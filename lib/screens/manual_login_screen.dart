@@ -1,6 +1,10 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:khonology_app/main.dart'; // Import MainScreen
 import 'dart:async'; // Import Timer
+import 'package:khonology_app/providers/auth_provider.dart'; // Import AuthProvider
+import 'package:provider/provider.dart'; // Import Provider
 
 class ManualLoginScreen extends StatefulWidget {
   const ManualLoginScreen({super.key});
@@ -130,32 +134,39 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      /*AnimatedOpacity(
-                        opacity: 1.0, // Always visible
-                        duration: const Duration(milliseconds: 500),
-                        child: const Text(
-                          'Enter Khonology Specific Email Address.',
-                          style: TextStyle(
-                            color: Color(0xFFC10D00),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),*/
                     ],
                   ),
                   const SizedBox(height: 32),
                   _buildButton(
                     text: 'CONFIRM',
                     color: const Color(0xFFC10D00),
-                    onPressed: () {
+                    onPressed: () async {
                       // Implement confirm logic here
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(
-                          builder: (context) => const MainScreen(),
-                        ),
-                        (route) => false,
+                      final authProvider = context.read<AuthProvider>();
+                      bool success = await authProvider.manualLogin(
+                        _emailController.text,
                       );
+
+                      if (!mounted) return;
+
+                      if (success) {
+                        if (!mounted) return; // Added for linter
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                            builder: (context) => const MainScreen(),
+                          ),
+                          (route) => false,
+                        );
+                      } else {
+                        if (!mounted) return; // Added for linter
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Manual login failed. Please check your credentials.',
+                            ),
+                          ),
+                        );
+                      }
                     },
                   ),
                   const SizedBox(height: 16),

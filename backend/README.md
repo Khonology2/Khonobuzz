@@ -1,6 +1,6 @@
 # Khonology Backend API
 
-Flask-based REST API for the Khonology project management application.
+FastAPI-based REST API for the Khonology project management application.
 
 ## Setup Instructions
 
@@ -14,7 +14,7 @@ pip install -r requirements.txt
 2. Create a new project or select existing one
 3. Go to Project Settings > Service Accounts
 4. Generate a new private key
-5. Download the JSON file and rename it to `firebase-service-account.json`
+5. Download the JSON file and rename it to `khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json`
 6. Place it in the backend folder
 
 ### 3. Environment Variables
@@ -25,7 +25,7 @@ cp .env.example .env
 
 ### 4. Run the Application
 ```bash
-python run.py
+python app.py
 ```
 
 The API will be available at `http://localhost:5000`
@@ -33,7 +33,7 @@ The API will be available at `http://localhost:5000`
 ## API Endpoints
 
 ### Authentication
-- `POST /api/auth/login` - User login
+- `GET /` - Check API status
 - `POST /api/auth/register` - User registration
 
 ### Projects

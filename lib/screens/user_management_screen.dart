@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -9,32 +10,61 @@ class UserManagementScreen extends StatefulWidget {
 
 class User {
   final String id;
-  final String name;
+  final String firstName;
+  final String lastName;
   final String email;
-  final String department;
+  final String department; // Re-added department field
   final String designation;
-  String role;
-  String status;
+  String role; // Default to 'Staff'
+  String status; // Default to 'Active'
+
+  // Combined name getter for UI display
+  String get name => '$firstName $lastName';
 
   User({
     required this.id,
-    required this.name,
+    required this.firstName,
+    required this.lastName,
     required this.email,
-    required this.department,
+    required this.department, // Added to constructor
     required this.designation,
-    required this.role,
-    required this.status,
+    this.role = 'Staff',
+    this.status = 'Active',
   });
+
+  // Factory constructor to create a User from combined Firestore data
+  factory User.fromFirestore(
+    String id,
+    Map<String, dynamic> userData,
+    Map<String, dynamic> onboardingData,
+  ) {
+    return User(
+      id: id,
+      firstName: onboardingData['firstName'] ?? '',
+      lastName: onboardingData['lastName'] ?? '',
+      email: userData['email'] ?? '',
+      department: onboardingData['department'] ?? '',
+      designation: onboardingData['designation'] ?? '',
+      role: userData['role'] ?? 'Staff', // Default to Staff if not in Firestore
+      status:
+          userData['status'] ??
+          'Active', // Default to Active if not in Firestore
+    );
+  }
 }
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
-  final List<User> users = [
-    User(id: '1', name: 'Name Surname', email: 'name.surname@khonology.com', department: 'Department', designation: 'Specialist Designation', role: 'Staff', status: 'Active'),
-    User(id: '2', name: 'Name Surname', email: 'name.surname@khonology.com', department: 'Department', designation: 'Specialist Designation', role: 'Staff', status: 'Active'),
-    User(id: '3', name: 'Name Surname', email: 'name.surname@khonology.com', department: 'Department', designation: 'Specialist Designation', role: 'Manager', status: 'Active'),
-    User(id: '4', name: 'Name Surname', email: 'name.surname@khonology.com', department: 'Department', designation: 'Specialist Designation', role: 'Admin', status: 'Pending'),
-    User(id: '5', name: 'Name Surname', email: 'name.surname@khonology.com', department: 'Department', designation: 'Specialist Designation', role: 'Staff', status: 'Inactive'),
-  ];
+  List<User> _fetchedUsers = []; // List to hold fetched users
+  bool _isLoading = true; // Loading state
+
+  // Removed the static 'users' list as data will be fetched dynamically
+  // final List<User> users = [
+  //   User(id: '1', firstName: 'Name', lastName: 'Surname', email: 'name.surname@khonology.com', designation: 'Specialist Designation', role: 'Staff', status: 'Active'),
+  //   User(id: '2', firstName: 'Name', lastName: 'Surname', email: 'name.surname@khonology.com', designation: 'Specialist Designation', role: 'Staff', status: 'Active'),
+  //   User(id: '3', firstName: 'Name', lastName: 'Surname', email: 'name.surname@khonology.com', designation: 'Specialist Designation', role: 'Manager', status: 'Active'),
+  //   User(id: '4', firstName: 'Name', lastName: 'Surname', email: 'name.surname@khonology.com', designation: 'Specialist Designation', role: 'Admin', status: 'Pending'),
+  //   User(id: '5', firstName: 'Name', lastName: 'Surname', email: 'name.surname@khonology.com', designation: 'Specialist Designation', role: 'Staff', status: 'Inactive'),
+  // ];
 
   String? expandedUserId;
 
@@ -56,7 +86,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     'Pending': Colors.orange.shade500,
   };
 
-  final List<String> userRoles = ['Staff', 'Manager', 'Admin'];
+  final List<String> userRoles = [
+    'Staff',
+    'Manager',
+    'Admin',
+    'user',
+  ]; // Added 'user' to roles list
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -64,6 +99,78 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUsersData(); // Fetch users when the screen initializes
+  }
+
+  Future<void> _fetchUsersData() async {
+    // Renamed from _fetchOnboardingUsers
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      debugPrint(
+        'Attempting to fetch data from projectId: ${FirebaseFirestore.instance.app?.options.projectId}',
+      ); // Debug print
+      // Fetch from 'users' collection
+      final usersQuerySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .get();
+      List<User> usersList = [];
+
+      for (var userDoc in usersQuerySnapshot.docs) {
+        Map<String, dynamic> userData = userDoc.data();
+        String userId = userDoc.id;
+
+        // Fetch corresponding document from 'onboarding' collection
+        final onboardingDoc = await FirebaseFirestore.instance
+            .collection('onboarding')
+            .where('user_id', isEqualTo: userId)
+            .limit(1)
+            .get();
+
+        if (onboardingDoc.docs.isNotEmpty) {
+          Map<String, dynamic> onboardingData = onboardingDoc.docs.first.data();
+          // Combine data and create User object
+          usersList.add(User.fromFirestore(userId, userData, onboardingData));
+        } else {
+          debugPrint('No onboarding data found for user: $userId');
+          // Create user with available data, defaulting missing onboarding fields
+          usersList.add(
+            User(
+              id: userId,
+              firstName: userData['name']?.split(' ')[0] ?? '',
+              lastName: userData['name']?.split(' ').length > 1
+                  ? userData['name'].split(' ')[1]
+                  : '',
+              email: userData['email'] ?? '',
+              department: '', // Default empty if no onboarding
+              designation: '', // Default empty if no onboarding
+              role: userData['role'] ?? 'Staff',
+              status: userData['status'] ?? 'Active',
+            ),
+          );
+        }
+      }
+
+      debugPrint(
+        'Fetched ${usersList.length} users (combined from users and onboarding collections).',
+      );
+      setState(() {
+        _fetchedUsers = usersList;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error fetching users data: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      // Optionally show a SnackBar or alert to the user
+    }
   }
 
   @override
@@ -136,9 +243,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0x802C3E50),
                   foregroundColor: Colors.white70,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.0)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20.0),
+                  ),
                 ),
-                child: const Text('FILTER STATUS', style: TextStyle(fontFamily: 'Poppins')),
+                child: const Text(
+                  'FILTER STATUS',
+                  style: TextStyle(fontFamily: 'Poppins'),
+                ),
               ),
             ),
             const SizedBox(width: 8.0),
@@ -148,9 +260,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0x802C3E50),
                   foregroundColor: Colors.white70,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.0)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20.0),
+                  ),
                 ),
-                child: const Text('FILTER DEPARTMENT', style: TextStyle(fontFamily: 'Poppins')),
+                child: const Text(
+                  'FILTER DEPARTMENT',
+                  style: TextStyle(fontFamily: 'Poppins'),
+                ),
               ),
             ),
             const SizedBox(width: 8.0),
@@ -160,9 +277,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0x802C3E50),
                   foregroundColor: Colors.white70,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.0)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20.0),
+                  ),
                 ),
-                child: const Text('FILTER DESIGNATION', style: TextStyle(fontFamily: 'Poppins')),
+                child: const Text(
+                  'FILTER DESIGNATION',
+                  style: TextStyle(fontFamily: 'Poppins'),
+                ),
               ),
             ),
           ],
@@ -172,7 +294,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           controller: _searchController,
           decoration: InputDecoration(
             hintText: 'Search',
-            hintStyle: const TextStyle(color: Colors.white54, fontFamily: 'Poppins'),
+            hintStyle: const TextStyle(
+              color: Colors.white54,
+              fontFamily: 'Poppins',
+            ),
             prefixIcon: const Icon(Icons.search, color: Colors.white54),
             suffixIcon: IconButton(
               icon: const Icon(Icons.close, color: Colors.white54),
@@ -197,8 +322,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Widget _buildUserList() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_fetchedUsers.isEmpty) {
+      return const Center(
+        child: Text(
+          'No onboarding users found.',
+          style: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+        ),
+      );
+    }
+
     return Column(
-      children: users.map((user) {
+      children: _fetchedUsers.map((user) {
         final bool isExpanded = expandedUserId == user.id;
         return Padding(
           padding: const EdgeInsets.only(bottom: 16.0),
@@ -236,11 +374,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 children: [
                   Text(
                     user.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16.0, fontFamily: 'Poppins'),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16.0,
+                      fontFamily: 'Poppins',
+                    ),
                   ),
                   Text(
                     user.email,
-                    style: const TextStyle(color: Colors.white60, fontSize: 12.0, fontFamily: 'Poppins'),
+                    style: const TextStyle(
+                      color: Colors.white60,
+                      fontSize: 12.0,
+                      fontFamily: 'Poppins',
+                    ),
                   ),
                 ],
               ),
@@ -250,8 +396,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(user.department, style: const TextStyle(fontWeight: FontWeight.w500, fontFamily: 'Poppins')),
-                  Text(user.designation, style: const TextStyle(color: Colors.white60, fontSize: 12.0, fontFamily: 'Poppins')),
+                  Text(
+                    user.designation, // Displaying designation as requested for the second line
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  Text(
+                    user.department, // Displaying department as requested for the second line
+                    style: const TextStyle(
+                      color: Colors.white60,
+                      fontSize: 12.0,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -262,7 +421,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             const SizedBox(width: 8.0),
             Transform.rotate(
               angle: isExpanded ? 3.14 : 0,
-              child: const Icon(Icons.keyboard_arrow_down, color: Colors.white54),
+              child: const Icon(
+                Icons.keyboard_arrow_down,
+                color: Colors.white54,
+              ),
             ),
           ],
         ),
@@ -279,7 +441,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       ),
       child: Text(
         role,
-        style: const TextStyle(fontSize: 12.0, fontWeight: FontWeight.bold, fontFamily: 'Poppins'),
+        style: const TextStyle(
+          fontSize: 12.0,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'Poppins',
+        ),
       ),
     );
   }
@@ -293,7 +459,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       ),
       child: Text(
         status,
-        style: const TextStyle(fontSize: 12.0, fontWeight: FontWeight.bold, fontFamily: 'Poppins'),
+        style: const TextStyle(
+          fontSize: 12.0,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'Poppins',
+        ),
       ),
     );
   }
@@ -302,7 +472,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     String selectedRole = user.role;
     return Container(
       padding: const EdgeInsets.all(16.0),
-        decoration: const BoxDecoration(
+      decoration: const BoxDecoration(
         // ignore: use_full_hex_values_for_flutter_colors
         color: Color(0x801a1a1a1a),
         borderRadius: BorderRadius.only(
@@ -323,14 +493,31 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
               ),
               const SizedBox(width: 8.0),
-              const Text('User Status: ', style: TextStyle(color: Colors.white60, fontFamily: 'Poppins')),
-              Text(user.status, style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
+              const Text(
+                'User Status: ',
+                style: TextStyle(color: Colors.white60, fontFamily: 'Poppins'),
+              ),
+              Text(
+                user.status,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Poppins',
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8.0),
           Row(
             children: [
-              Expanded(child: const Text('User Role: ', style: TextStyle(color: Colors.white60, fontFamily: 'Poppins'))),
+              Expanded(
+                child: const Text(
+                  'User Role: ',
+                  style: TextStyle(
+                    color: Colors.white60,
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+              ),
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
@@ -348,10 +535,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         user.role = newValue;
                       });
                     },
-                    items: userRoles.map<DropdownMenuItem<String>>((String value) {
+                    items: userRoles.map<DropdownMenuItem<String>>((
+                      String value,
+                    ) {
                       return DropdownMenuItem<String>(
                         value: value,
-                        child: Text(value, style: const TextStyle(fontFamily: 'Poppins')),
+                        child: Text(
+                          value,
+                          style: const TextStyle(fontFamily: 'Poppins'),
+                        ),
                       );
                     }).toList(),
                   ),
@@ -368,9 +560,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFC10D00),
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
                   ),
-                  child: const Text('Update', style: TextStyle(fontFamily: 'Poppins'))),
+                  child: const Text(
+                    'Update',
+                    style: TextStyle(fontFamily: 'Poppins'),
+                  ),
+                ),
               ),
             ],
           ),

@@ -11,8 +11,16 @@ import 'screens/user_management_screen.dart';
 import 'screens/landing_screen.dart'; // Import LandingScreen
 import 'providers/auth_provider.dart';
 import 'widgets/side_menu.dart';
+import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
+import 'firebase_options.dart'; // Import generated Firebase options
 
-void main() {
+void main() async {
+  // Made main async
+  WidgetsFlutterBinding.ensureInitialized(); // Ensure Flutter is initialized
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  ); // Initialize Firebase
+  debugPrint('Firebase initialized successfully!'); // Debug print
   runApp(const MyApp());
 }
 
@@ -22,15 +30,15 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-      ],
+      providers: [ChangeNotifierProvider(create: (_) => AuthProvider())],
       child: MaterialApp(
         title: 'Khonology',
         theme: ThemeData(
           fontFamily: 'Poppins', // Set Poppins as the default font
           primaryColor: const Color(0xFFC10D00), // Use the specified red color
-          colorScheme: ColorScheme.fromSwatch().copyWith(secondary: const Color(0xFFC10D00)), // Use the specified red color for accent
+          colorScheme: ColorScheme.fromSwatch().copyWith(
+            secondary: const Color(0xFFC10D00),
+          ), // Use the specified red color for accent
           scaffoldBackgroundColor: const Color(0xFF1A1A1A),
           appBarTheme: const AppBarTheme(
             backgroundColor: Color(0xFF1A1A1A),
@@ -45,7 +53,9 @@ class MyApp extends StatelessWidget {
         home: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
             return authProvider.isAuthenticated
-                ? MainScreen(role: authProvider.userRole) // Pass role to MainScreen
+                ? MainScreen(
+                    role: authProvider.userRole,
+                  ) // Pass role to MainScreen
                 : LandingScreen(); // Start with LandingScreen
           },
         ),
@@ -70,19 +80,19 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    // Display SnackBar with role if available
-    if (widget.role != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('You have logged in as ${widget.role}'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      });
-    }
+    // Removed: Display SnackBar with role if available
+    // if (widget.role != null) {
+    //   WidgetsBinding.instance.addPostFrameCallback((_) {
+    //     if (mounted) {
+    //       ScaffoldMessenger.of(context).showSnackBar(
+    //         SnackBar(
+    //           content: Text('You have logged in as ${widget.role}'),
+    //           duration: const Duration(seconds: 2),
+    //         ),
+    //       );
+    //     }
+    //   });
+    // }
   }
 
   final List<Widget> _screens = [
@@ -117,9 +127,7 @@ class _MainScreenState extends State<MainScreen> {
             selectedIndex: _selectedIndex,
             onItemSelected: _onItemTapped,
           ),
-          Expanded(
-            child: _screens[_selectedIndex],
-          ),
+          Expanded(child: _screens[_selectedIndex]),
         ],
       ),
       floatingActionButton: GestureDetector(
@@ -136,4 +144,3 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 }
-

@@ -29,7 +29,7 @@ class AuthProvider extends ChangeNotifier {
     String? role,
     String firstName = '', // Made optional with default empty string
     String lastName = '', // Made optional with default empty string
-    String department = '', // Made optional with default empty string
+    String? department, // Changed to nullable String?
     String designation = '', // Made optional with default empty string
   }) async {
     // Modified: added role and all onboarding parameters
@@ -52,8 +52,10 @@ class AuthProvider extends ChangeNotifier {
           'password':
               'password', // Placeholder: You might want a proper password or remove this if registration is passwordless
           'name': '$firstName $lastName',
+          'firstName': firstName, // Added to match Pydantic model
+          'lastName': lastName, // Added to match Pydantic model
           'role': role ?? 'user',
-          'department': department,
+          'department': department ?? '', // Handle nullable department
           'designation': designation,
         }),
       );
@@ -101,6 +103,50 @@ class AuthProvider extends ChangeNotifier {
       _isAuthenticated = false;
       notifyListeners();
       return false; // Indicate failure
+    }
+  }
+
+  Future<bool> manualLogin(String email) async {
+    // Removed password parameter
+    debugPrint('Attempting manual login...');
+    debugPrint('  Email: $email');
+
+    final url = Uri.parse('http://localhost:5000/api/auth/login');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'email': email}), // Removed password from body
+      );
+
+      debugPrint('Manual Login Response status: ${response.statusCode}');
+      debugPrint('Manual Login Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        debugPrint('Manual login successful: $responseData');
+
+        final prefs = await SharedPreferences.getInstance();
+        _isAuthenticated = true;
+        _userEmail = responseData['user']['email'];
+        _userRole = responseData['user']['role'];
+        await prefs.setBool('isAuthenticated', true);
+        await prefs.setString('userEmail', _userEmail!);
+        await prefs.setString('userRole', _userRole!);
+        notifyListeners();
+        return true;
+      } else {
+        debugPrint('Manual login failed with status: ${response.statusCode}');
+        debugPrint('Error: ${response.body}');
+        _isAuthenticated = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error during manual login: $e');
+      _isAuthenticated = false;
+      notifyListeners();
+      return false;
     }
   }
 

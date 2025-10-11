@@ -1,0 +1,16 @@
+        rules_version = '2';
+        service cloud.firestore {
+          match /databases/{database}/documents {
+            // TEMPORARILY allow read access for ANYONE (including unauthenticated users)
+            // This is ONLY for debugging and should NOT be used in production.
+            match /onboarding/{document=**} {
+              allow read: if true;
+            }
+
+            // TEMPORARILY allow read access for ANYONE (including unauthenticated users)
+            // This is ONLY for debugging and should NOT be used in production.
+            match /users/{document=**} {
+              allow read: if true;
+            }
+          }
+        }

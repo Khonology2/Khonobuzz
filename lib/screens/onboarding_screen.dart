@@ -1,4 +1,4 @@
-// ignore_for_file: use_build_context_synchronously
+// ignore_for_file: use_build_context_synchronously, dead_code
 
 import 'package:flutter/material.dart';
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart'; // Import for AAD OAuth
@@ -22,9 +22,38 @@ class OnboardingScreenState extends State<OnboardingScreen> {
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _departmentController = TextEditingController();
-  final TextEditingController _designationController = TextEditingController();
+  // Removed _departmentController as it will be managed by DropdownButtonFormField
+  // Removed _designationController as it will be managed by DropdownButtonFormField
   double _discsOpacity = 0.0; // Initial opacity for discs.png
+
+  final List<String> _departments = const [
+    'Management',
+    'Operations',
+    'Finance',
+    'HR',
+    'Sales',
+  ];
+  String? _selectedDepartment; // New state variable for selected department
+
+  final List<String> _designations = const [
+    'Director',
+    'Developer',
+    'Support Analyst',
+    'Learner',
+    'UX Designer',
+    'AWS Cloud Engineer',
+    'Tester',
+    'RMB Small Talk Developer',
+    'Finance',
+    'Business Analyst',
+    'Manager',
+    'Delivery Manager',
+    'Analyst',
+    'Sales Person',
+    'HR',
+    'Junior Analyst',
+  ];
+  String? _selectedDesignation; // New state variable for selected designation
 
   // List of hint texts
   /*
@@ -83,8 +112,8 @@ class OnboardingScreenState extends State<OnboardingScreen> {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
-    _departmentController.dispose();
-    _designationController.dispose();
+    // Removed _departmentController.dispose();
+    // Removed _designationController.dispose();
     /*_timer.cancel();*/ // Cancel the timer to prevent memory leaks
     super.dispose();
   }
@@ -140,16 +169,129 @@ class OnboardingScreenState extends State<OnboardingScreen> {
                     controller: _emailController,
                   ),
                   const SizedBox(height: 16),
-                  _buildTextField(
-                    label: 'Department',
-                    hint: 'Analyst',
-                    controller: _departmentController,
+                  // Replaced _buildTextField for Department with DropdownButtonFormField
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Department',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        initialValue:
+                            _selectedDepartment, // Changed from value to initialValue
+                        dropdownColor: Colors.grey[800],
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.grey[800],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8.0),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFC10D00),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 12.0,
+                          ),
+                        ),
+                        hint: Text(
+                          'Select Department',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontFamily: 'Poppins',
+                          ), // Applied Poppins font
+                        ),
+                        items: _departments.map((String department) {
+                          return DropdownMenuItem<String>(
+                            value: department,
+                            child: Text(department),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _selectedDepartment = newValue;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please select a department';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
-                  _buildTextField(
-                    label: 'Designation',
-                    hint: 'Software Tester',
-                    controller: _designationController,
+                  // Replaced _buildTextField for Designation with DropdownButtonFormField
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Designation',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        initialValue: _selectedDesignation,
+                        dropdownColor: Colors.grey[800],
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.grey[800],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8.0),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFC10D00),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 12.0,
+                          ),
+                        ),
+                        hint: Text(
+                          'Select Designation',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontFamily: 'Poppins',
+                          ), // Applied Poppins font
+                        ),
+                        items: _designations.map((String designation) {
+                          return DropdownMenuItem<String>(
+                            value: designation,
+                            child: Text(designation),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _selectedDesignation = newValue;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please select a designation';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 32),
                   // Buttons
@@ -163,17 +305,21 @@ class OnboardingScreenState extends State<OnboardingScreen> {
                       debugPrint('  First Name: ${_firstNameController.text}');
                       debugPrint('  Last Name: ${_lastNameController.text}');
                       debugPrint('  Email: ${_emailController.text}');
-                      debugPrint('  Department: ${_departmentController.text}');
+                      debugPrint('  Department: $_selectedDepartment');
                       debugPrint(
-                        '  Designation: ${_designationController.text}',
+                        '  Designation: $_selectedDesignation', // Pass selected designation
                       );
 
                       bool success = await context.read<AuthProvider>().login(
                         _emailController.text,
                         firstName: _firstNameController.text,
                         lastName: _lastNameController.text,
-                        department: _departmentController.text,
-                        designation: _designationController.text,
+                        department:
+                            _selectedDepartment ??
+                            '', // Fix: Pass empty string if null
+                        designation:
+                            _selectedDesignation ??
+                            '', // Fix: Pass empty string if null
                         role:
                             null, // Role selection is not explicitly handled on this screen currently
                       );
@@ -252,7 +398,10 @@ class OnboardingScreenState extends State<OnboardingScreen> {
             fontFamily: 'Poppins',
           ), // Added Poppins font family
           decoration: InputDecoration(
-            hintText: hintText ?? hint ?? _getHintText(label),
+            hintText:
+                hintText ??
+                hint ??
+                _getHintText(label), // Re-applied: Ensured non-nullable String
             hintStyle: TextStyle(color: Colors.grey[600]),
             filled: true,
             fillColor: Colors.grey[800], // Reverted to Colors.grey[800]
@@ -273,6 +422,7 @@ class OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   String _getHintText(String label) {
+    // Explicitly define return type as String
     switch (label) {
       case 'First Name':
         return 'John'; // Static hint text
