@@ -114,7 +114,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     });
     try {
       debugPrint(
-        'Attempting to fetch data from projectId: ${FirebaseFirestore.instance.app?.options.projectId}',
+        'Attempting to fetch data from projectId: ${FirebaseFirestore.instance.app.options.projectId}',
       ); // Debug print
       // Fetch from 'users' collection
       final usersQuerySnapshot = await FirebaseFirestore.instance
