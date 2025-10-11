@@ -1,0 +1,302 @@
+// ignore_for_file: use_build_context_synchronously
+
+import 'package:flutter/material.dart';
+import 'package:flutter_aad_oauth/flutter_aad_oauth.dart'; // Import for AAD OAuth
+import 'package:provider/provider.dart'; // Import for AuthProvider
+import '../providers/auth_provider.dart'; // Import AuthProvider
+import 'lobby_screen.dart'; // Import LobbyScreen
+import 'dart:async'; // Import Timer
+
+class OnboardingScreen extends StatefulWidget {
+  final FlutterAadOauth oauth; // Receive the oauth object
+  const OnboardingScreen({
+    super.key,
+    required this.oauth,
+  }); // Update constructor
+
+  @override
+  OnboardingScreenState createState() => OnboardingScreenState();
+}
+
+class OnboardingScreenState extends State<OnboardingScreen> {
+  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _departmentController = TextEditingController();
+  final TextEditingController _designationController = TextEditingController();
+  double _discsOpacity = 0.0; // Initial opacity for discs.png
+
+  // List of hint texts
+  /*
+  final List<String> _emailHintTexts = const [
+    'Nkosinathi.Radebe@Khonology.com',
+    'Yannie.Nkuna@Khonology.com',
+    'Mampopi.Tau@Khonology.com',
+    'Dzunisani.Mabunda@Khonology.com',
+    'Okuhle.Galdla@Khonology.com',
+    'Kgothatso.Mokgashi@Khonology.com',
+    'Thabang.Nkabinde@Khonology.com',
+    'Thembelihle.Zulu@Khonology.com',
+    'Sipho.Masango@Khonology.com',
+    'Dapo.Adeyemo@Khonology.com',
+    'Qiniso.Ngobese@Khonology.com',
+    'Tiyane.Mahange@Khonology.com',
+    'Tshiamo.Modubu@khonology.com',
+  ];
+
+  late final List<String> _firstNameHintTexts;
+  late final List<String> _lastNameHintTexts;
+
+  int _currentHintIndex = 0;
+  late Timer _timer;
+  */
+
+  @override
+  void initState() {
+    super.initState();
+    /*
+    _firstNameHintTexts = _emailHintTexts.map((email) => email.split('.')[0]).toList();
+    _lastNameHintTexts = _emailHintTexts.map((email) => email.split('.')[1].split('@')[0]).toList();
+    */
+
+    // Trigger fade-in animation when the screen is initialized
+    Future.delayed(const Duration(milliseconds: 500), () {
+      setState(() {
+        _discsOpacity = 1.0;
+      });
+    });
+    /*_startHintTextAnimation();*/
+  }
+
+  /*
+  void _startHintTextAnimation() {
+    _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      setState(() {
+        _currentHintIndex = (_currentHintIndex + 1) % _emailHintTexts.length;
+      });
+    });
+  }
+  */
+
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _emailController.dispose();
+    _departmentController.dispose();
+    _designationController.dispose();
+    /*_timer.cancel();*/ // Cancel the timer to prevent memory leaks
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent, // Dark background
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage(
+              'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
+            ),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Khonology Asset
+                  Image.asset(
+                    'assets/images/khono.png', // Khonology asset
+                    height: 100, // Adjust height as needed
+                  ),
+                  const SizedBox(height: 48),
+                  // Text fields
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          label: 'First Name',
+                          controller: _firstNameController,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildTextField(
+                          label: 'Surname',
+                          controller: _lastNameController,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    label: 'Email Address',
+                    hintText: 'example@khonology.com',
+                    controller: _emailController,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    label: 'Department',
+                    hint: 'Analyst',
+                    controller: _departmentController,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    label: 'Designation',
+                    hint: 'Software Tester',
+                    controller: _designationController,
+                  ),
+                  const SizedBox(height: 32),
+                  // Buttons
+                  _buildButton(
+                    text: 'CONFIRM',
+                    color: const Color(0xFFC10D00),
+                    onPressed: () async {
+                      // Implement confirm logic here
+                      // For now, allow login without verification
+                      debugPrint('Onboarding Data:');
+                      debugPrint('  First Name: ${_firstNameController.text}');
+                      debugPrint('  Last Name: ${_lastNameController.text}');
+                      debugPrint('  Email: ${_emailController.text}');
+                      debugPrint('  Department: ${_departmentController.text}');
+                      debugPrint(
+                        '  Designation: ${_designationController.text}',
+                      );
+
+                      await context.read<AuthProvider>().login(
+                        _emailController.text,
+                        firstName: _firstNameController.text,
+                        lastName: _lastNameController.text,
+                        department: _departmentController.text,
+                        designation: _designationController.text,
+                        role:
+                            null, // Role selection is not explicitly handled on this screen currently
+                      );
+                      if (!mounted) return;
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              LobbyScreen(oauth: widget.oauth),
+                        ), // Navigate to LobbyScreen
+                        (route) => false,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildButton(
+                    text: 'BACK',
+                    color: Colors.grey,
+                    onPressed: () {
+                      Navigator.of(
+                        context,
+                      ).pop(); // Go back to the previous screen
+                    },
+                  ),
+                  const SizedBox(height: 48),
+                  // Discs Asset
+                  AnimatedOpacity(
+                    opacity: _discsOpacity,
+                    duration: const Duration(milliseconds: 1000),
+                    child: Image.asset(
+                      'assets/images/discs.png', // Discs asset
+                      height: 80, // Adjust height as needed
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required String label,
+    String? hint,
+    String? hintText,
+    required TextEditingController controller,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontFamily: 'Poppins', // Added Poppins font family
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          style: const TextStyle(
+            color: Colors.white,
+            fontFamily: 'Poppins',
+          ), // Added Poppins font family
+          decoration: InputDecoration(
+            hintText: hintText ?? hint ?? _getHintText(label),
+            hintStyle: TextStyle(color: Colors.grey[600]),
+            filled: true,
+            fillColor: Colors.grey[800], // Reverted to Colors.grey[800]
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8.0),
+              borderSide: const BorderSide(
+                color: Color(0xFFC10D00),
+              ), // Changed border color to red
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 12.0,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getHintText(String label) {
+    switch (label) {
+      case 'First Name':
+        return 'John'; // Static hint text
+      case 'Surname':
+        return 'Doe'; // Static hint text
+      case 'Email Address':
+        return 'john.doe@example.com'; // Static hint text
+      default:
+        return '';
+    }
+  }
+
+  Widget _buildButton({
+    required String text,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      width: 250,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(50.0),
+      ),
+      child: MaterialButton(
+        onPressed: onPressed,
+        padding: const EdgeInsets.symmetric(vertical: 16.0),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontFamily: 'Poppins',
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+}
