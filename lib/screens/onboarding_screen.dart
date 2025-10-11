@@ -168,7 +168,7 @@ class OnboardingScreenState extends State<OnboardingScreen> {
                         '  Designation: ${_designationController.text}',
                       );
 
-                      await context.read<AuthProvider>().login(
+                      bool success = await context.read<AuthProvider>().login(
                         _emailController.text,
                         firstName: _firstNameController.text,
                         lastName: _lastNameController.text,
@@ -178,13 +178,24 @@ class OnboardingScreenState extends State<OnboardingScreen> {
                             null, // Role selection is not explicitly handled on this screen currently
                       );
                       if (!mounted) return;
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              LobbyScreen(oauth: widget.oauth),
-                        ), // Navigate to LobbyScreen
-                        (route) => false,
-                      );
+
+                      if (success) {
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                LobbyScreen(oauth: widget.oauth),
+                          ), // Navigate to LobbyScreen
+                          (route) => false,
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Registration/Login failed. Please try again.',
+                            ),
+                          ),
+                        );
+                      }
                     },
                   ),
                   const SizedBox(height: 16),

@@ -24,7 +24,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> login(
+  Future<bool> login(
     String email, {
     String? role,
     String firstName = '', // Made optional with default empty string
@@ -74,6 +74,7 @@ class AuthProvider extends ChangeNotifier {
         await prefs.setString('userEmail', email);
         await prefs.setString('userRole', _userRole!);
         notifyListeners();
+        return true; // Indicate success
       } else if (response.statusCode == 409) {
         debugPrint('User already exists. Attempting to log in.');
         // If user already exists, proceed as if logged in or attempt a login API call if available
@@ -86,17 +87,20 @@ class AuthProvider extends ChangeNotifier {
         await prefs.setString('userEmail', email);
         await prefs.setString('userRole', _userRole!);
         notifyListeners();
+        return true; // Indicate success
       } else {
         // Handle other errors
         debugPrint('Registration failed with status: ${response.statusCode}');
         debugPrint('Error: ${response.body}');
         _isAuthenticated = false;
         notifyListeners();
+        return false; // Indicate failure
       }
     } catch (e) {
       debugPrint('Error during registration: $e');
       _isAuthenticated = false;
       notifyListeners();
+      return false; // Indicate failure
     }
   }
 
