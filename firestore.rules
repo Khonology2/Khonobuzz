@@ -7,10 +7,10 @@
               allow read: if true;
             }
 
-            // TEMPORARILY allow read access for ANYONE (including unauthenticated users)
-            // This is ONLY for debugging and should NOT be used in production.
+            // This is ONLY for debugging and NOT for production.
             match /users/{document=**} {
               allow read: if true;
+              allow update: if request.auth != null;
             }
           }
         }

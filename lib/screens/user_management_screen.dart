@@ -68,6 +68,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   String? expandedUserId;
 
+  String? _selectedStatus;
+  String? _selectedDepartment;
+  String? _selectedDesignation;
+
+  Set<String> get _availableStatuses =>
+      _fetchedUsers.map((user) => user.status).toSet();
+  Set<String> get _availableDepartments =>
+      _fetchedUsers.map((user) => user.department).toSet();
+  Set<String> get _availableDesignations =>
+      _fetchedUsers.map((user) => user.designation).toSet();
+
   final Map<String, Color> userStatusColors = {
     'Active': Colors.green.shade600,
     'Inactive': Colors.grey.shade600,
@@ -95,6 +106,41 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   final TextEditingController _searchController = TextEditingController();
 
+  List<User> get _filteredUsers {
+    List<User> users = _fetchedUsers;
+    final query = _searchController.text.toLowerCase();
+
+    // Apply search query filter
+    if (query.isNotEmpty) {
+      users = users.where((user) {
+        return user.name.toLowerCase().contains(query) ||
+            user.department.toLowerCase().contains(query) ||
+            user.designation.toLowerCase().contains(query);
+      }).toList();
+    }
+
+    // Apply status filter
+    if (_selectedStatus != null) {
+      users = users.where((user) => user.status == _selectedStatus).toList();
+    }
+
+    // Apply department filter
+    if (_selectedDepartment != null) {
+      users = users
+          .where((user) => user.department == _selectedDepartment)
+          .toList();
+    }
+
+    // Apply designation filter
+    if (_selectedDesignation != null) {
+      users = users
+          .where((user) => user.designation == _selectedDesignation)
+          .toList();
+    }
+
+    return users;
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -105,6 +151,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   void initState() {
     super.initState();
     _fetchUsersData(); // Fetch users when the screen initializes
+    _searchController.addListener(() {
+      setState(() {});
+    });
   }
 
   Future<void> _fetchUsersData() async {
@@ -173,6 +222,27 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
   }
 
+  Future<void> _updateUserRoleAndStatus(
+    String userId,
+    String newRole,
+    String newStatus,
+  ) async {
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'role': newRole,
+        'status': newStatus,
+      });
+      debugPrint(
+        'User $userId role updated to $newRole and status to $newStatus in Firestore.',
+      );
+      // Refresh the user list after updating the role and status
+      _fetchUsersData();
+    } catch (e) {
+      debugPrint('Error updating user role and status: $e');
+      // Optionally show error to user
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -186,18 +256,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             ),
           ),
           // Existing content
-          SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 16.0),
-                  _buildFiltersAndSearch(),
-                  const SizedBox(height: 16.0),
-                  _buildUserList(),
-                ],
+          Positioned.fill(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 16.0),
+                    _buildFiltersAndSearch(),
+                    const SizedBox(height: 16.0),
+                    _buildUserList(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -238,52 +310,136 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             Expanded(
-              child: ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0x802C3E50),
-                  foregroundColor: Colors.white70,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20.0),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedStatus,
+                  hint: const Text(
+                    'FILTER STATUS',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'Poppins',
+                      fontSize: 12.0,
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'FILTER STATUS',
-                  style: TextStyle(fontFamily: 'Poppins'),
+                  dropdownColor: const Color(0xFF2C3E50),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Poppins',
+                  ),
+                  isExpanded: true,
+                  icon: const Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.white70,
+                  ),
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      _selectedStatus = newValue;
+                    });
+                  },
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: null,
+                      child: Text('All Statuses'),
+                    ),
+                    ..._availableStatuses.map<DropdownMenuItem<String>>((
+                      String value,
+                    ) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      );
+                    }),
+                  ],
                 ),
               ),
             ),
             const SizedBox(width: 8.0),
             Expanded(
-              child: ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0x802C3E50),
-                  foregroundColor: Colors.white70,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20.0),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedDepartment,
+                  hint: const Text(
+                    'FILTER DEPARTMENT',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'Poppins',
+                      fontSize: 12.0,
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'FILTER DEPARTMENT',
-                  style: TextStyle(fontFamily: 'Poppins'),
+                  dropdownColor: const Color(0xFF2C3E50),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Poppins',
+                  ),
+                  isExpanded: true,
+                  icon: const Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.white70,
+                  ),
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      _selectedDepartment = newValue;
+                    });
+                  },
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: null,
+                      child: Text('All Departments'),
+                    ),
+                    ..._availableDepartments.map<DropdownMenuItem<String>>((
+                      String value,
+                    ) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      );
+                    }),
+                  ],
                 ),
               ),
             ),
             const SizedBox(width: 8.0),
             Expanded(
-              child: ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0x802C3E50),
-                  foregroundColor: Colors.white70,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20.0),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedDesignation,
+                  hint: const Text(
+                    'FILTER DESIGNATION',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'Poppins',
+                      fontSize: 12.0,
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'FILTER DESIGNATION',
-                  style: TextStyle(fontFamily: 'Poppins'),
+                  dropdownColor: const Color(0xFF2C3E50),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Poppins',
+                  ),
+                  isExpanded: true,
+                  icon: const Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.white70,
+                  ),
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      _selectedDesignation = newValue;
+                    });
+                  },
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: null,
+                      child: Text('All Designations'),
+                    ),
+                    ..._availableDesignations.map<DropdownMenuItem<String>>((
+                      String value,
+                    ) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      );
+                    }),
+                  ],
                 ),
               ),
             ),
@@ -336,7 +492,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
 
     return Column(
-      children: _fetchedUsers.map((user) {
+      children: _filteredUsers.map((user) {
         final bool isExpanded = expandedUserId == user.id;
         return Padding(
           padding: const EdgeInsets.only(bottom: 16.0),
@@ -470,6 +626,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Widget _buildDropdownContent(User user) {
     String selectedRole = user.role;
+    String selectedStatusLocal = user.status; // Local state for status
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: const BoxDecoration(
@@ -482,95 +639,104 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       ),
       child: Column(
         children: [
-          Row(
+          // User Role Dropdown
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 8.0,
-                height: 8.0,
-                decoration: BoxDecoration(
-                  color: userStatusCircleColors[user.status],
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8.0),
               const Text(
-                'User Status: ',
+                'User Role: ',
                 style: TextStyle(color: Colors.white60, fontFamily: 'Poppins'),
               ),
-              Text(
-                user.status,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Poppins',
+              const SizedBox(height: 8.0),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2C3E50),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: DropdownButton<String>(
+                  value: selectedRole,
+                  dropdownColor: const Color(0xFF2C3E50),
+                  underline: const SizedBox.shrink(),
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      selectedRole = newValue!;
+                      user.role = newValue;
+                    });
+                  },
+                  items: userRoles.map<DropdownMenuItem<String>>((
+                    String value,
+                  ) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(
+                        value,
+                        style: const TextStyle(fontFamily: 'Poppins'),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8.0),
-          Row(
+          const SizedBox(height: 16.0), // Spacing between role and status
+          // User Status Dropdown
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: const Text(
-                  'User Role: ',
-                  style: TextStyle(
-                    color: Colors.white60,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
+              const Text(
+                'User Status: ',
+                style: TextStyle(color: Colors.white60, fontFamily: 'Poppins'),
               ),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2C3E50),
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                  child: DropdownButton<String>(
-                    value: selectedRole,
-                    dropdownColor: const Color(0xFF2C3E50),
-                    underline: const SizedBox.shrink(),
-                    onChanged: (String? newValue) {
-                      setState(() {
-                        selectedRole = newValue!;
-                        user.role = newValue;
-                      });
-                    },
-                    items: userRoles.map<DropdownMenuItem<String>>((
-                      String value,
-                    ) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(
-                          value,
-                          style: const TextStyle(fontFamily: 'Poppins'),
-                        ),
-                      );
-                    }).toList(),
-                  ),
+              const SizedBox(height: 8.0),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2C3E50),
+                  borderRadius: BorderRadius.circular(8.0),
                 ),
-              ),
-              const SizedBox(width: 16.0),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
+                child: DropdownButton<String>(
+                  value: selectedStatusLocal,
+                  dropdownColor: const Color(0xFF2C3E50),
+                  underline: const SizedBox.shrink(),
+                  onChanged: (String? newValue) {
                     setState(() {
-                      expandedUserId = null;
+                      selectedStatusLocal = newValue!;
+                      user.status = newValue;
                     });
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFC10D00),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8.0),
-                    ),
-                  ),
-                  child: const Text(
-                    'Update',
-                    style: TextStyle(fontFamily: 'Poppins'),
-                  ),
+                  items: ['Active', 'Pending'].map<DropdownMenuItem<String>>((
+                    String value,
+                  ) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(
+                        value,
+                        style: const TextStyle(fontFamily: 'Poppins'),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16.0), // Spacing before the update button
+          // Update Button
+          ElevatedButton(
+            onPressed: () {
+              _updateUserRoleAndStatus(user.id, user.role, user.status);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFC10D00),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+            ),
+            child: const Text(
+              'Update',
+              style: TextStyle(fontFamily: 'Poppins'),
+            ),
           ),
         ],
       ),

@@ -326,13 +326,32 @@ class OnboardingScreenState extends State<OnboardingScreen> {
                       if (!mounted) return;
 
                       if (success) {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                LobbyScreen(oauth: widget.oauth),
-                          ), // Navigate to LobbyScreen
-                          (route) => false,
-                        );
+                        if (context.read<AuthProvider>().userAlreadyOnboarded) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('You have already onboarded!'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          Future.delayed(const Duration(seconds: 2), () {
+                            if (!mounted) return;
+                            Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    LobbyScreen(oauth: widget.oauth),
+                              ),
+                              (route) => false,
+                            );
+                          });
+                        } else {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  LobbyScreen(oauth: widget.oauth),
+                            ),
+                            (route) => false,
+                          );
+                        }
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(

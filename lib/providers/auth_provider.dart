@@ -7,10 +7,14 @@ class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
   String? _userEmail;
   String? _userRole; // New: To store the user's role
+  bool _userAlreadyOnboarded =
+      false; // New: State to indicate if user already onboarded
 
   bool get isAuthenticated => _isAuthenticated;
   String? get userEmail => _userEmail;
   String? get userRole => _userRole; // New: Getter for user role
+  bool get userAlreadyOnboarded =>
+      _userAlreadyOnboarded; // New: Getter for onboarding status
 
   AuthProvider() {
     _loadAuthState();
@@ -75,6 +79,8 @@ class AuthProvider extends ChangeNotifier {
         await prefs.setBool('isAuthenticated', true);
         await prefs.setString('userEmail', email);
         await prefs.setString('userRole', _userRole!);
+        _userAlreadyOnboarded =
+            false; // Reset onboarding status for new registration
         notifyListeners();
         return true; // Indicate success
       } else if (response.statusCode == 409) {
@@ -88,6 +94,7 @@ class AuthProvider extends ChangeNotifier {
         await prefs.setBool('isAuthenticated', true);
         await prefs.setString('userEmail', email);
         await prefs.setString('userRole', _userRole!);
+        _userAlreadyOnboarded = true; // Set onboarding status to true
         notifyListeners();
         return true; // Indicate success
       } else {
@@ -95,12 +102,14 @@ class AuthProvider extends ChangeNotifier {
         debugPrint('Registration failed with status: ${response.statusCode}');
         debugPrint('Error: ${response.body}');
         _isAuthenticated = false;
+        _userAlreadyOnboarded = false; // Reset onboarding status on failure
         notifyListeners();
         return false; // Indicate failure
       }
     } catch (e) {
       debugPrint('Error during registration: $e');
       _isAuthenticated = false;
+      _userAlreadyOnboarded = false; // Reset onboarding status on error
       notifyListeners();
       return false; // Indicate failure
     }
@@ -116,7 +125,7 @@ class AuthProvider extends ChangeNotifier {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'email': email}), // Removed password from body
+        body: json.encode({'email': email}),
       );
 
       debugPrint('Manual Login Response status: ${response.statusCode}');
