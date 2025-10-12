@@ -639,83 +639,98 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       ),
       child: Column(
         children: [
-          // User Role Dropdown
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'User Role: ',
-                style: TextStyle(color: Colors.white60, fontFamily: 'Poppins'),
-              ),
-              const SizedBox(height: 8.0),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2C3E50),
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                child: DropdownButton<String>(
-                  value: selectedRole,
-                  dropdownColor: const Color(0xFF2C3E50),
-                  underline: const SizedBox.shrink(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      selectedRole = newValue!;
-                      user.role = newValue;
-                    });
-                  },
-                  items: userRoles.map<DropdownMenuItem<String>>((
-                    String value,
-                  ) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        value,
-                        style: const TextStyle(fontFamily: 'Poppins'),
+              // User Role Dropdown
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'User Role: ',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontFamily: 'Poppins',
                       ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16.0), // Spacing between role and status
-          // User Status Dropdown
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'User Status: ',
-                style: TextStyle(color: Colors.white60, fontFamily: 'Poppins'),
-              ),
-              const SizedBox(height: 8.0),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2C3E50),
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                child: DropdownButton<String>(
-                  value: selectedStatusLocal,
-                  dropdownColor: const Color(0xFF2C3E50),
-                  underline: const SizedBox.shrink(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      selectedStatusLocal = newValue!;
-                      user.status = newValue;
-                    });
-                  },
-                  items: ['Active', 'Pending'].map<DropdownMenuItem<String>>((
-                    String value,
-                  ) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        value,
-                        style: const TextStyle(fontFamily: 'Poppins'),
+                    ),
+                    const SizedBox(height: 8.0),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2C3E50),
+                        borderRadius: BorderRadius.circular(8.0),
                       ),
-                    );
-                  }).toList(),
+                      child: DropdownButton<String>(
+                        value: selectedRole,
+                        dropdownColor: const Color(0xFF2C3E50),
+                        underline: const SizedBox.shrink(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            selectedRole = newValue!;
+                            user.role = newValue;
+                          });
+                        },
+                        items: userRoles.map<DropdownMenuItem<String>>((
+                          String value,
+                        ) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(
+                              value,
+                              style: const TextStyle(fontFamily: 'Poppins'),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16.0), // Spacing between role and status
+              // User Status Dropdown
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'User Status: ',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    const SizedBox(height: 8.0),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2C3E50),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: DropdownButton<String>(
+                        value: selectedStatusLocal,
+                        dropdownColor: const Color(0xFF2C3E50),
+                        underline: const SizedBox.shrink(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            selectedStatusLocal = newValue!;
+                            user.status = newValue;
+                          });
+                        },
+                        items: ['Active', 'Pending']
+                            .map<DropdownMenuItem<String>>((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(
+                                  value,
+                                  style: const TextStyle(fontFamily: 'Poppins'),
+                                ),
+                              );
+                            })
+                            .toList(),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
