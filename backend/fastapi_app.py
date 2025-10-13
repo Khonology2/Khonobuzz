@@ -10,6 +10,8 @@ from fastapi import status # Import status for HTTP status codes
 from fastapi import HTTPException # Import HTTPException for authentication errors
 from typing import Optional
 
+from fastapi import Body
+
 load_dotenv()
 
 # Configuration
@@ -48,6 +50,10 @@ class Role(BaseModel):
     roleName: str
     description: Optional[str] = None
     pageAccess: PageAccess = PageAccess()
+
+class UserUpdate(BaseModel):
+    role: str
+    status: str
 
 # Initialize Firebase Admin SDK
 cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
@@ -153,6 +159,57 @@ async def register_user(user: UserRegister):
 
     except Exception as e:
         print(f"[ERROR] During FastAPI registration: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/users")
+async def list_users():
+    try:
+        users_query = db.collection('users').stream()
+        users_data = []
+
+        for user_doc in users_query:
+            user_info = user_doc.to_dict() or {}
+
+            onboarding_query = db.collection('onboarding').where('user_id', '==', user_doc.id).limit(1).stream()
+            onboarding_info = {}
+
+            for onboarding_doc in onboarding_query:
+                onboarding_info = onboarding_doc.to_dict() or {}
+                break
+
+            first_name = onboarding_info.get('firstName') or onboarding_info.get('name') or ''
+            last_name = onboarding_info.get('lastName') or onboarding_info.get('surname') or ''
+
+            users_data.append({
+                'id': user_doc.id,
+                'email': user_info.get('email', ''),
+                'role': user_info.get('role', 'Staff'),
+                'status': user_info.get('status', 'Active'),
+                'firstName': first_name,
+                'lastName': last_name,
+                'department': onboarding_info.get('department', ''),
+                'designation': onboarding_info.get('designation', ''),
+            })
+
+        return JSONResponse(status_code=status.HTTP_200_OK, content={'users': users_data})
+    except Exception as e:
+        print(f"[ERROR] During users fetch: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.patch("/api/users/{user_id}")
+async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
+    try:
+        user_ref = db.collection('users').document(user_id)
+        user_ref.update({
+            'role': user_update.role,
+            'status': user_update.status,
+            'updated_at': datetime.utcnow(),
+        })
+        return JSONResponse(status_code=status.HTTP_200_OK, content={'message': 'User updated successfully'})
+    except Exception as e:
+        print(f"[ERROR] During user update: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
