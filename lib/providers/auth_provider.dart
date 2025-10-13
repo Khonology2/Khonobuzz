@@ -45,7 +45,7 @@ class AuthProvider extends ChangeNotifier {
     debugPrint('  Designation: $designation');
 
     final url = Uri.parse(
-      'http://localhost:5000/api/auth/register',
+      'https://khonology-buzz-build-backend.onrender.com/api/auth/register',
     ); // Your backend registration endpoint
     try {
       final response = await http.post(
@@ -120,7 +120,9 @@ class AuthProvider extends ChangeNotifier {
     debugPrint('Attempting manual login...');
     debugPrint('  Email: $email');
 
-    final url = Uri.parse('http://localhost:5000/api/auth/login');
+    final url = Uri.parse(
+      'https://khonology-buzz-build-backend.onrender.com/api/auth/login',
+    );
     try {
       final response = await http.post(
         url,
