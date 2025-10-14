@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
+import 'package:http/http.dart' as http;
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -38,10 +41,27 @@ class User {
     Map<String, dynamic> userData,
     Map<String, dynamic> onboardingData,
   ) {
+    // Prioritize onboarding data for names, then fallback to user data
+    String firstName = onboardingData['firstName'] ?? '';
+    String lastName = onboardingData['lastName'] ?? '';
+
+    if (firstName.isEmpty && lastName.isEmpty) {
+      final userName = userData['name'] as String?;
+      if (userName != null && userName.isNotEmpty) {
+        final nameParts = userName.split(' ');
+        if (nameParts.isNotEmpty) {
+          firstName = nameParts[0];
+        }
+        if (nameParts.length > 1) {
+          lastName = nameParts.sublist(1).join(' ');
+        }
+      }
+    }
+
     return User(
       id: id,
-      firstName: onboardingData['firstName'] ?? '',
-      lastName: onboardingData['lastName'] ?? '',
+      firstName: firstName,
+      lastName: lastName,
       email: userData['email'] ?? '',
       department: onboardingData['department'] ?? '',
       designation: onboardingData['designation'] ?? '',
@@ -49,6 +69,19 @@ class User {
       status:
           userData['status'] ??
           'Active', // Default to Active if not in Firestore
+    );
+  }
+
+  factory User.fromApi(Map<String, dynamic> data) {
+    return User(
+      id: data['id'] ?? '',
+      firstName: data['firstName'] ?? '',
+      lastName: data['lastName'] ?? '',
+      email: data['email'] ?? '',
+      department: data['department'] ?? '',
+      designation: data['designation'] ?? '',
+      role: data['role'] ?? 'Staff',
+      status: data['status'] ?? 'Active',
     );
   }
 }
@@ -165,50 +198,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       debugPrint(
         'Attempting to fetch data from projectId: ${FirebaseFirestore.instance.app.options.projectId}',
       ); // Debug print
-      // Fetch from 'users' collection
-      final usersQuerySnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .get();
-      List<User> usersList = [];
+      final response = await http
+          .get(Uri.parse('http://localhost:5000/api/users'));
 
-      for (var userDoc in usersQuerySnapshot.docs) {
-        Map<String, dynamic> userData = userDoc.data();
-        String userId = userDoc.id;
-
-        // Fetch corresponding document from 'onboarding' collection
-        final onboardingDoc = await FirebaseFirestore.instance
-            .collection('onboarding')
-            .where('user_id', isEqualTo: userId)
-            .limit(1)
-            .get();
-
-        if (onboardingDoc.docs.isNotEmpty) {
-          Map<String, dynamic> onboardingData = onboardingDoc.docs.first.data();
-          // Combine data and create User object
-          usersList.add(User.fromFirestore(userId, userData, onboardingData));
-        } else {
-          debugPrint('No onboarding data found for user: $userId');
-          // Create user with available data, defaulting missing onboarding fields
-          usersList.add(
-            User(
-              id: userId,
-              firstName: userData['name']?.split(' ')[0] ?? '',
-              lastName: userData['name']?.split(' ').length > 1
-                  ? userData['name'].split(' ')[1]
-                  : '',
-              email: userData['email'] ?? '',
-              department: '', // Default empty if no onboarding
-              designation: '', // Default empty if no onboarding
-              role: userData['role'] ?? 'Staff',
-              status: userData['status'] ?? 'Active',
-            ),
-          );
-        }
+      if (response.statusCode != 200) {
+        throw Exception(
+            'Failed to fetch users: ${response.statusCode} ${response.body}');
       }
 
-      debugPrint(
-        'Fetched ${usersList.length} users (combined from users and onboarding collections).',
-      );
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final usersData =
+          (decoded['users'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+      final usersList =
+          usersData.map((user) => User.fromApi(user)).toList(growable: false);
+
+      debugPrint('Fetched ${usersList.length} users from backend.');
       setState(() {
         _fetchedUsers = usersList;
         _isLoading = false;
@@ -228,13 +232,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     String newStatus,
   ) async {
     try {
-      await FirebaseFirestore.instance.collection('users').doc(userId).update({
-        'role': newRole,
-        'status': newStatus,
-      });
-      debugPrint(
-        'User $userId role updated to $newRole and status to $newStatus in Firestore.',
+      final response = await http.patch(
+        Uri.parse('http://localhost:5000/api/users/$userId'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'role': newRole, 'status': newStatus}),
       );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+            'Failed to update user $userId: ${response.statusCode} ${response.body}');
+      }
+      debugPrint('User $userId role updated to $newRole and status to $newStatus.');
       // Refresh the user list after updating the role and status
       _fetchUsersData();
     } catch (e) {
@@ -571,8 +579,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ),
             ),
             const SizedBox(width: 16.0),
-            _buildRoleBadge(user.role),
-            const SizedBox(width: 8.0),
+            if (user.role.toLowerCase() != 'user') ...[
+              _buildRoleBadge(user.role),
+              const SizedBox(width: 8.0),
+            ],
             _buildStatusBadge(user.status),
             const SizedBox(width: 8.0),
             Transform.rotate(
@@ -639,83 +649,98 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       ),
       child: Column(
         children: [
-          // User Role Dropdown
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'User Role: ',
-                style: TextStyle(color: Colors.white60, fontFamily: 'Poppins'),
-              ),
-              const SizedBox(height: 8.0),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2C3E50),
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                child: DropdownButton<String>(
-                  value: selectedRole,
-                  dropdownColor: const Color(0xFF2C3E50),
-                  underline: const SizedBox.shrink(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      selectedRole = newValue!;
-                      user.role = newValue;
-                    });
-                  },
-                  items: userRoles.map<DropdownMenuItem<String>>((
-                    String value,
-                  ) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        value,
-                        style: const TextStyle(fontFamily: 'Poppins'),
+              // User Role Dropdown
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'User Role: ',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontFamily: 'Poppins',
                       ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16.0), // Spacing between role and status
-          // User Status Dropdown
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'User Status: ',
-                style: TextStyle(color: Colors.white60, fontFamily: 'Poppins'),
-              ),
-              const SizedBox(height: 8.0),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2C3E50),
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                child: DropdownButton<String>(
-                  value: selectedStatusLocal,
-                  dropdownColor: const Color(0xFF2C3E50),
-                  underline: const SizedBox.shrink(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      selectedStatusLocal = newValue!;
-                      user.status = newValue;
-                    });
-                  },
-                  items: ['Active', 'Pending'].map<DropdownMenuItem<String>>((
-                    String value,
-                  ) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        value,
-                        style: const TextStyle(fontFamily: 'Poppins'),
+                    ),
+                    const SizedBox(height: 8.0),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2C3E50),
+                        borderRadius: BorderRadius.circular(8.0),
                       ),
-                    );
-                  }).toList(),
+                      child: DropdownButton<String>(
+                        value: selectedRole,
+                        dropdownColor: const Color(0xFF2C3E50),
+                        underline: const SizedBox.shrink(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            selectedRole = newValue!;
+                            user.role = newValue;
+                          });
+                        },
+                        items: userRoles.map<DropdownMenuItem<String>>((
+                          String value,
+                        ) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(
+                              value,
+                              style: const TextStyle(fontFamily: 'Poppins'),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16.0), // Spacing between role and status
+              // User Status Dropdown
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'User Status: ',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    const SizedBox(height: 8.0),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2C3E50),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: DropdownButton<String>(
+                        value: selectedStatusLocal,
+                        dropdownColor: const Color(0xFF2C3E50),
+                        underline: const SizedBox.shrink(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            selectedStatusLocal = newValue!;
+                            user.status = newValue;
+                          });
+                        },
+                        items: ['Active', 'Pending']
+                            .map<DropdownMenuItem<String>>((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(
+                                  value,
+                                  style: const TextStyle(fontFamily: 'Poppins'),
+                                ),
+                              );
+                            })
+                            .toList(),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

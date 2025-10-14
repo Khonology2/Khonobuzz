@@ -43,6 +43,7 @@ dependencies:
   intl: ^0.18.1
   flutter_aad_oauth: ^2.3.0
   firebase_core: ^2.32.0 # Added firebase_core dependency
+  video_player: ^2.9.2
 
 dev_dependencies:
   flutter_test:
@@ -73,6 +74,7 @@ flutter:
     - assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png
     - assets/images/khono.png
     - assets/images/rokects.png
+    - assets/images/animated_rocket.mp4
     - assets/images/Networking_Collaboration/Collaboration_Red Badge_White.png
     - assets/images/Time Allocation_Approval/Allocation_Red Badge_White.png # Updated path for Time Keeping
     - assets/images/project_data.png
