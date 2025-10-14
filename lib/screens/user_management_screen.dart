@@ -198,7 +198,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         'Attempting to fetch data from projectId: ${FirebaseFirestore.instance.app.options.projectId}',
       ); // Debug print
       final response = await http
-          .get(Uri.parse('http://localhost:5000/api/users'));
+          .get(Uri.parse('https://khonology-buzz-build-backend.onrender.com/api/users'));
 
       if (response.statusCode != 200) {
         throw Exception(
@@ -232,7 +232,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   ) async {
     try {
       final response = await http.patch(
-        Uri.parse('http://localhost:5000/api/users/$userId'),
+        Uri.parse('https://khonology-buzz-build-backend.onrender.com/api/users/$userId'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'role': newRole, 'status': newStatus}),
       );
