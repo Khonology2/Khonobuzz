@@ -134,8 +134,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     'Staff',
     'Manager',
     'Admin',
-    'user',
-  ]; // Added 'user' to roles list
+  ];
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -672,7 +671,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         borderRadius: BorderRadius.circular(8.0),
                       ),
                       child: DropdownButton<String>(
-                        value: selectedRole,
+                        value: userRoles.contains(selectedRole) ? selectedRole : null,
+                        hint: const Text(
+                          'Select role',
+                          style: TextStyle(fontFamily: 'Poppins'),
+                        ),
                         dropdownColor: const Color(0xFF2C3E50),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
@@ -718,7 +721,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         borderRadius: BorderRadius.circular(8.0),
                       ),
                       child: DropdownButton<String>(
-                        value: selectedStatusLocal,
+                        value: ['Active', 'Pending'].contains(selectedStatusLocal)
+                            ? selectedStatusLocal
+                            : null,
+                        hint: const Text(
+                          'Select status',
+                          style: TextStyle(fontFamily: 'Poppins'),
+                        ),
                         dropdownColor: const Color(0xFF2C3E50),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
