@@ -39,7 +39,6 @@ dependencies:
   provider: ^6.1.5+1
   http: ^0.13.6
   shared_preferences: ^2.5.3
-  file_picker: ^6.1.1
   intl: ^0.18.1
   flutter_aad_oauth: ^2.3.0
   firebase_core: ^2.32.0 # Added firebase_core dependency
@@ -69,6 +68,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
+    - assets/videos/spinning_discs.gif      
     - assets/images/logo.png
     - assets/images/discs.png
     - assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png

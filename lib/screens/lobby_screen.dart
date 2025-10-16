@@ -146,9 +146,12 @@ class LobbyScreenState extends State<LobbyScreen> {
                   AnimatedOpacity(
                     opacity: _discsOpacity,
                     duration: const Duration(milliseconds: 1000),
-                    child: Image.asset(
-                      'assets/images/discs.png', // Discs asset
-                      height: 80, // Adjust height as needed
+                    child: RotatedBox(
+                      quarterTurns: 1,
+                      child: Image.asset(
+                        'assets/videos/spinning_discs.gif', // Discs asset
+                        height: 122, // Adjust height as needed
+                      ),
                     ),
                   ),
                 ],
