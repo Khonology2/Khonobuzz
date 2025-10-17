@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/animation.dart' show AlwaysStoppedAnimation;
 import 'auth_screen.dart'; // Import AuthScreen
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart'; // Import FlutterAadOauth
 import 'package:video_player/video_player.dart';
@@ -11,9 +12,207 @@ class LobbyScreen extends StatefulWidget {
   LobbyScreenState createState() => LobbyScreenState();
 }
 
+class _AnimatedBubblyButton extends StatefulWidget {
+  final String text;
+  final Color color;
+  final VoidCallback? onPressed;
+  final int bounceDelayMs;
+  const _AnimatedBubblyButton({
+    required this.text,
+    required this.color,
+    required this.onPressed,
+    required this.bounceDelayMs,
+  });
+
+  @override
+  State<_AnimatedBubblyButton> createState() => _AnimatedBubblyButtonState();
+}
+
+class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
+    with TickerProviderStateMixin {
+  late AnimationController _btnController;
+  Animation<Offset> _btnOffset =
+      const AlwaysStoppedAnimation<Offset>(Offset.zero);
+  late AnimationController _pulseController;
+  Animation<double> _pulseScale =
+      const AlwaysStoppedAnimation<double>(1.0);
+  Animation<double> _ringRadius =
+      const AlwaysStoppedAnimation<double>(0.0);
+  Animation<double> _ringOpacity =
+      const AlwaysStoppedAnimation<double>(0.0);
+  late AnimationController _clickController;
+  Animation<double> _clickProgress =
+      const AlwaysStoppedAnimation<double>(0.0);
+
+  @override
+  void initState() {
+    super.initState();
+    _btnController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+    _btnOffset = Tween<Offset>(
+      begin: const Offset(0, 1.0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _btnController, curve: Curves.bounceOut));
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _pulseScale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.9, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 70,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.9)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 30,
+      ),
+    ]).animate(_pulseController);
+    _ringRadius = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween<double>(begin: 0.0, end: 50.0), weight: 70),
+      TweenSequenceItem(tween: Tween<double>(begin: 50.0, end: 0.0), weight: 30),
+    ]).animate(_pulseController);
+    _ringOpacity = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween<double>(begin: 0.5, end: 0.0), weight: 70),
+      TweenSequenceItem(tween: ConstantTween<double>(0.0), weight: 30),
+    ]).animate(_pulseController);
+
+    _clickController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 750),
+    );
+    _clickProgress =
+        CurvedAnimation(parent: _clickController, curve: Curves.easeInOut);
+
+    _btnController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _pulseController.repeat(reverse: true);
+      }
+    });
+
+    Future.delayed(Duration(milliseconds: widget.bounceDelayMs), () {
+      if (mounted) _btnController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _clickController.dispose();
+    _pulseController.dispose();
+    _btnController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SlideTransition(
+      position: _btnOffset,
+      child: ScaleTransition(
+        scale: _pulseScale,
+        child: AnimatedBuilder(
+          animation: _pulseScale,
+          builder: (context, child) {
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: 250,
+                  decoration: BoxDecoration(
+                    color: widget.color,
+                    borderRadius: BorderRadius.circular(50.0),
+                    boxShadow: [
+                      BoxShadow(
+                        color: widget.color.withOpacity(_ringOpacity.value),
+                        offset: const Offset(0, 0),
+                        blurRadius: 0,
+                        spreadRadius: _ringRadius.value,
+                      ),
+                    ],
+                  ),
+                  child: child,
+                ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedBuilder(
+                      animation: _clickController,
+                      builder: (context, _) {
+                        return CustomPaint(
+                          painter: _BubblesPainter(
+                            progress: _clickProgress.value,
+                            color: widget.color,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+          child: MaterialButton(
+            onPressed: () {
+              _clickController.forward(from: 0);
+              if (widget.onPressed != null) {
+                Future.delayed(const Duration(milliseconds: 250), widget.onPressed!);
+              }
+            },
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            child: Text(
+              widget.text,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Poppins',
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BubblesPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  _BubblesPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress <= 0 || progress >= 1) return;
+    final paint = Paint()..style = PaintingStyle.fill;
+    final topXs = [0.05, 0.15, 0.3, 0.5, 0.7, 0.85, 0.95];
+    final bottomXs = [0.1, 0.25, 0.45, 0.6, 0.75, 0.9];
+    for (final x in topXs) {
+      final p = progress;
+      final y = (0.0 - size.height * (0.8 * p));
+      final r = (size.height * 0.12) * (1.0 - p);
+      paint.color = color.withOpacity(0.5 * (1.0 - p));
+      canvas.drawCircle(Offset(x * size.width, y + size.height * 0.1), r, paint);
+    }
+    for (final x in bottomXs) {
+      final p = progress;
+      final y = size.height + size.height * (0.8 * p);
+      final r = (size.height * 0.12) * (1.0 - p);
+      paint.color = color.withOpacity(0.5 * (1.0 - p));
+      canvas.drawCircle(Offset(x * size.width, y - size.height * 0.1), r, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BubblesPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
+  }
+}
+
 class LobbyScreenState extends State<LobbyScreen> {
   double _discsOpacity = 0.0; // Initial opacity for discs.png
-  late VideoPlayerController _videoController;
+  VideoPlayerController? _videoController;
 
   @override
   void initState() {
@@ -25,7 +224,7 @@ class LobbyScreenState extends State<LobbyScreen> {
       ..initialize().then((_) {
         if (mounted) {
           setState(() {
-            _videoController.play();
+            _videoController?.play();
           });
         }
       });
@@ -39,7 +238,7 @@ class LobbyScreenState extends State<LobbyScreen> {
 
   @override
   void dispose() {
-    _videoController.dispose();
+    _videoController?.dispose();
     super.dispose();
   }
 
@@ -71,7 +270,7 @@ class LobbyScreenState extends State<LobbyScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Rocket Asset
-                  if (_videoController.value.isInitialized)
+                  if ((_videoController?.value.isInitialized ?? false))
                     Container(
                       width: 72,
                       height: 72,
@@ -83,9 +282,9 @@ class LobbyScreenState extends State<LobbyScreen> {
                         child: FittedBox(
                           fit: BoxFit.cover,
                           child: SizedBox(
-                            width: _videoController.value.size.width,
-                            height: _videoController.value.size.height,
-                            child: VideoPlayer(_videoController),
+                            width: _videoController?.value.size.width ?? 0,
+                            height: _videoController?.value.size.height ?? 0,
+                            child: VideoPlayer(_videoController!),
                           ),
                         ),
                       ),
@@ -109,37 +308,18 @@ class LobbyScreenState extends State<LobbyScreen> {
                     ),
                   ),
                   const SizedBox(height: 24), // Added spacing for the new button
-                  Container(
-                    width: 250,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(50),
-                    ),
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(
-                            builder: (context) => AuthScreen(oauth: widget.oauth),
-                          ),
-                          (Route<dynamic> route) => false,
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFC10D00), // Button color
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16.0),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(50),
+                  _AnimatedBubblyButton(
+                    text: 'Go Back',
+                    color: const Color(0xFFC10D00),
+                    onPressed: () {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                          builder: (context) => AuthScreen(oauth: widget.oauth),
                         ),
-                      ),
-                      child: const Text(
-                        'Go Back',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Poppins', // Apply Poppins font
-                        ),
-                      ),
-                    ),
+                        (Route<dynamic> route) => false,
+                      );
+                    },
+                    bounceDelayMs: 250,
                   ),
                   const SizedBox(height: 32),
                   // Discs Asset
