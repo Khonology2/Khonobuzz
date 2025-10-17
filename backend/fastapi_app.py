@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
+from brotli_asgi import BrotliMiddleware
 from firebase_admin import credentials, firestore, initialize_app
 from dotenv import load_dotenv
 import os
@@ -70,6 +72,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(BrotliMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 @app.get("/")
 async def home():
