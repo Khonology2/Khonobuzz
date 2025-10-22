@@ -396,6 +396,14 @@ class _SideMenuState extends State<SideMenu> {
                   isExpanded: _isExpanded,
                   onTap: () => widget.onItemSelected(6),
                 ),
+                MenuItemWidget(
+                  unselectedIconPath: 'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
+                  selectedIconPath: 'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
+                  title: 'Modules',
+                  isSelected: widget.selectedIndex == 8,
+                  isExpanded: _isExpanded,
+                  onTap: () => widget.onItemSelected(8),
+                ),
                 const Divider(color: Colors.white54),
                 // Logout item with hover functionality
                 _LogoutMenuItem(

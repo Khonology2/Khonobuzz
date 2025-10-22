@@ -7,6 +7,7 @@ import 'screens/analytics_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/project_data_screen.dart';
 import 'screens/projects_screen.dart';
+import 'screens/module_screen.dart'; // Import ModuleScreen
 import 'screens/user_management_screen.dart';
 import 'screens/landing_screen.dart'; // Import LandingScreen
 import 'providers/auth_provider.dart';
@@ -95,7 +96,7 @@ class _MainScreenState extends State<MainScreen> {
     // }
   }
 
-  final List<Widget> _screens = [
+  List<Widget> get _screens => [
     const DashboardScreen(),
     const ResourceAllocationScreen(),
     const TimeKeepingScreen(),
@@ -104,6 +105,7 @@ class _MainScreenState extends State<MainScreen> {
     const ProfileScreen(),
     const UserManagementScreen(),
     const ProjectsScreen(), // Added for Assets
+    const ModuleScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -124,10 +126,10 @@ class _MainScreenState extends State<MainScreen> {
       body: Row(
         children: [
           SideMenu(
-            selectedIndex: _selectedIndex,
+            selectedIndex: (_selectedIndex < _screens.length) ? _selectedIndex : 0,
             onItemSelected: _onItemTapped,
           ),
-          Expanded(child: _screens[_selectedIndex]),
+          Expanded(child: _screens[(_selectedIndex < _screens.length) ? _selectedIndex : 0]),
         ],
       ),
       floatingActionButton: GestureDetector(

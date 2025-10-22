@@ -43,6 +43,7 @@ dependencies:
   flutter_aad_oauth: ^2.3.0
   firebase_core: ^2.32.0 # Added firebase_core dependency
   video_player: ^2.9.2
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:
