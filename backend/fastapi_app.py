@@ -169,8 +169,8 @@ async def register_user(user: UserRegister):
 @app.get("/api/users")
 async def list_users():
     try:
-        users_query = db.collection('users').order_by('created_at', direction=firestore.Query.DESCENDING).stream()
-        users_data = []
+        users_query = db.collection('users').stream()
+        users_with_sort_keys = []
 
         for user_doc in users_query:
             user_info = user_doc.to_dict() or {}
@@ -185,9 +185,21 @@ async def list_users():
             first_name = onboarding_info.get('firstName') or onboarding_info.get('name') or ''
             last_name = onboarding_info.get('lastName') or onboarding_info.get('surname') or ''
             created_at_val = user_info.get('created_at')
-            created_at_str = created_at_val.isoformat() + 'Z' if isinstance(created_at_val, datetime) else None
+            created_at_dt = created_at_val if isinstance(created_at_val, datetime) else None
+            if created_at_dt is None:
+                # Fallback to Firestore document create/update times if available
+                try:
+                    doc_create = getattr(user_doc, 'create_time', None)
+                    doc_update = getattr(user_doc, 'update_time', None)
+                    if isinstance(doc_create, datetime):
+                        created_at_dt = doc_create
+                    elif isinstance(doc_update, datetime):
+                        created_at_dt = doc_update
+                except Exception:
+                    created_at_dt = None
+            created_at_str = created_at_dt.isoformat() + 'Z' if created_at_dt else None
 
-            users_data.append({
+            user_payload = {
                 'id': user_doc.id,
                 'email': user_info.get('email', ''),
                 'role': user_info.get('role', 'Staff'),
@@ -197,7 +209,11 @@ async def list_users():
                 'department': onboarding_info.get('department', ''),
                 'designation': onboarding_info.get('designation', ''),
                 'createdAt': created_at_str,
-            })
+            }
+            users_with_sort_keys.append((created_at_dt, user_payload))
+
+        users_with_sort_keys.sort(key=lambda item: item[0] or datetime.min, reverse=True)
+        users_data = [payload for _, payload in users_with_sort_keys]
 
         return JSONResponse(status_code=status.HTTP_200_OK, content={'users': users_data})
     except Exception as e:
