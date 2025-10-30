@@ -33,3 +33,18 @@ Future<void> syncUserToPDH(
       .doc(uid)
       .set(onboardingData, SetOptions(merge: true));
 }
+
+Future<void> updatePDHUserPartial(
+  String uid,
+  Map<String, dynamic> userFields, {
+  Map<String, dynamic>? onboardingFields,
+}) async {
+  final fs = await _getPdhFirestore();
+  await fs.collection('users').doc(uid).set(userFields, SetOptions(merge: true));
+  if (onboardingFields != null) {
+    await fs
+        .collection('onboarding')
+        .doc(uid)
+        .set(onboardingFields, SetOptions(merge: true));
+  }
+}

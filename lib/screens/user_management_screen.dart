@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../utils/pdh_firebase.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -252,11 +253,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         throw Exception(
             'Failed to update user $userId: ${response.statusCode} ${response.body}');
       }
-      debugPrint('User $userId role updated to $newRole and status to $newStatus.');
+      await updatePDHUserPartial(userId, {
+        'role': newRole,
+        'status': newStatus,
+        'updated_at': DateTime.now().toUtc(),
+      });
       // Refresh the user list after updating the role and status
       _fetchUsersData();
     } catch (e) {
-      debugPrint('Error updating user role and status: $e');
       // Optionally show error to user
     }
   }
