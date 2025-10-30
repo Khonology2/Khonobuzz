@@ -6,6 +6,7 @@ import 'package:khonology_app/main.dart'; // Import MainScreen
 import 'dart:async'; // Import Timer
 import 'package:khonology_app/providers/auth_provider.dart'; // Import AuthProvider
 import 'package:provider/provider.dart'; // Import Provider
+import '../widgets/animations/loading_button.dart';
 
 class ManualLoginScreen extends StatefulWidget {
   const ManualLoginScreen({super.key});
@@ -138,20 +139,18 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 32),
-                  _buildButton(
+                  LoadingConfirmButton(
                     text: 'CONFIRM',
                     color: const Color(0xFFC10D00),
                     onPressed: () async {
-                      // Implement confirm logic here
                       final authProvider = context.read<AuthProvider>();
-                      bool success = await authProvider.manualLogin(
+                      final success = await authProvider.manualLogin(
                         _emailController.text,
                       );
 
                       if (!mounted) return;
 
                       if (success) {
-                        if (!mounted) return; // Added for linter
                         Navigator.of(context).pushAndRemoveUntil(
                           MaterialPageRoute(
                             builder: (context) => const MainScreen(),
@@ -159,7 +158,6 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
                           (route) => false,
                         );
                       } else {
-                        if (!mounted) return; // Added for linter
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(

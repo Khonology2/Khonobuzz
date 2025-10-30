@@ -20,6 +20,7 @@ class User {
   final String designation;
   String role; // Default to 'Staff'
   String status; // Default to 'Active'
+  final DateTime? createdAt;
 
   // Combined name getter for UI display
   String get name => '$firstName $lastName';
@@ -33,6 +34,7 @@ class User {
     required this.designation,
     this.role = 'Staff',
     this.status = 'Active',
+    this.createdAt,
   });
 
   // Factory constructor to create a User from combined Firestore data
@@ -82,6 +84,7 @@ class User {
       designation: data['designation'] ?? '',
       role: data['role'] ?? 'Staff',
       status: data['status'] ?? 'Active',
+      createdAt: null,
     );
   }
 }
@@ -211,9 +214,46 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       final usersList =
           usersData.map((user) => User.fromApi(user)).toList(growable: false);
 
+      final firestore = FirebaseFirestore.instance;
+      final futures = usersList
+          .map((u) => firestore.collection('users').doc(u.id).get())
+          .toList();
+      final snapshots = await Future.wait(futures);
+      final enrichedUsers = <User>[];
+      for (int i = 0; i < usersList.length; i++) {
+        final base = usersList[i];
+        final snap = snapshots[i];
+        final data = snap.data();
+        DateTime? createdAt;
+        if (data != null && data['created_at'] != null) {
+          final ts = data['created_at'];
+          if (ts is Timestamp) {
+            createdAt = ts.toDate();
+          } else if (ts is DateTime) {
+            createdAt = ts;
+          }
+        }
+        enrichedUsers.add(User(
+          id: base.id,
+          firstName: base.firstName,
+          lastName: base.lastName,
+          email: base.email,
+          department: base.department,
+          designation: base.designation,
+          role: base.role,
+          status: base.status,
+          createdAt: createdAt,
+        ));
+      }
+      enrichedUsers.sort((a, b) {
+        final aTime = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTime.compareTo(aTime);
+      });
+
       debugPrint('Fetched ${usersList.length} users from backend.');
       setState(() {
-        _fetchedUsers = usersList;
+        _fetchedUsers = enrichedUsers;
         _isLoading = false;
       });
     } catch (e) {
