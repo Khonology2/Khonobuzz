@@ -7,6 +7,7 @@ import 'package:provider/provider.dart'; // Import for AuthProvider
 import '../providers/auth_provider.dart'; // Import AuthProvider
 import 'lobby_screen.dart'; // Import LobbyScreen
 import 'dart:async'; // Import Timer
+import '../widgets/animations/loading_button.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final FlutterAadOauth oauth; // Receive the oauth object
@@ -296,33 +297,24 @@ class OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   const SizedBox(height: 32),
                   // Buttons
-                  _buildButton(
+                  LoadingConfirmButton(
                     text: 'CONFIRM',
                     color: const Color(0xFFC10D00),
                     onPressed: () async {
-                      // Implement confirm logic here
-                      // For now, allow login without verification
                       debugPrint('Onboarding Data:');
                       debugPrint('  First Name: ${_firstNameController.text}');
                       debugPrint('  Last Name: ${_lastNameController.text}');
                       debugPrint('  Email: ${_emailController.text}');
                       debugPrint('  Department: $_selectedDepartment');
-                      debugPrint(
-                        '  Designation: $_selectedDesignation', // Pass selected designation
-                      );
+                      debugPrint('  Designation: $_selectedDesignation');
 
-                      bool success = await context.read<AuthProvider>().login(
+                      final success = await context.read<AuthProvider>().login(
                         _emailController.text,
                         firstName: _firstNameController.text,
                         lastName: _lastNameController.text,
-                        department:
-                            _selectedDepartment ??
-                            '', // Fix: Pass empty string if null
-                        designation:
-                            _selectedDesignation ??
-                            '', // Fix: Pass empty string if null
-                        role:
-                            null, // Role selection is not explicitly handled on this screen currently
+                        department: _selectedDepartment ?? '',
+                        designation: _selectedDesignation ?? '',
+                        role: null,
                       );
                       if (!mounted) return;
 
@@ -334,31 +326,19 @@ class OnboardingScreenState extends State<OnboardingScreen> {
                               duration: Duration(seconds: 2),
                             ),
                           );
-                          Future.delayed(const Duration(seconds: 2), () {
-                            if (!mounted) return;
-                            Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    LobbyScreen(oauth: widget.oauth),
-                              ),
-                              (route) => false,
-                            );
-                          });
-                        } else {
-                          Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  LobbyScreen(oauth: widget.oauth),
-                            ),
-                            (route) => false,
-                          );
+                          await Future.delayed(const Duration(seconds: 2));
                         }
+                        if (!mounted) return;
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                            builder: (context) => LobbyScreen(oauth: widget.oauth),
+                          ),
+                          (route) => false,
+                        );
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text(
-                              'Registration/Login failed. Please try again.',
-                            ),
+                            content: Text('Registration/Login failed. Please try again.'),
                           ),
                         );
                       }

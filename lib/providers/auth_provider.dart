@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http; // Import for making HTTP requests
 import 'dart:convert'; // Import for JSON encoding/decoding
+import '../utils/pdh_firebase.dart';
 
 class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
@@ -45,7 +46,7 @@ class AuthProvider extends ChangeNotifier {
     debugPrint('  Designation: $designation');
 
     final url = Uri.parse(
-      'https://khonology-buzz-build-backend.onrender.com/api/auth/register',
+      'https://khonobuzz-backend.onrender.com/api/auth/register',
     ); // Your backend registration endpoint
     try {
       final response = await http.post(
@@ -71,6 +72,40 @@ class AuthProvider extends ChangeNotifier {
         // User registered successfully
         final responseData = json.decode(response.body);
         debugPrint('Registration successful: $responseData');
+
+        final String uid = responseData['user']?['id'] ?? '';
+        try {
+          if (uid.isNotEmpty) {
+            final Map<String, dynamic> userData = {
+              'email': email,
+              'password': 'password',
+              'name': '$firstName $lastName',
+              'role': role ?? 'user',
+              'status': 'Pending',
+              'created_at': DateTime.now().toUtc(),
+              'updated_at': DateTime.now().toUtc(),
+            };
+            final Map<String, dynamic> onboardingData = {
+              'user_id': uid,
+              'email': email,
+              'name': firstName,
+              'surname': lastName,
+              'department': department ?? '',
+              'designation': designation,
+              'first_valid': DateTime.utc(2025, 9, 25),
+              'inserted_by': email,
+              'last_valid': DateTime.utc(2039, 12, 31),
+              'onboarding_id': uid,
+              'status_id': '',
+              'updated_by': email,
+              'created_at': DateTime.now().toUtc(),
+              'updated_at': DateTime.now().toUtc(),
+            };
+            await syncUserToPDH(userData, onboardingData, uid);
+          }
+        } catch (e) {
+          debugPrint('PDH sync error: $e');
+        }
 
         final prefs = await SharedPreferences.getInstance();
         _isAuthenticated = true;
@@ -121,7 +156,7 @@ class AuthProvider extends ChangeNotifier {
     debugPrint('  Email: $email');
 
     final url = Uri.parse(
-      'https://khonology-buzz-build-backend.onrender.com/api/auth/login',
+      'https://khonobuzz-backend.onrender.com/api/auth/login',
     );
     try {
       final response = await http.post(
