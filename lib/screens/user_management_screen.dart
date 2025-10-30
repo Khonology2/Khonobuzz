@@ -241,6 +241,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     String userId,
     String newRole,
     String newStatus,
+    {
+    required String firstName,
+    required String lastName,
+    required String department,
+    required String designation,
+  }
   ) async {
     try {
       final response = await http.patch(
@@ -256,6 +262,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       await updatePDHUserPartial(userId, {
         'role': newRole,
         'status': newStatus,
+        'name': '$firstName $lastName',
+        'updated_at': DateTime.now().toUtc(),
+      }, onboardingFields: {
+        'name': firstName,
+        'surname': lastName,
+        'department': department,
+        'designation': designation,
         'updated_at': DateTime.now().toUtc(),
       });
       // Refresh the user list after updating the role and status
@@ -777,7 +790,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           // Update Button
           ElevatedButton(
             onPressed: () {
-              _updateUserRoleAndStatus(user.id, user.role, user.status);
+              _updateUserRoleAndStatus(
+                user.id,
+                user.role,
+                user.status,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                department: user.department,
+                designation: user.designation,
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFC10D00),
