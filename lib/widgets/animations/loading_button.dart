@@ -49,7 +49,7 @@ class _LoadingConfirmButtonState extends State<LoadingConfirmButton> {
                   height: 22,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFC10D00)),
                   ),
                 )
               : Text(
