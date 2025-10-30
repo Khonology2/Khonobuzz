@@ -38,12 +38,6 @@ class AuthProvider extends ChangeNotifier {
     String designation = '', // Made optional with default empty string
   }) async {
     // Modified: added role and all onboarding parameters
-    debugPrint('Attempting to register user...');
-    debugPrint('  Email: $email');
-    debugPrint('  First Name: $firstName');
-    debugPrint('  Last Name: $lastName');
-    debugPrint('  Department: $department');
-    debugPrint('  Designation: $designation');
 
     final url = Uri.parse(
       'https://khonobuzz-backend.onrender.com/api/auth/register',
@@ -65,46 +59,38 @@ class AuthProvider extends ChangeNotifier {
         }),
       );
 
-      debugPrint('Response status: ${response.statusCode}');
-      debugPrint('Response body: ${response.body}');
-
       if (response.statusCode == 201) {
         // User registered successfully
         final responseData = json.decode(response.body);
-        debugPrint('Registration successful: $responseData');
 
         final String uid = responseData['user']?['id'] ?? '';
-        try {
-          if (uid.isNotEmpty) {
-            final Map<String, dynamic> userData = {
-              'email': email,
-              'password': 'password',
-              'name': '$firstName $lastName',
-              'role': role ?? 'user',
-              'status': 'Pending',
-              'created_at': DateTime.now().toUtc(),
-              'updated_at': DateTime.now().toUtc(),
-            };
-            final Map<String, dynamic> onboardingData = {
-              'user_id': uid,
-              'email': email,
-              'name': firstName,
-              'surname': lastName,
-              'department': department ?? '',
-              'designation': designation,
-              'first_valid': DateTime.utc(2025, 9, 25),
-              'inserted_by': email,
-              'last_valid': DateTime.utc(2039, 12, 31),
-              'onboarding_id': uid,
-              'status_id': '',
-              'updated_by': email,
-              'created_at': DateTime.now().toUtc(),
-              'updated_at': DateTime.now().toUtc(),
-            };
-            await syncUserToPDH(userData, onboardingData, uid);
-          }
-        } catch (e) {
-          debugPrint('PDH sync error: $e');
+        if (uid.isNotEmpty) {
+          final Map<String, dynamic> userData = {
+            'email': email,
+            'password': 'password',
+            'name': '$firstName $lastName',
+            'role': role ?? 'user',
+            'status': 'Pending',
+            'created_at': DateTime.now().toUtc(),
+            'updated_at': DateTime.now().toUtc(),
+          };
+          final Map<String, dynamic> onboardingData = {
+            'user_id': uid,
+            'email': email,
+            'name': firstName,
+            'surname': lastName,
+            'department': department ?? '',
+            'designation': designation,
+            'first_valid': DateTime.utc(2025, 9, 25),
+            'inserted_by': email,
+            'last_valid': DateTime.utc(2039, 12, 31),
+            'onboarding_id': uid,
+            'status_id': '',
+            'updated_by': email,
+            'created_at': DateTime.now().toUtc(),
+            'updated_at': DateTime.now().toUtc(),
+          };
+          await syncUserToPDH(userData, onboardingData, uid).catchError((_) {});
         }
 
         final prefs = await SharedPreferences.getInstance();
@@ -119,7 +105,6 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return true; // Indicate success
       } else if (response.statusCode == 409) {
-        debugPrint('User already exists. Attempting to log in.');
         // If user already exists, proceed as if logged in or attempt a login API call if available
         final prefs = await SharedPreferences.getInstance();
         _isAuthenticated = true;
@@ -134,15 +119,12 @@ class AuthProvider extends ChangeNotifier {
         return true; // Indicate success
       } else {
         // Handle other errors
-        debugPrint('Registration failed with status: ${response.statusCode}');
-        debugPrint('Error: ${response.body}');
         _isAuthenticated = false;
         _userAlreadyOnboarded = false; // Reset onboarding status on failure
         notifyListeners();
         return false; // Indicate failure
       }
     } catch (e) {
-      debugPrint('Error during registration: $e');
       _isAuthenticated = false;
       _userAlreadyOnboarded = false; // Reset onboarding status on error
       notifyListeners();
@@ -152,8 +134,6 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> manualLogin(String email) async {
     // Removed password parameter
-    debugPrint('Attempting manual login...');
-    debugPrint('  Email: $email');
 
     final url = Uri.parse(
       'https://khonobuzz-backend.onrender.com/api/auth/login',
@@ -165,12 +145,8 @@ class AuthProvider extends ChangeNotifier {
         body: json.encode({'email': email}),
       );
 
-      debugPrint('Manual Login Response status: ${response.statusCode}');
-      debugPrint('Manual Login Response body: ${response.body}');
-
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
-        debugPrint('Manual login successful: $responseData');
 
         final prefs = await SharedPreferences.getInstance();
         _isAuthenticated = true;
@@ -182,14 +158,11 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        debugPrint('Manual login failed with status: ${response.statusCode}');
-        debugPrint('Error: ${response.body}');
         _isAuthenticated = false;
         notifyListeners();
         return false;
       }
     } catch (e) {
-      debugPrint('Error during manual login: $e');
       _isAuthenticated = false;
       notifyListeners();
       return false;

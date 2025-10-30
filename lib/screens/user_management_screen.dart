@@ -84,7 +84,10 @@ class User {
       designation: data['designation'] ?? '',
       role: data['role'] ?? 'Staff',
       status: data['status'] ?? 'Active',
-      createdAt: null,
+      createdAt: (data['createdAt'] is String &&
+              (data['createdAt'] as String).isNotEmpty)
+          ? DateTime.tryParse(data['createdAt'])
+          : null,
     );
   }
 }
@@ -197,9 +200,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       _isLoading = true;
     });
     try {
-      debugPrint(
-        'Attempting to fetch data from projectId: ${FirebaseFirestore.instance.app.options.projectId}',
-      ); // Debug print
       final response = await http
           .get(Uri.parse('https://khonobuzz-backend.onrender.com/api/users'));
 
@@ -213,51 +213,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           (decoded['users'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
       final usersList =
           usersData.map((user) => User.fromApi(user)).toList(growable: false);
-
-      final firestore = FirebaseFirestore.instance;
-      final futures = usersList
-          .map((u) => firestore.collection('users').doc(u.id).get())
-          .toList();
-      final snapshots = await Future.wait(futures);
-      final enrichedUsers = <User>[];
-      for (int i = 0; i < usersList.length; i++) {
-        final base = usersList[i];
-        final snap = snapshots[i];
-        final data = snap.data();
-        DateTime? createdAt;
-        if (data != null && data['created_at'] != null) {
-          final ts = data['created_at'];
-          if (ts is Timestamp) {
-            createdAt = ts.toDate();
-          } else if (ts is DateTime) {
-            createdAt = ts;
-          }
-        }
-        enrichedUsers.add(User(
-          id: base.id,
-          firstName: base.firstName,
-          lastName: base.lastName,
-          email: base.email,
-          department: base.department,
-          designation: base.designation,
-          role: base.role,
-          status: base.status,
-          createdAt: createdAt,
-        ));
-      }
-      enrichedUsers.sort((a, b) {
+      usersList.sort((a, b) {
         final aTime = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         final bTime = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         return bTime.compareTo(aTime);
       });
 
-      debugPrint('Fetched ${usersList.length} users from backend.');
       setState(() {
-        _fetchedUsers = enrichedUsers;
+        _fetchedUsers = usersList;
         _isLoading = false;
       });
     } catch (e) {
-      debugPrint('Error fetching users data: $e');
       setState(() {
         _isLoading = false;
       });
@@ -526,7 +492,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Widget _buildUserList() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: CircularProgressIndicator(
+          color: const Color(0xFFC10D00),
+        ),
+      );
     }
 
     if (_fetchedUsers.isEmpty) {

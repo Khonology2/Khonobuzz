@@ -301,13 +301,6 @@ class OnboardingScreenState extends State<OnboardingScreen> {
                     text: 'CONFIRM',
                     color: const Color(0xFFC10D00),
                     onPressed: () async {
-                      debugPrint('Onboarding Data:');
-                      debugPrint('  First Name: ${_firstNameController.text}');
-                      debugPrint('  Last Name: ${_lastNameController.text}');
-                      debugPrint('  Email: ${_emailController.text}');
-                      debugPrint('  Department: $_selectedDepartment');
-                      debugPrint('  Designation: $_selectedDesignation');
-
                       final success = await context.read<AuthProvider>().login(
                         _emailController.text,
                         firstName: _firstNameController.text,

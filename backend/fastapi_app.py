@@ -169,7 +169,7 @@ async def register_user(user: UserRegister):
 @app.get("/api/users")
 async def list_users():
     try:
-        users_query = db.collection('users').stream()
+        users_query = db.collection('users').order_by('created_at', direction=firestore.Query.DESCENDING).stream()
         users_data = []
 
         for user_doc in users_query:
@@ -184,6 +184,8 @@ async def list_users():
 
             first_name = onboarding_info.get('firstName') or onboarding_info.get('name') or ''
             last_name = onboarding_info.get('lastName') or onboarding_info.get('surname') or ''
+            created_at_val = user_info.get('created_at')
+            created_at_str = created_at_val.isoformat() + 'Z' if isinstance(created_at_val, datetime) else None
 
             users_data.append({
                 'id': user_doc.id,
@@ -194,6 +196,7 @@ async def list_users():
                 'lastName': last_name,
                 'department': onboarding_info.get('department', ''),
                 'designation': onboarding_info.get('designation', ''),
+                'createdAt': created_at_str,
             })
 
         return JSONResponse(status_code=status.HTTP_200_OK, content={'users': users_data})
