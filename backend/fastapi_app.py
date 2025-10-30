@@ -186,18 +186,34 @@ async def list_users():
             last_name = onboarding_info.get('lastName') or onboarding_info.get('surname') or ''
             created_at_val = user_info.get('created_at')
             created_at_dt = created_at_val if isinstance(created_at_val, datetime) else None
+            updated_at_val = user_info.get('updated_at')
+            updated_at_dt = updated_at_val if isinstance(updated_at_val, datetime) else None
+
+            # Fallbacks for timestamps
+            try:
+                doc_create = getattr(user_doc, 'create_time', None)
+                doc_update = getattr(user_doc, 'update_time', None)
+            except Exception:
+                doc_create = None
+                doc_update = None
+
             if created_at_dt is None:
-                # Fallback to Firestore document create/update times if available
-                try:
-                    doc_create = getattr(user_doc, 'create_time', None)
-                    doc_update = getattr(user_doc, 'update_time', None)
-                    if isinstance(doc_create, datetime):
-                        created_at_dt = doc_create
-                    elif isinstance(doc_update, datetime):
-                        created_at_dt = doc_update
-                except Exception:
-                    created_at_dt = None
+                if isinstance(doc_create, datetime):
+                    created_at_dt = doc_create
+                elif isinstance(doc_update, datetime):
+                    created_at_dt = doc_update
+
+            if updated_at_dt is None:
+                # Prefer document update_time, then created_at_dt, then create_time
+                if isinstance(doc_update, datetime):
+                    updated_at_dt = doc_update
+                elif created_at_dt is not None:
+                    updated_at_dt = created_at_dt
+                elif isinstance(doc_create, datetime):
+                    updated_at_dt = doc_create
+
             created_at_str = created_at_dt.isoformat() + 'Z' if created_at_dt else None
+            updated_at_str = updated_at_dt.isoformat() + 'Z' if updated_at_dt else None
 
             user_payload = {
                 'id': user_doc.id,
@@ -209,8 +225,11 @@ async def list_users():
                 'department': onboarding_info.get('department', ''),
                 'designation': onboarding_info.get('designation', ''),
                 'createdAt': created_at_str,
+                'updatedAt': updated_at_str,
             }
-            users_with_sort_keys.append((created_at_dt, user_payload))
+            # Sort primarily by updated_at, fallback to created_at
+            sort_key = updated_at_dt or created_at_dt
+            users_with_sort_keys.append((sort_key, user_payload))
 
         users_with_sort_keys.sort(key=lambda item: item[0] or datetime.min, reverse=True)
         users_data = [payload for _, payload in users_with_sort_keys]

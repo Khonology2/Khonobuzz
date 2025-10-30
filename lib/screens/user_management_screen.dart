@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
 import 'package:http/http.dart' as http;
 
 class UserManagementScreen extends StatefulWidget {
@@ -21,6 +20,7 @@ class User {
   String role; // Default to 'Staff'
   String status; // Default to 'Active'
   final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   // Combined name getter for UI display
   String get name => '$firstName $lastName';
@@ -35,6 +35,7 @@ class User {
     this.role = 'Staff',
     this.status = 'Active',
     this.createdAt,
+    this.updatedAt,
   });
 
   // Factory constructor to create a User from combined Firestore data
@@ -87,6 +88,10 @@ class User {
       createdAt: (data['createdAt'] is String &&
               (data['createdAt'] as String).isNotEmpty)
           ? DateTime.tryParse(data['createdAt'])
+          : null,
+      updatedAt: (data['updatedAt'] is String &&
+              (data['updatedAt'] as String).isNotEmpty)
+          ? DateTime.tryParse(data['updatedAt'])
           : null,
     );
   }
@@ -214,9 +219,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       final usersList =
           usersData.map((user) => User.fromApi(user)).toList(growable: false);
       usersList.sort((a, b) {
-        final aTime = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bTime = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bTime.compareTo(aTime);
+        final aKey = a.updatedAt ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bKey = b.updatedAt ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bKey.compareTo(aKey);
       });
 
       setState(() {
