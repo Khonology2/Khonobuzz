@@ -1,0 +1,27 @@
+2025-11-06 07:29:23.067: [INFO] VisibilityChanged: 0
+2025-11-06 07:29:23.171: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2025-11-06 07:29:23.173: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2025-11-06 07:29:23.176: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2025-11-06 07:29:23.179: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2025-11-06 07:29:23.181: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2025-11-06 07:29:23.182: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2025-11-06 07:29:23.184: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2025-11-06 07:29:23.186: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2025-11-06 07:29:23.188: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2025-11-06 07:29:23.191: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2025-11-06 07:29:23.194: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2025-11-06 07:29:23.207: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2025-11-06 07:29:23.207: [INFO] OnDoneLoading sync enabled: 0
+2025-11-06 07:29:23.213: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2025-11-06 07:29:30.214: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 3
+2025-11-06 07:29:30.232: [INFO] Primary account changed.
+2025-11-06 07:29:30.232: [INFO] OnPrimaryAccountChanged PrimaryAccountChangeEvent::Type::kSet
+2025-11-06 07:29:30.240: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 3
+2025-11-06 07:29:30.463: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 3
+2025-11-06 07:29:37.064: [INFO] VisibilityChanged: 1
+2025-11-06 07:29:37.415: [INFO] BookmarkNodeAdded, ABU: 0
+2025-11-06 07:29:37.417: [INFO] BookmarkNodeAdded, ABU: 0
+2025-11-06 07:29:43.289: [INFO] Sync initialization duration: 12614ms
+2025-11-06 08:29:13.880: [INFO] VisibilityChanged: 0
+2025-11-06 08:29:15.926: [INFO] VisibilityChanged: 1
+2025-11-06 09:02:31.633: [INFO] VisibilityChanged: 0
