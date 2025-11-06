@@ -1,10 +1,9 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
-import 'package:flutter/animation.dart' show AlwaysStoppedAnimation;
-import 'package:khonology_app/main.dart'; // Import MainScreen
+import '../main.dart'; // Import MainScreen
 import 'dart:async'; // Import Timer
-import 'package:khonology_app/providers/auth_provider.dart'; // Import AuthProvider
+import '../providers/auth_provider.dart'; // Import AuthProvider
 import 'package:provider/provider.dart'; // Import Provider
 import '../widgets/animations/loading_button.dart';
 
@@ -143,9 +142,21 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
                     text: 'CONFIRM',
                     color: const Color(0xFFC10D00),
                     onPressed: () async {
+                      final email = _emailController.text.trim();
+                      if (email.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Please enter your email address.',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+
                       final authProvider = context.read<AuthProvider>();
                       final success = await authProvider.manualLogin(
-                        _emailController.text,
+                        email,
                       );
 
                       if (!mounted) return;
@@ -153,7 +164,9 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
                       if (success) {
                         Navigator.of(context).pushAndRemoveUntil(
                           MaterialPageRoute(
-                            builder: (context) => const MainScreen(),
+                            builder: (context) => const MainScreen(
+                              initialIndex: 6, // Navigate to User Management screen
+                            ),
                           ),
                           (route) => false,
                         );
@@ -161,7 +174,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(
-                              'Manual login failed. Please check your credentials.',
+                              'Login failed. Please check your email address and try again.',
                             ),
                           ),
                         );
@@ -312,14 +325,14 @@ class _BubblesPainter extends CustomPainter {
       final p = progress;
       final y = (0.0 - size.height * (0.8 * p));
       final r = (size.height * 0.12) * (1.0 - p);
-      paint.color = color.withOpacity(0.5 * (1.0 - p));
+      paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
       canvas.drawCircle(Offset(x * size.width, y + size.height * 0.1), r, paint);
     }
     for (final x in bottomXs) {
       final p = progress;
       final y = size.height + size.height * (0.8 * p);
       final r = (size.height * 0.12) * (1.0 - p);
-      paint.color = color.withOpacity(0.5 * (1.0 - p));
+      paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
       canvas.drawCircle(Offset(x * size.width, y - size.height * 0.1), r, paint);
     }
   }

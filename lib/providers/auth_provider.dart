@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http; // Import for making HTTP requests
 import 'dart:convert'; // Import for JSON encoding/decoding
+import 'dart:async'; // Import for TimeoutException
 import '../utils/pdh_firebase.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -10,12 +11,14 @@ class AuthProvider extends ChangeNotifier {
   String? _userRole; // New: To store the user's role
   bool _userAlreadyOnboarded =
       false; // New: State to indicate if user already onboarded
+  int? _initialScreenIndex; // New: Track initial screen index after login
 
   bool get isAuthenticated => _isAuthenticated;
   String? get userEmail => _userEmail;
   String? get userRole => _userRole; // New: Getter for user role
   bool get userAlreadyOnboarded =>
       _userAlreadyOnboarded; // New: Getter for onboarding status
+  int? get initialScreenIndex => _initialScreenIndex; // New: Getter for initial screen index
 
   AuthProvider() {
     _loadAuthState();
@@ -26,6 +29,7 @@ class AuthProvider extends ChangeNotifier {
     _isAuthenticated = prefs.getBool('isAuthenticated') ?? false;
     _userEmail = prefs.getString('userEmail');
     _userRole = prefs.getString('userRole'); // New: Load user role
+    _initialScreenIndex = prefs.getInt('initialScreenIndex'); // Load initial screen index
     notifyListeners();
   }
 
@@ -143,6 +147,11 @@ class AuthProvider extends ChangeNotifier {
         url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'email': email}),
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw TimeoutException('Login request timed out. Please check your internet connection and try again.');
+        },
       );
 
       if (response.statusCode == 200) {
@@ -151,20 +160,76 @@ class AuthProvider extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         _isAuthenticated = true;
         _userEmail = responseData['user']['email'];
-        _userRole = responseData['user']['role'];
+        _userRole = responseData['user']['role'] ?? 'Staff';
+        _initialScreenIndex = 6; // Set to User Management screen
         await prefs.setBool('isAuthenticated', true);
         await prefs.setString('userEmail', _userEmail!);
         await prefs.setString('userRole', _userRole!);
+        await prefs.setInt('initialScreenIndex', 6); // Store initial screen index
         notifyListeners();
         return true;
+      } else if (response.statusCode == 404 || response.statusCode == 401) {
+        // User not found or unauthorized - but still allow login if email exists in our system
+        // Check if user exists by attempting to fetch user data
+        final userCheckUrl = Uri.parse(
+          'https://khonobuzz-backend.onrender.com/api/users',
+        );
+        try {
+          final userCheckResponse = await http.get(userCheckUrl).timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              throw TimeoutException('Request timed out');
+            },
+          );
+          
+          if (userCheckResponse.statusCode == 200) {
+            final usersData = json.decode(userCheckResponse.body);
+            final users = (usersData['users'] as List<dynamic>? ?? []);
+            Map<String, dynamic>? foundUser;
+            try {
+              foundUser = users.firstWhere(
+                (u) => (u as Map<String, dynamic>)['email']?.toString().toLowerCase() == email.toLowerCase(),
+              ) as Map<String, dynamic>?;
+            } catch (_) {
+              foundUser = null;
+            }
+            
+            if (foundUser != null) {
+              // User exists in database, allow login
+              final prefs = await SharedPreferences.getInstance();
+              _isAuthenticated = true;
+              _userEmail = foundUser['email'] ?? email;
+              _userRole = foundUser['role'] ?? 'Staff';
+              _initialScreenIndex = 6;
+              await prefs.setBool('isAuthenticated', true);
+              await prefs.setString('userEmail', _userEmail!);
+              await prefs.setString('userRole', _userRole!);
+              await prefs.setInt('initialScreenIndex', 6);
+              notifyListeners();
+              return true;
+            }
+          }
+        } catch (_) {
+          // If user check fails, proceed with normal error handling
+        }
+        
+        _isAuthenticated = false;
+        notifyListeners();
+        return false;
       } else {
         _isAuthenticated = false;
         notifyListeners();
         return false;
       }
+    } on TimeoutException catch (e) {
+      _isAuthenticated = false;
+      notifyListeners();
+      debugPrint('Manual login timeout: $e');
+      return false;
     } catch (e) {
       _isAuthenticated = false;
       notifyListeners();
+      debugPrint('Manual login error: $e');
       return false;
     }
   }
@@ -174,9 +239,19 @@ class AuthProvider extends ChangeNotifier {
     _isAuthenticated = false;
     _userEmail = null;
     _userRole = null; // New: Clear user role
+    _initialScreenIndex = null; // Clear initial screen index
     await prefs.remove('isAuthenticated');
     await prefs.remove('userEmail');
     await prefs.remove('userRole'); // New: Remove user role
+    await prefs.remove('initialScreenIndex'); // Remove initial screen index
+    notifyListeners();
+  }
+
+  void clearInitialScreenIndex() {
+    _initialScreenIndex = null;
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.remove('initialScreenIndex');
+    });
     notifyListeners();
   }
 }

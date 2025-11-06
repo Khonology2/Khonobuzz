@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/animation.dart' show AlwaysStoppedAnimation;
 
 class LoadingConfirmButton extends StatefulWidget {
   final String text;

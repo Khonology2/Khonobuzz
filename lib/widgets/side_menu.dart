@@ -39,10 +39,11 @@ class _MenuItemWidgetState extends State<MenuItemWidget> {
       : const EdgeInsets.all(12.0);
 
   // Text style
-  TextStyle get textStyle => TextStyle(
+  TextStyle get textStyle => const TextStyle(
+        fontFamily: 'Poppins', // Added Poppins font
         color: Colors.white,
         fontSize: 16.0,
-        fontWeight: widget.isSelected ? FontWeight.bold : FontWeight.w500,
+        fontWeight: FontWeight.w500,
       );
 
   @override
@@ -340,6 +341,7 @@ class _SideMenuState extends State<SideMenu> {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
+                /*
                 MenuItemWidget(
                   unselectedIconPath: 'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
                   selectedIconPath: 'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
@@ -388,6 +390,7 @@ class _SideMenuState extends State<SideMenu> {
                   isExpanded: _isExpanded,
                   onTap: () => widget.onItemSelected(5),
                 ),
+                */
                 MenuItemWidget(
                   unselectedIconPath: 'assets/images/HR_Team Management/HR_Team Management_White Badge_Red.png',
                   selectedIconPath: 'assets/images/HR_Team Management/red_Management_Red Badge_White.png',

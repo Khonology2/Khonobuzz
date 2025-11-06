@@ -515,8 +515,22 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Widget _buildUserList() {
     if (_isLoading) {
       return Center(
-        child: CircularProgressIndicator(
-          color: const Color(0xFFC10D00),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(
+              color: Color(0xFFC10D00),
+            ),
+            const SizedBox(height: 24.0),
+            Text(
+              'Please wait. We\'re loading all users...',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16.0,
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ],
         ),
       );
     }

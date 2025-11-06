@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/animation.dart' show AlwaysStoppedAnimation;
 import 'auth_screen.dart'; // Import AuthScreen
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart'; // Import FlutterAadOauth
 import 'package:video_player/video_player.dart';
@@ -126,7 +125,7 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
                     borderRadius: BorderRadius.circular(50.0),
                     boxShadow: [
                       BoxShadow(
-                        color: widget.color.withOpacity(_ringOpacity.value),
+                        color: widget.color.withValues(alpha: _ringOpacity.value),
                         offset: const Offset(0, 0),
                         blurRadius: 0,
                         spreadRadius: _ringRadius.value,
@@ -192,14 +191,14 @@ class _BubblesPainter extends CustomPainter {
       final p = progress;
       final y = (0.0 - size.height * (0.8 * p));
       final r = (size.height * 0.12) * (1.0 - p);
-      paint.color = color.withOpacity(0.5 * (1.0 - p));
+      paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
       canvas.drawCircle(Offset(x * size.width, y + size.height * 0.1), r, paint);
     }
     for (final x in bottomXs) {
       final p = progress;
       final y = size.height + size.height * (0.8 * p);
       final r = (size.height * 0.12) * (1.0 - p);
-      paint.color = color.withOpacity(0.5 * (1.0 - p));
+      paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
       canvas.drawCircle(Offset(x * size.width, y - size.height * 0.1), r, paint);
     }
   }

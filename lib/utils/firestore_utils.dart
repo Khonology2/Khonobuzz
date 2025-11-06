@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:math';
 
 // Made lists static and final for easy access
@@ -402,5 +403,5 @@ Future<void> createSampleUsersCollection() async {
     });
   }
 
-  print('Sample users collection created successfully!');
+  debugPrint('Sample users collection created successfully!');
 }

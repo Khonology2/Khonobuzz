@@ -56,7 +56,8 @@ class MyApp extends StatelessWidget {
             return authProvider.isAuthenticated
                 ? MainScreen(
                     role: authProvider.userRole,
-                  ) // Pass role to MainScreen
+                    initialIndex: authProvider.initialScreenIndex ?? 0,
+                  ) // Pass role and initialIndex to MainScreen
                 : LandingScreen(); // Start with LandingScreen
           },
         ),
@@ -68,8 +69,9 @@ class MyApp extends StatelessWidget {
 
 class MainScreen extends StatefulWidget {
   final String? role; // New: Optional role parameter
+  final int? initialIndex; // Optional initial screen index
 
-  const MainScreen({super.key, this.role}); // Modified constructor
+  const MainScreen({super.key, this.role, this.initialIndex}); // Modified constructor
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -81,6 +83,16 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
+    // Set initial index if provided
+    if (widget.initialIndex != null) {
+      _selectedIndex = widget.initialIndex!;
+      // Clear the initial screen index after using it
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.read<AuthProvider>().clearInitialScreenIndex();
+        }
+      });
+    }
     // Removed: Display SnackBar with role if available
     // if (widget.role != null) {
     //   WidgetsBinding.instance.addPostFrameCallback((_) {
