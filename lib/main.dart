@@ -56,7 +56,9 @@ class MyApp extends StatelessWidget {
             return authProvider.isAuthenticated
                 ? MainScreen(
                     role: authProvider.userRole,
-                    initialIndex: authProvider.initialScreenIndex ?? 0,
+                    initialIndex: authProvider.initialScreenIndex ?? 
+                                  authProvider.currentScreenIndex ?? 
+                                  0,
                   ) // Pass role and initialIndex to MainScreen
                 : LandingScreen(); // Start with LandingScreen
           },
@@ -83,16 +85,23 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    // Set initial index if provided
+    // Set initial index if provided, prioritizing initialScreenIndex over currentScreenIndex
+    final authProvider = context.read<AuthProvider>();
+    final indexToUse = widget.initialIndex ?? authProvider.currentScreenIndex ?? 0;
+    
+    if (indexToUse >= 0 && indexToUse < _screens.length) {
+      _selectedIndex = indexToUse;
+      // Save the initial index as current screen index for refresh persistence
+      // This ensures that if user refreshes immediately after login, they stay on the same screen
+      authProvider.saveCurrentScreenIndex(indexToUse);
+    } else {
+      // If invalid index, default to User Management (index 6)
+      _selectedIndex = 6;
+      authProvider.saveCurrentScreenIndex(6);
+    }
+    
+    // Clear the initial screen index after using it (but keep currentScreenIndex for refresh)
     if (widget.initialIndex != null) {
-      // Ensure the index is valid (within bounds)
-      if (widget.initialIndex! >= 0 && widget.initialIndex! < _screens.length) {
-        _selectedIndex = widget.initialIndex!;
-      } else {
-        // If invalid index, default to User Management (index 6)
-        _selectedIndex = 6;
-      }
-      // Clear the initial screen index after using it
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           context.read<AuthProvider>().clearInitialScreenIndex();
@@ -130,6 +139,8 @@ class _MainScreenState extends State<MainScreen> {
     setState(() {
       _selectedIndex = index;
     });
+    // Save current screen index for refresh persistence
+    context.read<AuthProvider>().saveCurrentScreenIndex(index);
   }
 
   @override

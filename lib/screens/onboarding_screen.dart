@@ -19,13 +19,18 @@ class OnboardingScreen extends StatefulWidget {
   OnboardingScreenState createState() => OnboardingScreenState();
 }
 
-class OnboardingScreenState extends State<OnboardingScreen> {
+class OnboardingScreenState extends State<OnboardingScreen>
+    with TickerProviderStateMixin {
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   // Removed _departmentController as it will be managed by DropdownButtonFormField
   // Removed _designationController as it will be managed by DropdownButtonFormField
   double _discsOpacity = 0.0; // Initial opacity for discs.png
+  bool _isLoading = false; // Track loading state
+  late AnimationController
+  _blinkController; // Controller for blinking animation
+  late Animation<double> _blinkAnimation; // Animation for blinking
 
   final List<String> _departments = const [
     'Management',
@@ -89,6 +94,21 @@ class OnboardingScreenState extends State<OnboardingScreen> {
     _lastNameHintTexts = _emailHintTexts.map((email) => email.split('.')[1].split('@')[0]).toList();
     */
 
+    // Initialize blink animation controller
+    _blinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(
+        milliseconds: 500,
+      ), // Blink duration for Simple Blink animation
+    );
+    // Create blinking animation - Animation 1 (Simple Blink)
+    _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _blinkController,
+        curve: Curves.easeInOut, // Smooth ease in/out curve
+      ),
+    );
+
     // Trigger fade-in animation when the screen is initialized
     Future.delayed(const Duration(milliseconds: 500), () {
       setState(() {
@@ -113,6 +133,7 @@ class OnboardingScreenState extends State<OnboardingScreen> {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
+    _blinkController.dispose();
     // Removed _departmentController.dispose();
     // Removed _designationController.dispose();
     /*_timer.cancel();*/ // Cancel the timer to prevent memory leaks
@@ -325,9 +346,19 @@ class OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   const SizedBox(height: 32),
                   // Buttons
-                  LoadingConfirmButton(
+                  _LoadingConfirmButtonWrapper(
                     text: 'CONFIRM',
                     color: const Color(0xFFC10D00),
+                    onLoadingChanged: (isLoading) {
+                      setState(() {
+                        _isLoading = isLoading;
+                        if (isLoading) {
+                          _startBlinking();
+                        } else {
+                          _stopBlinking();
+                        }
+                      });
+                    },
                     onPressed: () async {
                       final success = await context.read<AuthProvider>().login(
                         _emailController.text,
@@ -379,14 +410,20 @@ class OnboardingScreenState extends State<OnboardingScreen> {
                     },
                   ),
                   const SizedBox(height: 48),
-                  // Discs Asset
-                  AnimatedOpacity(
-                    opacity: _discsOpacity,
-                    duration: const Duration(milliseconds: 1000),
-                    child: Image.asset(
-                      'assets/images/discs.png', // Discs asset
-                      height: 80, // Adjust height as needed
-                    ),
+                  // Discs Asset with blinking animation
+                  AnimatedBuilder(
+                    animation: _blinkAnimation,
+                    builder: (context, child) {
+                      return Opacity(
+                        opacity: _isLoading
+                            ? _blinkAnimation.value * _discsOpacity
+                            : _discsOpacity,
+                        child: Image.asset(
+                          'assets/images/discs.png', // Discs asset
+                          height: 80, // Adjust height as needed
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -452,12 +489,67 @@ class OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
+  // Animation 1: Simple Blink (Default)
+  // Fast, smooth blinking effect
+  void _startBlinking() {
+    _blinkController.duration = const Duration(milliseconds: 500);
+    _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _blinkController, curve: Curves.easeInOut),
+    );
+    _blinkController.repeat(reverse: true);
+  }
+
+  void _stopBlinking() {
+    _blinkController.stop();
+    _blinkController.reset();
+  }
+
   Widget _buildButton({
     required String text,
     required Color color,
     required VoidCallback onPressed,
   }) {
     return _ClickBubblyButton(text: text, color: color, onPressed: onPressed);
+  }
+}
+
+// Wrapper widget to track loading state from LoadingConfirmButton
+class _LoadingConfirmButtonWrapper extends StatefulWidget {
+  final String text;
+  final Color color;
+  final Future<void> Function() onPressed;
+  final ValueChanged<bool> onLoadingChanged;
+
+  const _LoadingConfirmButtonWrapper({
+    required this.text,
+    required this.color,
+    required this.onPressed,
+    required this.onLoadingChanged,
+  });
+
+  @override
+  State<_LoadingConfirmButtonWrapper> createState() =>
+      _LoadingConfirmButtonWrapperState();
+}
+
+class _LoadingConfirmButtonWrapperState
+    extends State<_LoadingConfirmButtonWrapper> {
+  @override
+  Widget build(BuildContext context) {
+    return LoadingConfirmButton(
+      text: widget.text,
+      color: widget.color,
+      onPressed: () async {
+        widget.onLoadingChanged(true);
+        try {
+          await widget.onPressed();
+        } finally {
+          if (mounted) {
+            widget.onLoadingChanged(false);
+          }
+        }
+      },
+    );
   }
 }
 

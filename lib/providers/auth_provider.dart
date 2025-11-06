@@ -12,6 +12,7 @@ class AuthProvider extends ChangeNotifier {
   bool _userAlreadyOnboarded =
       false; // New: State to indicate if user already onboarded
   int? _initialScreenIndex; // New: Track initial screen index after login
+  int? _currentScreenIndex; // Track current screen index for refresh persistence
 
   bool get isAuthenticated => _isAuthenticated;
   String? get userEmail => _userEmail;
@@ -19,6 +20,7 @@ class AuthProvider extends ChangeNotifier {
   bool get userAlreadyOnboarded =>
       _userAlreadyOnboarded; // New: Getter for onboarding status
   int? get initialScreenIndex => _initialScreenIndex; // New: Getter for initial screen index
+  int? get currentScreenIndex => _currentScreenIndex; // Getter for current screen index
 
   AuthProvider() {
     _loadAuthState();
@@ -30,6 +32,7 @@ class AuthProvider extends ChangeNotifier {
     _userEmail = prefs.getString('userEmail');
     _userRole = prefs.getString('userRole'); // New: Load user role
     _initialScreenIndex = prefs.getInt('initialScreenIndex'); // Load initial screen index
+    _currentScreenIndex = prefs.getInt('currentScreenIndex'); // Load current screen index for refresh persistence
     notifyListeners();
   }
 
@@ -162,10 +165,12 @@ class AuthProvider extends ChangeNotifier {
         _userEmail = responseData['user']['email'];
         _userRole = responseData['user']['role'] ?? 'Staff';
         _initialScreenIndex = 6; // Set to User Management screen
+        _currentScreenIndex = 6; // Also save as current screen index for refresh persistence
         await prefs.setBool('isAuthenticated', true);
         await prefs.setString('userEmail', _userEmail!);
         await prefs.setString('userRole', _userRole!);
         await prefs.setInt('initialScreenIndex', 6); // Store initial screen index
+        await prefs.setInt('currentScreenIndex', 6); // Store current screen index for refresh
         notifyListeners();
         return true;
       } else if (response.statusCode == 404 || response.statusCode == 401) {
@@ -201,10 +206,12 @@ class AuthProvider extends ChangeNotifier {
               _userEmail = foundUser['email'] ?? email;
               _userRole = foundUser['role'] ?? 'Staff';
               _initialScreenIndex = 6;
+              _currentScreenIndex = 6; // Also save as current screen index for refresh persistence
               await prefs.setBool('isAuthenticated', true);
               await prefs.setString('userEmail', _userEmail!);
               await prefs.setString('userRole', _userRole!);
               await prefs.setInt('initialScreenIndex', 6);
+              await prefs.setInt('currentScreenIndex', 6); // Store current screen index for refresh
               notifyListeners();
               return true;
             }
@@ -240,10 +247,12 @@ class AuthProvider extends ChangeNotifier {
     _userEmail = null;
     _userRole = null; // New: Clear user role
     _initialScreenIndex = null; // Clear initial screen index
+    _currentScreenIndex = null; // Clear current screen index
     await prefs.remove('isAuthenticated');
     await prefs.remove('userEmail');
     await prefs.remove('userRole'); // New: Remove user role
     await prefs.remove('initialScreenIndex'); // Remove initial screen index
+    await prefs.remove('currentScreenIndex'); // Remove current screen index
     notifyListeners();
   }
 
@@ -252,6 +261,14 @@ class AuthProvider extends ChangeNotifier {
     SharedPreferences.getInstance().then((prefs) {
       prefs.remove('initialScreenIndex');
     });
+    notifyListeners();
+  }
+
+  // Save current screen index for refresh persistence
+  Future<void> saveCurrentScreenIndex(int index) async {
+    _currentScreenIndex = index;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('currentScreenIndex', index);
     notifyListeners();
   }
 }

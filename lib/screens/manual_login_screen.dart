@@ -14,9 +14,14 @@ class ManualLoginScreen extends StatefulWidget {
   ManualLoginScreenState createState() => ManualLoginScreenState();
 }
 
-class ManualLoginScreenState extends State<ManualLoginScreen> {
+class ManualLoginScreenState extends State<ManualLoginScreen>
+    with TickerProviderStateMixin {
   final TextEditingController _emailController = TextEditingController();
   double _discsOpacity = 0.0; // Initial opacity for discs.png
+  bool _isLoading = false; // Track loading state
+  late AnimationController
+  _blinkController; // Controller for blinking animation
+  late Animation<double> _blinkAnimation; // Animation for blinking
 
   // List of hint texts
   /*
@@ -43,6 +48,20 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
   @override
   void initState() {
     super.initState();
+    // Initialize blink animation controller
+    _blinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(
+        milliseconds: 500,
+      ), // Blink duration for Simple Blink animation
+    );
+    // Create blinking animation - Animation 1 (Simple Blink)
+    _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _blinkController,
+        curve: Curves.easeInOut, // Smooth ease in/out curve
+      ),
+    );
     // Trigger fade-in animation when the screen is initialized
     Future.delayed(const Duration(milliseconds: 500), () {
       setState(() {
@@ -68,9 +87,115 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
   }
   */
 
+  // Animation 1: Simple Blink (Default)
+  // Fast, smooth blinking effect
+  void _startBlinking() {
+    _blinkController.duration = const Duration(milliseconds: 500);
+    _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _blinkController, curve: Curves.easeInOut),
+    );
+    _blinkController.repeat(reverse: true);
+  }
+
+  // Animation 2: Slow Pulse
+  // Uncomment and use this for a slower, more gentle pulse
+  // void _startBlinking() {
+  //   _blinkController.duration = const Duration(milliseconds: 1000);
+  //   _blinkAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
+  //     CurvedAnimation(parent: _blinkController, curve: Curves.easeInOut),
+  //   );
+  //   _blinkController.repeat(reverse: true);
+  // }
+
+  // Animation 3: Fast Flicker
+  // Uncomment and use this for a quick flickering effect
+  // void _startBlinking() {
+  //   _blinkController.duration = const Duration(milliseconds: 200);
+  //   _blinkAnimation = Tween<double>(begin: 0.1, end: 1.0).animate(
+  //     CurvedAnimation(parent: _blinkController, curve: Curves.linear),
+  //   );
+  //   _blinkController.repeat(reverse: true);
+  // }
+
+  // Animation 4: Smooth Fade
+  // Uncomment and use this for a smooth, elegant fade
+  // void _startBlinking() {
+  //   _blinkController.duration = const Duration(milliseconds: 800);
+  //   _blinkAnimation = Tween<double>(begin: 0.2, end: 1.0).animate(
+  //     CurvedAnimation(parent: _blinkController, curve: Curves.easeInOutCubic),
+  //   );
+  //   _blinkController.repeat(reverse: true);
+  // }
+
+  // Animation 5: Bounce Blink
+  // Uncomment and use this for a bouncy, energetic effect
+  // void _startBlinking() {
+  //   _blinkController.duration = const Duration(milliseconds: 600);
+  //   _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+  //     CurvedAnimation(parent: _blinkController, curve: Curves.bounceInOut),
+  //   );
+  //   _blinkController.repeat(reverse: true);
+  // }
+
+  // Animation 6: Elastic Pulse
+  // Uncomment and use this for an elastic, spring-like effect
+  // void _startBlinking() {
+  //   _blinkController.duration = const Duration(milliseconds: 700);
+  //   _blinkAnimation = Tween<double>(begin: 0.25, end: 1.0).animate(
+  //     CurvedAnimation(parent: _blinkController, curve: Curves.elasticInOut),
+  //   );
+  //   _blinkController.repeat(reverse: true);
+  // }
+
+  // Animation 7: Sharp Flash
+  // Uncomment and use this for a sharp, attention-grabbing flash
+  // void _startBlinking() {
+  //   _blinkController.duration = const Duration(milliseconds: 300);
+  //   _blinkAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+  //     CurvedAnimation(parent: _blinkController, curve: Curves.easeIn),
+  //   );
+  //   _blinkController.repeat(reverse: true);
+  // }
+
+  // Animation 8: Gentle Wave
+  // Uncomment and use this for a gentle, wave-like effect
+  // void _startBlinking() {
+  //   _blinkController.duration = const Duration(milliseconds: 1200);
+  //   _blinkAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
+  //     CurvedAnimation(parent: _blinkController, curve: Curves.easeInOutSine),
+  //   );
+  //   _blinkController.repeat(reverse: true);
+  // }
+
+  // Animation 9: Quick Pulse
+  // Uncomment and use this for a quick, rhythmic pulse
+  // void _startBlinking() {
+  //   _blinkController.duration = const Duration(milliseconds: 400);
+  //   _blinkAnimation = Tween<double>(begin: 0.35, end: 1.0).animate(
+  //     CurvedAnimation(parent: _blinkController, curve: Curves.easeOut),
+  //   );
+  //   _blinkController.repeat(reverse: true);
+  // }
+
+  // Animation 10: Dramatic Fade
+  // Uncomment and use this for a dramatic, theatrical fade effect
+  // void _startBlinking() {
+  //   _blinkController.duration = const Duration(milliseconds: 900);
+  //   _blinkAnimation = Tween<double>(begin: 0.1, end: 1.0).animate(
+  //     CurvedAnimation(parent: _blinkController, curve: Curves.easeInOutQuad),
+  //   );
+  //   _blinkController.repeat(reverse: true);
+  // }
+
+  void _stopBlinking() {
+    _blinkController.stop();
+    _blinkController.reset();
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
+    _blinkController.dispose();
     /*_timer.cancel();*/ // Cancel the timer to prevent memory leaks
     super.dispose();
   }
@@ -142,9 +267,19 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 32),
-                  LoadingConfirmButton(
+                  _LoadingConfirmButtonWrapper(
                     text: 'CONFIRM',
                     color: const Color(0xFFC10D00),
+                    onLoadingChanged: (isLoading) {
+                      setState(() {
+                        _isLoading = isLoading;
+                        if (isLoading) {
+                          _startBlinking();
+                        } else {
+                          _stopBlinking();
+                        }
+                      });
+                    },
                     onPressed: () async {
                       final email = _emailController.text.trim();
                       if (email.isEmpty) {
@@ -193,14 +328,20 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
                     },
                   ),
                   const SizedBox(height: 48),
-                  // Discs Asset
-                  AnimatedOpacity(
-                    opacity: _discsOpacity,
-                    duration: const Duration(milliseconds: 1000),
-                    child: Image.asset(
-                      'assets/images/discs.png', // Discs asset
-                      height: 80, // Adjust height as needed
-                    ),
+                  // Discs Asset with blinking animation
+                  AnimatedBuilder(
+                    animation: _blinkAnimation,
+                    builder: (context, child) {
+                      return Opacity(
+                        opacity: _isLoading
+                            ? _blinkAnimation.value * _discsOpacity
+                            : _discsOpacity,
+                        child: Image.asset(
+                          'assets/images/discs.png', // Discs asset
+                          height: 80, // Adjust height as needed
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -217,6 +358,46 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
     required VoidCallback onPressed,
   }) {
     return _ClickBubblyButton(text: text, color: color, onPressed: onPressed);
+  }
+}
+
+// Wrapper widget to track loading state from LoadingConfirmButton
+class _LoadingConfirmButtonWrapper extends StatefulWidget {
+  final String text;
+  final Color color;
+  final Future<void> Function() onPressed;
+  final ValueChanged<bool> onLoadingChanged;
+
+  const _LoadingConfirmButtonWrapper({
+    required this.text,
+    required this.color,
+    required this.onPressed,
+    required this.onLoadingChanged,
+  });
+
+  @override
+  State<_LoadingConfirmButtonWrapper> createState() =>
+      _LoadingConfirmButtonWrapperState();
+}
+
+class _LoadingConfirmButtonWrapperState
+    extends State<_LoadingConfirmButtonWrapper> {
+  @override
+  Widget build(BuildContext context) {
+    return LoadingConfirmButton(
+      text: widget.text,
+      color: widget.color,
+      onPressed: () async {
+        widget.onLoadingChanged(true);
+        try {
+          await widget.onPressed();
+        } finally {
+          if (mounted) {
+            widget.onLoadingChanged(false);
+          }
+        }
+      },
+    );
   }
 }
 
