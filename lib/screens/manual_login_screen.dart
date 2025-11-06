@@ -107,31 +107,35 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
                   // Removed 'KHONOLOGY' text
                   const SizedBox(height: 32),
                   Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       const Text(
                         'Email Address',
+                        textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white, fontSize: 16),
                       ),
                       const SizedBox(height: 8),
-                      TextField(
-                        controller: _emailController,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontFamily: 'Poppins',
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'example@khonology.com',
-                          hintStyle: TextStyle(color: Colors.grey[600]),
-                          filled: true,
-                          fillColor: Colors.grey[800],
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8.0),
-                            borderSide: BorderSide.none,
+                      SizedBox(
+                        width: 590, // Increased width to match the red lines
+                        child: TextField(
+                          controller: _emailController,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Poppins',
                           ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16.0,
-                            vertical: 12.0,
+                          decoration: InputDecoration(
+                            hintText: 'example@khonology.com',
+                            hintStyle: TextStyle(color: Colors.grey[600]),
+                            filled: true,
+                            fillColor: Colors.grey[800]!.withValues(alpha: 0.5),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(25.0),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16.0,
+                              vertical: 12.0,
+                            ),
                           ),
                         ),
                       ),
@@ -146,18 +150,14 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
                       if (email.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text(
-                              'Please enter your email address.',
-                            ),
+                            content: Text('Please enter your email address.'),
                           ),
                         );
                         return;
                       }
 
                       final authProvider = context.read<AuthProvider>();
-                      final success = await authProvider.manualLogin(
-                        email,
-                      );
+                      final success = await authProvider.manualLogin(email);
 
                       if (!mounted) return;
 
@@ -165,7 +165,8 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
                         Navigator.of(context).pushAndRemoveUntil(
                           MaterialPageRoute(
                             builder: (context) => const MainScreen(
-                              initialIndex: 6, // Navigate to User Management screen
+                              initialIndex:
+                                  6, // Navigate to User Management screen
                             ),
                           ),
                           (route) => false,
@@ -215,11 +216,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen> {
     required Color color,
     required VoidCallback onPressed,
   }) {
-    return _ClickBubblyButton(
-      text: text,
-      color: color,
-      onPressed: onPressed,
-    );
+    return _ClickBubblyButton(text: text, color: color, onPressed: onPressed);
   }
 }
 
@@ -240,8 +237,7 @@ class _ClickBubblyButton extends StatefulWidget {
 class _ClickBubblyButtonState extends State<_ClickBubblyButton>
     with TickerProviderStateMixin {
   late AnimationController _clickController;
-  Animation<double> _clickProgress =
-      const AlwaysStoppedAnimation<double>(0.0);
+  Animation<double> _clickProgress = const AlwaysStoppedAnimation<double>(0.0);
 
   @override
   void initState() {
@@ -277,7 +273,10 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
           child: MaterialButton(
             onPressed: () {
               _clickController.forward(from: 0);
-              Future.delayed(const Duration(milliseconds: 200), widget.onPressed);
+              Future.delayed(
+                const Duration(milliseconds: 200),
+                widget.onPressed,
+              );
             },
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Text(
@@ -326,14 +325,22 @@ class _BubblesPainter extends CustomPainter {
       final y = (0.0 - size.height * (0.8 * p));
       final r = (size.height * 0.12) * (1.0 - p);
       paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
-      canvas.drawCircle(Offset(x * size.width, y + size.height * 0.1), r, paint);
+      canvas.drawCircle(
+        Offset(x * size.width, y + size.height * 0.1),
+        r,
+        paint,
+      );
     }
     for (final x in bottomXs) {
       final p = progress;
       final y = size.height + size.height * (0.8 * p);
       final r = (size.height * 0.12) * (1.0 - p);
       paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
-      canvas.drawCircle(Offset(x * size.width, y - size.height * 0.1), r, paint);
+      canvas.drawCircle(
+        Offset(x * size.width, y - size.height * 0.1),
+        r,
+        paint,
+      );
     }
   }
 

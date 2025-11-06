@@ -85,7 +85,13 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     // Set initial index if provided
     if (widget.initialIndex != null) {
-      _selectedIndex = widget.initialIndex!;
+      // Ensure the index is valid (within bounds)
+      if (widget.initialIndex! >= 0 && widget.initialIndex! < _screens.length) {
+        _selectedIndex = widget.initialIndex!;
+      } else {
+        // If invalid index, default to User Management (index 6)
+        _selectedIndex = 6;
+      }
       // Clear the initial screen index after using it
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
