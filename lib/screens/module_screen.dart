@@ -62,7 +62,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         title: 'Welcome to Your Growth Engine',
                         subtitle: 'Personal Development Hub',
                         buttonText: 'Launch Heatmap',
-                        url: 'https://resource-capacity.netlify.app/',
+                        url: 'https://resource-capacity.netlify.app/'
                       ),
                     ],
                   );

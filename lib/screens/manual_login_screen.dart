@@ -300,8 +300,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                         Navigator.of(context).pushAndRemoveUntil(
                           MaterialPageRoute(
                             builder: (context) => const MainScreen(
-                              initialIndex:
-                                  6, // Navigate to User Management screen
+                              initialIndex: 8, // Navigate to Module Screen
                             ),
                           ),
                           (route) => false,

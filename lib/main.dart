@@ -56,9 +56,10 @@ class MyApp extends StatelessWidget {
             return authProvider.isAuthenticated
                 ? MainScreen(
                     role: authProvider.userRole,
-                    initialIndex: authProvider.initialScreenIndex ?? 
-                                  authProvider.currentScreenIndex ?? 
-                                  0,
+                    initialIndex:
+                        authProvider.initialScreenIndex ??
+                        authProvider.currentScreenIndex ??
+                        0,
                   ) // Pass role and initialIndex to MainScreen
                 : LandingScreen(); // Start with LandingScreen
           },
@@ -73,7 +74,11 @@ class MainScreen extends StatefulWidget {
   final String? role; // New: Optional role parameter
   final int? initialIndex; // Optional initial screen index
 
-  const MainScreen({super.key, this.role, this.initialIndex}); // Modified constructor
+  const MainScreen({
+    super.key,
+    this.role,
+    this.initialIndex,
+  }); // Modified constructor
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -87,19 +92,20 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     // Set initial index if provided, prioritizing initialScreenIndex over currentScreenIndex
     final authProvider = context.read<AuthProvider>();
-    final indexToUse = widget.initialIndex ?? authProvider.currentScreenIndex ?? 0;
-    
+    final indexToUse =
+        widget.initialIndex ?? authProvider.currentScreenIndex ?? 0;
+
     if (indexToUse >= 0 && indexToUse < _screens.length) {
       _selectedIndex = indexToUse;
       // Save the initial index as current screen index for refresh persistence
       // This ensures that if user refreshes immediately after login, they stay on the same screen
       authProvider.saveCurrentScreenIndex(indexToUse);
     } else {
-      // If invalid index, default to User Management (index 6)
-      _selectedIndex = 6;
-      authProvider.saveCurrentScreenIndex(6);
+      // If invalid index, default to Module Screen (index 8)
+      _selectedIndex = 8;
+      authProvider.saveCurrentScreenIndex(8);
     }
-    
+
     // Clear the initial screen index after using it (but keep currentScreenIndex for refresh)
     if (widget.initialIndex != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -155,10 +161,17 @@ class _MainScreenState extends State<MainScreen> {
       body: Row(
         children: [
           SideMenu(
-            selectedIndex: (_selectedIndex < _screens.length) ? _selectedIndex : 0,
+            selectedIndex: (_selectedIndex < _screens.length)
+                ? _selectedIndex
+                : 0,
             onItemSelected: _onItemTapped,
           ),
-          Expanded(child: _screens[(_selectedIndex < _screens.length) ? _selectedIndex : 0]),
+          Expanded(
+            child:
+                _screens[(_selectedIndex < _screens.length)
+                    ? _selectedIndex
+                    : 0],
+          ),
         ],
       ),
       floatingActionButton: GestureDetector(

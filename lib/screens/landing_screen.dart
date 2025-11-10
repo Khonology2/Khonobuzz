@@ -145,7 +145,7 @@ class _LandingScreenState extends State<LandingScreen>
               ),
               const SizedBox(height: 50),
               const Text(
-                'Welcome to Khonobuzz',
+                'Welcome to KhonoBuzz',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,

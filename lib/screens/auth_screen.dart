@@ -119,10 +119,12 @@ class AuthScreenState extends State<AuthScreen> {
                           role: null,
                         ); // Role is not selected on this screen yet
                         if (!mounted) return;
-                        // After successful Microsoft login, go directly to MainScreen
+                        // After successful Microsoft login, go directly to MainScreen with Module Screen
                         Navigator.of(context).pushAndRemoveUntil(
                           MaterialPageRoute(
-                            builder: (context) => const MainScreen(),
+                            builder: (context) => const MainScreen(
+                              initialIndex: 8, // Navigate to Module Screen
+                            ),
                           ),
                           (route) => false,
                         );
@@ -186,11 +188,7 @@ class AuthScreenState extends State<AuthScreen> {
     required Color color,
     VoidCallback? onPressed,
   }) {
-    return _ClickBubblyButton(
-      text: text,
-      color: color,
-      onPressed: onPressed,
-    );
+    return _ClickBubblyButton(text: text, color: color, onPressed: onPressed);
   }
 }
 
@@ -213,18 +211,15 @@ class _AnimatedBubblyButton extends StatefulWidget {
 class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
     with TickerProviderStateMixin {
   late AnimationController _btnController;
-  Animation<Offset> _btnOffset =
-      const AlwaysStoppedAnimation<Offset>(Offset.zero);
+  Animation<Offset> _btnOffset = const AlwaysStoppedAnimation<Offset>(
+    Offset.zero,
+  );
   late AnimationController _pulseController;
-  Animation<double> _pulseScale =
-      const AlwaysStoppedAnimation<double>(1.0);
-  Animation<double> _ringRadius =
-      const AlwaysStoppedAnimation<double>(0.0);
-  Animation<double> _ringOpacity =
-      const AlwaysStoppedAnimation<double>(0.0);
+  Animation<double> _pulseScale = const AlwaysStoppedAnimation<double>(1.0);
+  Animation<double> _ringRadius = const AlwaysStoppedAnimation<double>(0.0);
+  Animation<double> _ringOpacity = const AlwaysStoppedAnimation<double>(0.0);
   late AnimationController _clickController;
-  Animation<double> _clickProgress =
-      const AlwaysStoppedAnimation<double>(0.0);
+  Animation<double> _clickProgress = const AlwaysStoppedAnimation<double>(0.0);
 
   @override
   void initState() {
@@ -236,9 +231,7 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
     _btnOffset = Tween<Offset>(
       begin: const Offset(0, 1.0),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _btnController, curve: Curves.bounceOut),
-    );
+    ).animate(CurvedAnimation(parent: _btnController, curve: Curves.bounceOut));
 
     _pulseController = AnimationController(
       vsync: this,
@@ -246,19 +239,29 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
     );
     _pulseScale = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.9, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween<double>(
+          begin: 0.9,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 70,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.9)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 0.9,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 30,
       ),
     ]).animate(_pulseController);
     _ringRadius = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween<double>(begin: 0.0, end: 50.0), weight: 70),
-      TweenSequenceItem(tween: Tween<double>(begin: 50.0, end: 0.0), weight: 30),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 50.0),
+        weight: 70,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 50.0, end: 0.0),
+        weight: 30,
+      ),
     ]).animate(_pulseController);
     _ringOpacity = TweenSequence<double>([
       TweenSequenceItem(tween: Tween<double>(begin: 0.5, end: 0.0), weight: 70),
@@ -312,7 +315,9 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
                     borderRadius: BorderRadius.circular(50.0),
                     boxShadow: [
                       BoxShadow(
-                        color: widget.color.withValues(alpha: _ringOpacity.value),
+                        color: widget.color.withValues(
+                          alpha: _ringOpacity.value,
+                        ),
                         offset: const Offset(0, 0),
                         blurRadius: 0,
                         spreadRadius: _ringRadius.value,
@@ -343,7 +348,10 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
             onPressed: () {
               _clickController.forward(from: 0);
               if (widget.onPressed != null) {
-                Future.delayed(const Duration(milliseconds: 250), widget.onPressed!);
+                Future.delayed(
+                  const Duration(milliseconds: 250),
+                  widget.onPressed!,
+                );
               }
             },
             padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -378,14 +386,22 @@ class _BubblesPainter extends CustomPainter {
       final y = (0.0 - size.height * (0.8 * p));
       final r = (size.height * 0.12) * (1.0 - p);
       paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
-      canvas.drawCircle(Offset(x * size.width, y + size.height * 0.1), r, paint);
+      canvas.drawCircle(
+        Offset(x * size.width, y + size.height * 0.1),
+        r,
+        paint,
+      );
     }
     for (final x in bottomXs) {
       final p = progress;
       final y = size.height + size.height * (0.8 * p);
       final r = (size.height * 0.12) * (1.0 - p);
       paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
-      canvas.drawCircle(Offset(x * size.width, y - size.height * 0.1), r, paint);
+      canvas.drawCircle(
+        Offset(x * size.width, y - size.height * 0.1),
+        r,
+        paint,
+      );
     }
   }
 
@@ -412,8 +428,7 @@ class _ClickBubblyButton extends StatefulWidget {
 class _ClickBubblyButtonState extends State<_ClickBubblyButton>
     with TickerProviderStateMixin {
   late AnimationController _clickController;
-  Animation<double> _clickProgress =
-      const AlwaysStoppedAnimation<double>(0.0);
+  Animation<double> _clickProgress = const AlwaysStoppedAnimation<double>(0.0);
 
   @override
   void initState() {
@@ -450,7 +465,10 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
             onPressed: () {
               _clickController.forward(from: 0);
               if (widget.onPressed != null) {
-                Future.delayed(const Duration(milliseconds: 200), widget.onPressed!);
+                Future.delayed(
+                  const Duration(milliseconds: 200),
+                  widget.onPressed!,
+                );
               }
             },
             padding: const EdgeInsets.symmetric(vertical: 16.0),

@@ -12,15 +12,18 @@ class AuthProvider extends ChangeNotifier {
   bool _userAlreadyOnboarded =
       false; // New: State to indicate if user already onboarded
   int? _initialScreenIndex; // New: Track initial screen index after login
-  int? _currentScreenIndex; // Track current screen index for refresh persistence
+  int?
+  _currentScreenIndex; // Track current screen index for refresh persistence
 
   bool get isAuthenticated => _isAuthenticated;
   String? get userEmail => _userEmail;
   String? get userRole => _userRole; // New: Getter for user role
   bool get userAlreadyOnboarded =>
       _userAlreadyOnboarded; // New: Getter for onboarding status
-  int? get initialScreenIndex => _initialScreenIndex; // New: Getter for initial screen index
-  int? get currentScreenIndex => _currentScreenIndex; // Getter for current screen index
+  int? get initialScreenIndex =>
+      _initialScreenIndex; // New: Getter for initial screen index
+  int? get currentScreenIndex =>
+      _currentScreenIndex; // Getter for current screen index
 
   AuthProvider() {
     _loadAuthState();
@@ -31,8 +34,12 @@ class AuthProvider extends ChangeNotifier {
     _isAuthenticated = prefs.getBool('isAuthenticated') ?? false;
     _userEmail = prefs.getString('userEmail');
     _userRole = prefs.getString('userRole'); // New: Load user role
-    _initialScreenIndex = prefs.getInt('initialScreenIndex'); // Load initial screen index
-    _currentScreenIndex = prefs.getInt('currentScreenIndex'); // Load current screen index for refresh persistence
+    _initialScreenIndex = prefs.getInt(
+      'initialScreenIndex',
+    ); // Load initial screen index
+    _currentScreenIndex = prefs.getInt(
+      'currentScreenIndex',
+    ); // Load current screen index for refresh persistence
     notifyListeners();
   }
 
@@ -104,9 +111,20 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = true;
         _userEmail = email;
         _userRole = role ?? 'user';
+        _initialScreenIndex = 8; // Set to Module Screen
+        _currentScreenIndex =
+            8; // Also save as current screen index for refresh persistence
         await prefs.setBool('isAuthenticated', true);
         await prefs.setString('userEmail', email);
         await prefs.setString('userRole', _userRole!);
+        await prefs.setInt(
+          'initialScreenIndex',
+          8,
+        ); // Store initial screen index
+        await prefs.setInt(
+          'currentScreenIndex',
+          8,
+        ); // Store current screen index for refresh
         _userAlreadyOnboarded =
             false; // Reset onboarding status for new registration
         notifyListeners();
@@ -118,9 +136,20 @@ class AuthProvider extends ChangeNotifier {
         _userEmail = email;
         // Here, you might want to fetch the actual role of the existing user from the backend
         _userRole = role ?? 'user';
+        _initialScreenIndex = 8; // Set to Module Screen
+        _currentScreenIndex =
+            8; // Also save as current screen index for refresh persistence
         await prefs.setBool('isAuthenticated', true);
         await prefs.setString('userEmail', email);
         await prefs.setString('userRole', _userRole!);
+        await prefs.setInt(
+          'initialScreenIndex',
+          8,
+        ); // Store initial screen index
+        await prefs.setInt(
+          'currentScreenIndex',
+          8,
+        ); // Store current screen index for refresh
         _userAlreadyOnboarded = true; // Set onboarding status to true
         notifyListeners();
         return true; // Indicate success
@@ -146,16 +175,20 @@ class AuthProvider extends ChangeNotifier {
       'https://khonobuzz-backend.onrender.com/api/auth/login',
     );
     try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'email': email}),
-      ).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw TimeoutException('Login request timed out. Please check your internet connection and try again.');
-        },
-      );
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({'email': email}),
+          )
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw TimeoutException(
+                'Login request timed out. Please check your internet connection and try again.',
+              );
+            },
+          );
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
@@ -164,13 +197,20 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = true;
         _userEmail = responseData['user']['email'];
         _userRole = responseData['user']['role'] ?? 'Staff';
-        _initialScreenIndex = 6; // Set to User Management screen
-        _currentScreenIndex = 6; // Also save as current screen index for refresh persistence
+        _initialScreenIndex = 8; // Set to Module Screen
+        _currentScreenIndex =
+            8; // Also save as current screen index for refresh persistence
         await prefs.setBool('isAuthenticated', true);
         await prefs.setString('userEmail', _userEmail!);
         await prefs.setString('userRole', _userRole!);
-        await prefs.setInt('initialScreenIndex', 6); // Store initial screen index
-        await prefs.setInt('currentScreenIndex', 6); // Store current screen index for refresh
+        await prefs.setInt(
+          'initialScreenIndex',
+          8,
+        ); // Store initial screen index
+        await prefs.setInt(
+          'currentScreenIndex',
+          8,
+        ); // Store current screen index for refresh
         notifyListeners();
         return true;
       } else if (response.statusCode == 404 || response.statusCode == 401) {
@@ -180,38 +220,50 @@ class AuthProvider extends ChangeNotifier {
           'https://khonobuzz-backend.onrender.com/api/users',
         );
         try {
-          final userCheckResponse = await http.get(userCheckUrl).timeout(
-            const Duration(seconds: 15),
-            onTimeout: () {
-              throw TimeoutException('Request timed out');
-            },
-          );
-          
+          final userCheckResponse = await http
+              .get(userCheckUrl)
+              .timeout(
+                const Duration(seconds: 15),
+                onTimeout: () {
+                  throw TimeoutException('Request timed out');
+                },
+              );
+
           if (userCheckResponse.statusCode == 200) {
             final usersData = json.decode(userCheckResponse.body);
             final users = (usersData['users'] as List<dynamic>? ?? []);
             Map<String, dynamic>? foundUser;
             try {
-              foundUser = users.firstWhere(
-                (u) => (u as Map<String, dynamic>)['email']?.toString().toLowerCase() == email.toLowerCase(),
-              ) as Map<String, dynamic>?;
+              foundUser =
+                  users.firstWhere(
+                        (u) =>
+                            (u as Map<String, dynamic>)['email']
+                                ?.toString()
+                                .toLowerCase() ==
+                            email.toLowerCase(),
+                      )
+                      as Map<String, dynamic>?;
             } catch (_) {
               foundUser = null;
             }
-            
+
             if (foundUser != null) {
               // User exists in database, allow login
               final prefs = await SharedPreferences.getInstance();
               _isAuthenticated = true;
               _userEmail = foundUser['email'] ?? email;
               _userRole = foundUser['role'] ?? 'Staff';
-              _initialScreenIndex = 6;
-              _currentScreenIndex = 6; // Also save as current screen index for refresh persistence
+              _initialScreenIndex = 8; // Set to Module Screen
+              _currentScreenIndex =
+                  8; // Also save as current screen index for refresh persistence
               await prefs.setBool('isAuthenticated', true);
               await prefs.setString('userEmail', _userEmail!);
               await prefs.setString('userRole', _userRole!);
-              await prefs.setInt('initialScreenIndex', 6);
-              await prefs.setInt('currentScreenIndex', 6); // Store current screen index for refresh
+              await prefs.setInt('initialScreenIndex', 8);
+              await prefs.setInt(
+                'currentScreenIndex',
+                8,
+              ); // Store current screen index for refresh
               notifyListeners();
               return true;
             }
@@ -219,7 +271,7 @@ class AuthProvider extends ChangeNotifier {
         } catch (_) {
           // If user check fails, proceed with normal error handling
         }
-        
+
         _isAuthenticated = false;
         notifyListeners();
         return false;
