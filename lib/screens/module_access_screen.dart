@@ -15,6 +15,8 @@ class ModuleAccessScreen extends StatefulWidget {
 class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   final TextEditingController _searchController = TextEditingController();
   final List<String> _moduleRoleOptionsPDH = ['Employee', 'Manager'];
+  static const double _designationColumnWidth = 240.0;
+  static const double _badgeAreaWidth = 320.0;
   static const String _notAssignedValue = 'Not Assigned';
 
   List<ManagedUser> _users = [];
@@ -377,6 +379,12 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   }
 
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
+    final moduleAccessChips = _buildModuleAccessChips(user.moduleAccess);
+    if (user.moduleAccess != null &&
+        user.moduleAccess!.split(',').map((e) => e.trim()).contains('PDH') &&
+        user.moduleRole != null) {
+      moduleAccessChips.add(_buildModuleRoleChip(user.moduleRole));
+    }
     return InkWell(
       onTap: () {
         setState(() {
@@ -404,6 +412,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       fontSize: 16.0,
                       fontFamily: 'Poppins',
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                   Text(
                     user.email,
@@ -412,49 +421,64 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       fontSize: 12.0,
                       fontFamily: 'Poppins',
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 16.0),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user.designation,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w500,
-                      fontFamily: 'Poppins',
+            Flexible(
+              child: SizedBox(
+                width: _designationColumnWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.designation,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontFamily: 'Poppins',
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Text(
-                    user.department,
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 12.0,
-                      fontFamily: 'Poppins',
+                    Text(
+                      user.department,
+                      style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 12.0,
+                        fontFamily: 'Poppins',
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(width: 16.0),
-            ..._buildModuleAccessChips(user.moduleAccess),
-            const SizedBox(width: 8.0),
-            if (user.moduleAccess != null &&
-                user.moduleAccess!
-                    .split(',')
-                    .map((e) => e.trim())
-                    .contains('PDH') &&
-                user.moduleRole != null)
-              _buildModuleRoleChip(user.moduleRole),
-            const SizedBox(width: 8.0),
-            Transform.rotate(
-              angle: isExpanded ? 3.14 : 0,
-              child: const Icon(
-                Icons.keyboard_arrow_down,
-                color: Colors.white54,
+            Flexible(
+              child: SizedBox(
+                width: _badgeAreaWidth,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Flexible(
+                      child: Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8.0,
+                        runSpacing: 4.0,
+                        children: moduleAccessChips,
+                      ),
+                    ),
+                    const SizedBox(width: 8.0),
+                    Transform.rotate(
+                      angle: isExpanded ? 3.14 : 0,
+                      child: const Icon(
+                        Icons.keyboard_arrow_down,
+                        color: Colors.white54,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -466,19 +490,25 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   List<Widget> _buildModuleAccessChips(String? moduleAccess) {
     if (moduleAccess == null || moduleAccess.isEmpty) {
       return [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-          decoration: BoxDecoration(
-            color: const Color(0x33FFFFFF),
-            borderRadius: BorderRadius.circular(20.0),
-          ),
-          child: Text(
-            _notAssignedValue,
-            style: const TextStyle(
-              fontSize: 12.0,
-              fontWeight: FontWeight.bold,
-              fontFamily: 'Poppins',
-              color: Colors.white,
+        Padding(
+          padding: const EdgeInsets.only(right: 8.0),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12.0,
+              vertical: 4.0,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0x33FFFFFF),
+              borderRadius: BorderRadius.circular(20.0),
+            ),
+            child: Text(
+              _notAssignedValue,
+              style: const TextStyle(
+                fontSize: 12.0,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Poppins',
+                color: Colors.white,
+              ),
             ),
           ),
         ),
@@ -515,19 +545,22 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   }
 
   Widget _buildModuleRoleChip(String? moduleRole) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-      decoration: BoxDecoration(
-        color: Colors.purple.shade600.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(20.0),
-      ),
-      child: Text(
-        moduleRole ?? '',
-        style: const TextStyle(
-          fontSize: 12.0,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
-          color: Colors.white,
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+        decoration: BoxDecoration(
+          color: const Color(0x33FFFFFF),
+          borderRadius: BorderRadius.circular(20.0),
+        ),
+        child: Text(
+          moduleRole ?? '',
+          style: const TextStyle(
+            fontSize: 12.0,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Poppins',
+            color: Colors.white,
+          ),
         ),
       ),
     );

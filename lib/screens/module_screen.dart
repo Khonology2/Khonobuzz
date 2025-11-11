@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:ui' show ImageFilter;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 
 // Define the custom colors used in the HTML design
 const Color primaryDark = Color(0xFF1F2937);
@@ -14,6 +16,17 @@ class ModuleScreen extends StatefulWidget {
 }
 
 class _ModuleScreenState extends State<ModuleScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Fetch user module access when screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthProvider>().fetchCurrentUserModuleAccess();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // Determine the max width for the card content to match the HTML's max-w-xl
@@ -37,66 +50,97 @@ class _ModuleScreenState extends State<ModuleScreen> {
             padding: const EdgeInsets.all(16.0),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final bool isMobile = constraints.maxWidth < 768;
-                if (isMobile) {
-                  // Stack vertically on mobile
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildModuleCard(
-                        context: context,
-                        cardWidth: constraints.maxWidth > 500
-                            ? 500
-                            : constraints.maxWidth * 0.9,
-                        title: 'Resource and Capacity',
-                        subtitle: 'Resource Capacity & Skills Heatmap',
-                        buttonText: 'Launch Development Hub',
-                        url: 'https://personal-developement-hub.netlify.app/',
-                      ),
-                      const SizedBox(height: 20.0),
-                      _buildModuleCard(
-                        context: context,
-                        cardWidth: constraints.maxWidth > 500
-                            ? 500
-                            : constraints.maxWidth * 0.9,
-                        title: 'Welcome to Your Growth Engine',
-                        subtitle: 'Personal Development Hub',
-                        buttonText: 'Launch Heatmap',
-                        url: 'https://resource-capacity.netlify.app/'
-                      ),
-                    ],
-                  );
-                } else {
-                  // Side by side on larger screens
-                  return IntrinsicHeight(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Flexible(
-                          child: _buildModuleCard(
-                            context: context,
-                            cardWidth: cardWidth,
-                            title: 'Personal Development Hub (PDH)',
-                            buttonText: 'Launch Development Hub',
-                            url:
-                                'https://personal-developement-hub.netlify.app/',
+                return Consumer<AuthProvider>(
+                  builder: (context, authProvider, child) {
+                    final isAdmin =
+                        authProvider.userRole?.toLowerCase() == 'admin';
+                    final hasPDHAccess = authProvider.hasModuleAccess('PDH');
+                    final hasSkillsHeatmapAccess = authProvider.hasModuleAccess(
+                      'Skills Heatmap',
+                    );
+
+                    // Admin users see all cards, Staff users see only cards they have access to
+                    final showPDH = isAdmin || hasPDHAccess;
+                    final showSkillsHeatmap = isAdmin || hasSkillsHeatmapAccess;
+
+                    // If no cards to show, show a message
+                    if (!showPDH && !showSkillsHeatmap) {
+                      return const Center(
+                        child: Text(
+                          'No module access assigned. Please contact your administrator.',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18.0,
+                            fontFamily: 'Poppins',
                           ),
+                          textAlign: TextAlign.center,
                         ),
-                        const SizedBox(width: 20.0),
-                        Flexible(
-                          child: _buildModuleCard(
-                            context: context,
-                            cardWidth: cardWidth,
-                            title: 'Resource Capacity & Skills Heatmap',
-                            buttonText: 'Launch Heatmap',
-                            url: 'https://resource-capacity.netlify.app/',
-                          ),
+                      );
+                    }
+
+                    final bool isMobile = constraints.maxWidth < 768;
+                    final List<Widget> cards = [];
+
+                    if (showPDH) {
+                      cards.add(
+                        _buildModuleCard(
+                          context: context,
+                          cardWidth: isMobile
+                              ? (constraints.maxWidth > 500
+                                    ? 500
+                                    : constraints.maxWidth * 0.9)
+                              : cardWidth,
+                          title: isMobile
+                              ? 'Personal Development Hub (PDH)'
+                              : 'Personal Development Hub (PDH)',
+                          buttonText: 'Launch Development Hub',
+                          url: 'https://personal-developement-hub.netlify.app/',
                         ),
-                      ],
-                    ),
-                  );
-                }
+                      );
+                    }
+
+                    if (showSkillsHeatmap) {
+                      if (cards.isNotEmpty && isMobile) {
+                        cards.add(const SizedBox(height: 20.0));
+                      } else if (cards.isNotEmpty && !isMobile) {
+                        cards.add(const SizedBox(width: 20.0));
+                      }
+
+                      cards.add(
+                        _buildModuleCard(
+                          context: context,
+                          cardWidth: isMobile
+                              ? (constraints.maxWidth > 500
+                                    ? 500
+                                    : constraints.maxWidth * 0.9)
+                              : cardWidth,
+                          title: 'Resource Capacity & Skills Heatmap',
+                          buttonText: 'Launch Heatmap',
+                          url: 'https://resource-capacity.netlify.app/',
+                        ),
+                      );
+                    }
+
+                    if (isMobile) {
+                      // Stack vertically on mobile
+                      return Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: cards,
+                      );
+                    } else {
+                      // Side by side on larger screens
+                      return IntrinsicHeight(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: cards
+                              .map((card) => Flexible(child: card))
+                              .toList(),
+                        ),
+                      );
+                    }
+                  },
+                );
               },
             ),
           ),
@@ -146,9 +190,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     fontWeight: FontWeight.w900,
                     color: Colors.white,
                   ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 if (subtitle != null && subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 16.0),
+                  const SizedBox(height: 12.0),
                   Text(
                     subtitle,
                     textAlign: TextAlign.center,
@@ -157,9 +203,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                       fontWeight: FontWeight.w600,
                       color: primaryAccent,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
-                const SizedBox(height: 40.0),
+                const SizedBox(height: 32.0),
                 _buildLaunchButton(text: buttonText, url: url),
               ],
             ),

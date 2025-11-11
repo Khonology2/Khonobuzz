@@ -14,6 +14,7 @@ class AuthProvider extends ChangeNotifier {
   int? _initialScreenIndex; // New: Track initial screen index after login
   int?
   _currentScreenIndex; // Track current screen index for refresh persistence
+  String? _userModuleAccess; // Store current user's module access
 
   bool get isAuthenticated => _isAuthenticated;
   String? get userEmail => _userEmail;
@@ -24,6 +25,7 @@ class AuthProvider extends ChangeNotifier {
       _initialScreenIndex; // New: Getter for initial screen index
   int? get currentScreenIndex =>
       _currentScreenIndex; // Getter for current screen index
+  String? get userModuleAccess => _userModuleAccess; // Getter for module access
 
   AuthProvider() {
     _loadAuthState();
@@ -134,6 +136,8 @@ class AuthProvider extends ChangeNotifier {
         _userAlreadyOnboarded =
             false; // Reset onboarding status for new registration
         notifyListeners();
+        // Fetch module access after login
+        fetchCurrentUserModuleAccess();
         return true; // Indicate success
       } else if (response.statusCode == 409) {
         // If user already exists, proceed as if logged in or attempt a login API call if available
@@ -158,6 +162,8 @@ class AuthProvider extends ChangeNotifier {
         ); // Store current screen index for refresh
         _userAlreadyOnboarded = true; // Set onboarding status to true
         notifyListeners();
+        // Fetch module access after login
+        fetchCurrentUserModuleAccess();
         return true; // Indicate success
       } else {
         // Handle other errors
@@ -216,6 +222,8 @@ class AuthProvider extends ChangeNotifier {
           9,
         ); // Store current screen index for refresh
         notifyListeners();
+        // Fetch module access after login
+        fetchCurrentUserModuleAccess();
         return true;
       } else if (response.statusCode == 404 ||
           response.statusCode == 401 ||
@@ -302,6 +310,8 @@ class AuthProvider extends ChangeNotifier {
             9,
           ); // Store current screen index for refresh
           notifyListeners();
+          // Fetch module access after fallback login
+          fetchCurrentUserModuleAccess();
           return true;
         }
       }
@@ -318,6 +328,7 @@ class AuthProvider extends ChangeNotifier {
     _userRole = null; // New: Clear user role
     _initialScreenIndex = null; // Clear initial screen index
     _currentScreenIndex = null; // Clear current screen index
+    _userModuleAccess = null; // Clear module access
     await prefs.remove('isAuthenticated');
     await prefs.remove('userEmail');
     await prefs.remove('userRole'); // New: Remove user role
@@ -340,5 +351,63 @@ class AuthProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('currentScreenIndex', index);
     notifyListeners();
+  }
+
+  // Fetch current user's module access from API
+  Future<void> fetchCurrentUserModuleAccess() async {
+    if (_userEmail == null) {
+      _userModuleAccess = null;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('http://localhost:5000/api/users'),
+      );
+
+      if (response.statusCode == 200) {
+        final usersData = json.decode(response.body);
+        final users = (usersData['users'] as List<dynamic>? ?? []);
+
+        try {
+          final foundUser =
+              users.firstWhere(
+                    (u) =>
+                        (u as Map<String, dynamic>)['email']
+                            ?.toString()
+                            .toLowerCase() ==
+                        _userEmail!.toLowerCase(),
+                  )
+                  as Map<String, dynamic>?;
+
+          _userModuleAccess = foundUser?['moduleAccess'] as String?;
+          notifyListeners();
+        } catch (_) {
+          _userModuleAccess = null;
+          notifyListeners();
+        }
+      } else {
+        _userModuleAccess = null;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error fetching user module access: $e');
+      _userModuleAccess = null;
+      notifyListeners();
+    }
+  }
+
+  // Check if user has specific module access
+  bool hasModuleAccess(String moduleName) {
+    if (_userModuleAccess == null || _userModuleAccess!.isEmpty) {
+      return false;
+    }
+    final accessList = _userModuleAccess!
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    return accessList.contains(moduleName);
   }
 }

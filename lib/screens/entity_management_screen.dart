@@ -15,6 +15,8 @@ class EntityManagementScreen extends StatefulWidget {
 class _EntityManagementScreenState extends State<EntityManagementScreen> {
   final TextEditingController _searchController = TextEditingController();
   final List<String> _entityOptions = ['Khonology Internal'];
+  static const double _designationColumnWidth = 240.0;
+  static const double _badgeAreaWidth = 200.0;
   static const String _notAssignedValue = 'Not Assigned';
 
   List<ManagedUser> _users = [];
@@ -354,7 +356,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
               ),
             ),
             const SizedBox(width: 16.0),
-            Expanded(
+            SizedBox(
+              width: _designationColumnWidth,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -377,13 +380,21 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
               ),
             ),
             const SizedBox(width: 16.0),
-            _buildEntityChip(user.entity),
-            const SizedBox(width: 8.0),
-            Transform.rotate(
-              angle: isExpanded ? 3.14 : 0,
-              child: const Icon(
-                Icons.keyboard_arrow_down,
-                color: Colors.white54,
+            SizedBox(
+              width: _badgeAreaWidth,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _buildEntityChip(user.entity),
+                  const SizedBox(width: 8.0),
+                  Transform.rotate(
+                    angle: isExpanded ? 3.14 : 0,
+                    child: const Icon(
+                      Icons.keyboard_arrow_down,
+                      color: Colors.white54,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

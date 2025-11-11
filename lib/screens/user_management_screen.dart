@@ -57,6 +57,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   final List<String> userRoles = ['Staff', 'Manager', 'Admin'];
 
+  static const double _designationColumnWidth = 240.0;
+  static const double _badgeAreaWidth = 200.0;
+
   final TextEditingController _searchController = TextEditingController();
 
   List<ManagedUser> get _filteredUsers {
@@ -523,7 +526,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ),
             ),
             const SizedBox(width: 16.0),
-            Expanded(
+            SizedBox(
+              width:
+                  _designationColumnWidth, // Fixed width for consistent alignment
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -545,18 +550,25 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 16.0),
-            if (user.role.toLowerCase() != 'user') ...[
-              _buildRoleBadge(user.role),
-              const SizedBox(width: 8.0),
-            ],
-            _buildStatusBadge(user.status),
-            const SizedBox(width: 8.0),
-            Transform.rotate(
-              angle: isExpanded ? 3.14 : 0,
-              child: const Icon(
-                Icons.keyboard_arrow_down,
-                color: Colors.white54,
+            SizedBox(
+              width: _badgeAreaWidth,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (user.role.toLowerCase() != 'user') ...[
+                    _buildRoleBadge(user.role),
+                    const SizedBox(width: 8.0),
+                  ],
+                  _buildStatusBadge(user.status),
+                  const SizedBox(width: 8.0),
+                  Transform.rotate(
+                    angle: isExpanded ? 3.14 : 0,
+                    child: const Icon(
+                      Icons.keyboard_arrow_down,
+                      color: Colors.white54,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
