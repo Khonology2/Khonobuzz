@@ -377,12 +377,6 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
               ),
             ),
             const SizedBox(width: 16.0),
-            if ((user.role).toLowerCase() != 'user') ...[
-              _buildRoleBadge(user.role),
-              const SizedBox(width: 8.0),
-            ],
-            _buildStatusBadge(user.status),
-            const SizedBox(width: 8.0),
             _buildEntityChip(user.entity),
             const SizedBox(width: 8.0),
             Transform.rotate(
@@ -393,42 +387,6 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRoleBadge(String role) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-      decoration: BoxDecoration(
-        color: userRoleColors[role] ?? Colors.blueGrey.shade600,
-        borderRadius: BorderRadius.circular(20.0),
-      ),
-      child: Text(
-        role,
-        style: const TextStyle(
-          fontSize: 12.0,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusBadge(String status) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-      decoration: BoxDecoration(
-        color: userStatusColors[status] ?? Colors.grey.shade600,
-        borderRadius: BorderRadius.circular(20.0),
-      ),
-      child: Text(
-        status,
-        style: const TextStyle(
-          fontSize: 12.0,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
         ),
       ),
     );

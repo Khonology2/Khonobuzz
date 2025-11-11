@@ -14,9 +14,7 @@ class ModuleAccessScreen extends StatefulWidget {
 
 class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final List<String> _moduleAccessOptions = ['PDH', 'SOW Builder'];
   final List<String> _moduleRoleOptionsPDH = ['Employee', 'Manager'];
-  final List<String> _moduleRoleOptionsSOW = ['Manager'];
   static const String _notAssignedValue = 'Not Assigned';
 
   List<ManagedUser> _users = [];
@@ -40,11 +38,16 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     if (query.isEmpty) return _users;
 
     return _users.where((user) {
+      final moduleAccessList = (user.moduleAccess ?? '')
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          .toList();
+
       return user.name.toLowerCase().contains(query) ||
           user.email.toLowerCase().contains(query) ||
           user.department.toLowerCase().contains(query) ||
           user.designation.toLowerCase().contains(query) ||
-          (user.moduleAccess ?? '').toLowerCase().contains(query) ||
+          moduleAccessList.any((access) => access.contains(query)) ||
           (user.moduleRole ?? '').toLowerCase().contains(query);
     }).toList();
   }
@@ -116,22 +119,36 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     }
   }
 
+  void _updateModuleAccessList(
+    ManagedUser user,
+    bool pdhSelected,
+    bool skillsHeatmapSelected,
+  ) {
+    List<String> accessList = [];
+    if (pdhSelected) accessList.add('PDH');
+    if (skillsHeatmapSelected) accessList.add('Skills Heatmap');
+
+    user.moduleAccess = accessList.isEmpty ? null : accessList.join(',');
+  }
+
   Future<void> _updateUserModuleAccess(
     ManagedUser user,
-    String? newModuleAccess,
+    bool pdhSelected,
+    bool skillsHeatmapSelected,
     String? newModuleRole,
   ) async {
-    // Convert "Not Assigned" to empty string for backend
-    final sanitizedModuleAccess =
-        (newModuleAccess != null &&
-            newModuleAccess.trim().isNotEmpty &&
-            newModuleAccess != _notAssignedValue)
-        ? newModuleAccess.trim()
-        : '';
+    // Build moduleAccess string from checkboxes
+    List<String> accessList = [];
+    if (pdhSelected) accessList.add('PDH');
+    if (skillsHeatmapSelected) accessList.add('Skills Heatmap');
+
+    final sanitizedModuleAccess = accessList.isEmpty
+        ? ''
+        : accessList.join(',');
 
     // Determine moduleRole based on moduleAccess
     String sanitizedModuleRole = '';
-    if (sanitizedModuleAccess == 'PDH') {
+    if (pdhSelected) {
       // For PDH, use the selected role (Employee or Manager)
       sanitizedModuleRole =
           (newModuleRole != null &&
@@ -139,18 +156,24 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               newModuleRole != _notAssignedValue)
           ? newModuleRole.trim()
           : '';
-    } else if (sanitizedModuleAccess == 'SOW Builder') {
-      // For SOW Builder, always set to Manager
-      sanitizedModuleRole = 'Manager';
+    }
+    // Note: Skills Heatmap always has Manager role, but we don't store it separately
+    // The moduleRole field is specifically for PDH
+
+    // Create combined moduleAccessRole field
+    List<String> combinedParts = [];
+    if (pdhSelected && sanitizedModuleRole.isNotEmpty) {
+      combinedParts.add('PDH - $sanitizedModuleRole');
+    } else if (pdhSelected) {
+      combinedParts.add('PDH');
+    }
+    if (skillsHeatmapSelected) {
+      combinedParts.add('Skills Heatmap - Manager');
     }
 
-    // Create combined moduleAccess field: "PDH - Employee", "PDH - Manager", or "SOW Builder - Manager"
-    String combinedModuleAccess = '';
-    if (sanitizedModuleAccess.isNotEmpty && sanitizedModuleRole.isNotEmpty) {
-      combinedModuleAccess = '$sanitizedModuleAccess - $sanitizedModuleRole';
-    } else if (sanitizedModuleAccess.isNotEmpty) {
-      combinedModuleAccess = sanitizedModuleAccess;
-    }
+    String combinedModuleAccess = combinedParts.isEmpty
+        ? ''
+        : combinedParts.join(', ');
 
     try {
       final response = await http.patch(
@@ -417,15 +440,14 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ),
             ),
             const SizedBox(width: 16.0),
-            if ((user.role).toLowerCase() != 'user') ...[
-              _buildRoleBadge(user.role),
-              const SizedBox(width: 8.0),
-            ],
-            _buildStatusBadge(user.status),
+            ..._buildModuleAccessChips(user.moduleAccess),
             const SizedBox(width: 8.0),
-            _buildModuleAccessChip(user.moduleAccess),
-            const SizedBox(width: 8.0),
-            if (user.moduleAccess == 'PDH' && user.moduleRole != null)
+            if (user.moduleAccess != null &&
+                user.moduleAccess!
+                    .split(',')
+                    .map((e) => e.trim())
+                    .contains('PDH') &&
+                user.moduleRole != null)
               _buildModuleRoleChip(user.moduleRole),
             const SizedBox(width: 8.0),
             Transform.rotate(
@@ -441,63 +463,55 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     );
   }
 
-  Widget _buildRoleBadge(String role) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-      decoration: BoxDecoration(
-        color: userRoleColors[role] ?? Colors.blueGrey.shade600,
-        borderRadius: BorderRadius.circular(20.0),
-      ),
-      child: Text(
-        role,
-        style: const TextStyle(
-          fontSize: 12.0,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
+  List<Widget> _buildModuleAccessChips(String? moduleAccess) {
+    if (moduleAccess == null || moduleAccess.isEmpty) {
+      return [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+          decoration: BoxDecoration(
+            color: const Color(0x33FFFFFF),
+            borderRadius: BorderRadius.circular(20.0),
+          ),
+          child: Text(
+            _notAssignedValue,
+            style: const TextStyle(
+              fontSize: 12.0,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Poppins',
+              color: Colors.white,
+            ),
+          ),
         ),
-      ),
-    );
-  }
+      ];
+    }
 
-  Widget _buildStatusBadge(String status) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-      decoration: BoxDecoration(
-        color: userStatusColors[status] ?? Colors.grey.shade600,
-        borderRadius: BorderRadius.circular(20.0),
-      ),
-      child: Text(
-        status,
-        style: const TextStyle(
-          fontSize: 12.0,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
+    final accessList = moduleAccess
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    return accessList.map((access) {
+      return Padding(
+        padding: const EdgeInsets.only(right: 8.0),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+          decoration: BoxDecoration(
+            color: const Color(0x33FFFFFF),
+            borderRadius: BorderRadius.circular(20.0),
+          ),
+          child: Text(
+            access,
+            style: const TextStyle(
+              fontSize: 12.0,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Poppins',
+              color: Colors.white,
+            ),
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildModuleAccessChip(String? moduleAccess) {
-    final displayText = (moduleAccess == null || moduleAccess.isEmpty)
-        ? _notAssignedValue
-        : moduleAccess;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-      decoration: BoxDecoration(
-        color: const Color(0x33FFFFFF),
-        borderRadius: BorderRadius.circular(20.0),
-      ),
-      child: Text(
-        displayText,
-        style: const TextStyle(
-          fontSize: 12.0,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
-          color: Colors.white,
-        ),
-      ),
-    );
+      );
+    }).toList();
   }
 
   Widget _buildModuleRoleChip(String? moduleRole) {
@@ -520,33 +534,27 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   }
 
   Widget _buildModuleAccessPanel(ManagedUser user) {
-    // Use "Not Assigned" as default if moduleAccess is null or empty
-    String? selectedModuleAccess =
-        (user.moduleAccess == null || user.moduleAccess!.isEmpty)
-        ? _notAssignedValue
-        : user.moduleAccess;
+    // Parse moduleAccess string to list (comma-separated)
+    List<String> selectedModuleAccessList = [];
+    if (user.moduleAccess != null && user.moduleAccess!.isNotEmpty) {
+      selectedModuleAccessList = user.moduleAccess!
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+
+    // Track checkbox states
+    bool pdhSelected = selectedModuleAccessList.contains('PDH');
+    bool skillsHeatmapSelected = selectedModuleAccessList.contains(
+      'Skills Heatmap',
+    );
 
     // Use "Not Assigned" as default if moduleRole is null or empty
     String? selectedModuleRole =
         (user.moduleRole == null || user.moduleRole!.isEmpty)
         ? _notAssignedValue
         : user.moduleRole;
-
-    // Module Role is enabled when Module Access is PDH or SOW Builder
-    final bool isModuleRoleEnabled =
-        selectedModuleAccess == 'PDH' || selectedModuleAccess == 'SOW Builder';
-
-    // Get appropriate role options based on module access
-    final List<String> roleOptions = selectedModuleAccess == 'PDH'
-        ? _moduleRoleOptionsPDH
-        : (selectedModuleAccess == 'SOW Builder' ? _moduleRoleOptionsSOW : []);
-
-    // If SOW Builder is selected and no role is set, default to Manager
-    if (selectedModuleAccess == 'SOW Builder' &&
-        selectedModuleRole == _notAssignedValue) {
-      selectedModuleRole = 'Manager';
-      user.moduleRole = 'Manager';
-    }
 
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -559,161 +567,228 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       ),
       child: Column(
         children: [
+          // PDH Row: Checkbox + Module Role Dropdown
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Module Access Dropdown
+              // PDH Checkbox
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Module Access: ',
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 8.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2C3E50),
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: CheckboxListTile(
+                    title: const Text(
+                      'PDH',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: Colors.white,
                         fontFamily: 'Poppins',
                       ),
                     ),
-                    const SizedBox(height: 8.0),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2C3E50),
-                        borderRadius: BorderRadius.circular(8.0),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String?>(
-                          value: selectedModuleAccess,
-                          isExpanded: true,
-                          dropdownColor: const Color(0xFF2C3E50),
-                          icon: const Icon(
-                            Icons.arrow_drop_down,
-                            color: Colors.white70,
-                          ),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontFamily: 'Poppins',
-                          ),
-                          onChanged: (value) {
-                            setState(() {
-                              // Convert "Not Assigned" to null/empty for storage
-                              if (value == _notAssignedValue) {
-                                selectedModuleAccess = _notAssignedValue;
-                                user.moduleAccess = null;
-                                // Clear moduleRole when moduleAccess is cleared
-                                selectedModuleRole = _notAssignedValue;
-                                user.moduleRole = null;
-                              } else {
-                                selectedModuleAccess = value;
-                                user.moduleAccess = value;
-                                // If SOW Builder is selected, automatically set role to Manager
-                                if (value == 'SOW Builder') {
-                                  selectedModuleRole = 'Manager';
-                                  user.moduleRole = 'Manager';
-                                } else if (value != 'PDH') {
-                                  // Clear moduleRole if moduleAccess is not PDH or SOW Builder
-                                  selectedModuleRole = _notAssignedValue;
-                                  user.moduleRole = null;
-                                }
-                              }
-                            });
-                          },
-                          items: <DropdownMenuItem<String?>>[
-                            DropdownMenuItem<String?>(
-                              value: _notAssignedValue,
-                              child: Text(_notAssignedValue),
-                            ),
-                            ..._moduleAccessOptions.map(
-                              (option) => DropdownMenuItem<String?>(
-                                value: option,
-                                child: Text(option),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                    value: pdhSelected,
+                    activeColor: const Color(0xFFC10D00),
+                    checkColor: Colors.white,
+                    onChanged: (bool? value) {
+                      setState(() {
+                        pdhSelected = value ?? false;
+                        _updateModuleAccessList(
+                          user,
+                          pdhSelected,
+                          skillsHeatmapSelected,
+                        );
+                        // If PDH is unchecked and no role selected, clear module role
+                        if (!pdhSelected &&
+                            selectedModuleRole != _notAssignedValue) {
+                          // Only clear if Skills Heatmap is also not selected
+                          if (!skillsHeatmapSelected) {
+                            selectedModuleRole = _notAssignedValue;
+                            user.moduleRole = null;
+                          }
+                        }
+                      });
+                    },
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
                 ),
               ),
-              const SizedBox(width: 16.0), // Spacing between dropdowns
-              // Module Role Dropdown (only enabled when Module Access is PDH)
+              const SizedBox(
+                width: 16.0,
+              ), // Spacing between checkbox and dropdown
+              // Module Role Dropdown for PDH
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Module Role: ',
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 8.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: pdhSelected
+                        ? const Color(0xFF2C3E50)
+                        : const Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      value: pdhSelected
+                          ? selectedModuleRole
+                          : _notAssignedValue,
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF2C3E50),
+                      icon: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.white70,
+                      ),
+                      hint: const Text(
+                        'Module Role',
+                        style: TextStyle(
+                          color: Colors.white60,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: pdhSelected ? Colors.white : Colors.white54,
+                        fontFamily: 'Poppins',
+                      ),
+                      onChanged: pdhSelected
+                          ? (value) {
+                              setState(() {
+                                if (value == _notAssignedValue) {
+                                  selectedModuleRole = _notAssignedValue;
+                                  user.moduleRole = null;
+                                } else {
+                                  selectedModuleRole = value;
+                                  user.moduleRole = value;
+                                }
+                              });
+                            }
+                          : null,
+                      items: <DropdownMenuItem<String?>>[
+                        DropdownMenuItem<String?>(
+                          value: _notAssignedValue,
+                          child: Text(_notAssignedValue),
+                        ),
+                        ..._moduleRoleOptionsPDH.map(
+                          (option) => DropdownMenuItem<String?>(
+                            value: option,
+                            child: Text(option),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16.0), // Spacing between rows
+          // Skills Heatmap Row: Checkbox + Module Role Dropdown
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Skills Heatmap Checkbox
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 8.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2C3E50),
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: CheckboxListTile(
+                    title: const Text(
+                      'Skills Heatmap',
+                      style: TextStyle(
+                        color: Colors.white,
                         fontFamily: 'Poppins',
                       ),
                     ),
-                    const SizedBox(height: 8.0),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      decoration: BoxDecoration(
-                        color: isModuleRoleEnabled
-                            ? const Color(0xFF2C3E50)
-                            : const Color(0xFF1A1A1A),
-                        borderRadius: BorderRadius.circular(8.0),
+                    value: skillsHeatmapSelected,
+                    activeColor: const Color(0xFFC10D00),
+                    checkColor: Colors.white,
+                    onChanged: (bool? value) {
+                      setState(() {
+                        skillsHeatmapSelected = value ?? false;
+                        _updateModuleAccessList(
+                          user,
+                          pdhSelected,
+                          skillsHeatmapSelected,
+                        );
+                      });
+                    },
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(
+                width: 16.0,
+              ), // Spacing between checkbox and dropdown
+              // Module Role Dropdown for Skills Heatmap
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 8.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: skillsHeatmapSelected
+                        ? const Color(0xFF2C3E50)
+                        : const Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      value: skillsHeatmapSelected
+                          ? 'Manager'
+                          : _notAssignedValue,
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF2C3E50),
+                      icon: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.white70,
                       ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String?>(
-                          value: isModuleRoleEnabled
-                              ? (selectedModuleAccess == 'SOW Builder'
-                                    ? 'Manager'
-                                    : selectedModuleRole)
-                              : _notAssignedValue,
-                          isExpanded: true,
-                          dropdownColor: const Color(0xFF2C3E50),
-                          icon: const Icon(
-                            Icons.arrow_drop_down,
-                            color: Colors.white70,
-                          ),
-                          style: TextStyle(
-                            color: isModuleRoleEnabled
-                                ? Colors.white
-                                : Colors.white54,
-                            fontFamily: 'Poppins',
-                          ),
-                          onChanged: isModuleRoleEnabled
-                              ? (value) {
-                                  setState(() {
-                                    // For SOW Builder, value should always be Manager
-                                    if (selectedModuleAccess == 'SOW Builder') {
-                                      selectedModuleRole = 'Manager';
-                                      user.moduleRole = 'Manager';
-                                    } else {
-                                      // Convert "Not Assigned" to null/empty for storage
-                                      if (value == _notAssignedValue) {
-                                        selectedModuleRole = _notAssignedValue;
-                                        user.moduleRole = null;
-                                      } else {
-                                        selectedModuleRole = value;
-                                        user.moduleRole = value;
-                                      }
-                                    }
-                                  });
-                                }
-                              : null,
-                          items: <DropdownMenuItem<String?>>[
-                            if (selectedModuleAccess != 'SOW Builder')
-                              DropdownMenuItem<String?>(
-                                value: _notAssignedValue,
-                                child: Text(_notAssignedValue),
-                              ),
-                            ...roleOptions.map(
-                              (option) => DropdownMenuItem<String?>(
-                                value: option,
-                                child: Text(option),
-                              ),
-                            ),
-                          ],
+                      hint: const Text(
+                        'Module Role',
+                        style: TextStyle(
+                          color: Colors.white60,
+                          fontFamily: 'Poppins',
                         ),
                       ),
+                      style: TextStyle(
+                        color: skillsHeatmapSelected
+                            ? Colors.white
+                            : Colors.white54,
+                        fontFamily: 'Poppins',
+                      ),
+                      onChanged: skillsHeatmapSelected
+                          ? (value) {
+                              // Skills Heatmap always has Manager role
+                              setState(() {
+                                // Keep it as Manager
+                              });
+                            }
+                          : null,
+                      items: <DropdownMenuItem<String?>>[
+                        if (!skillsHeatmapSelected)
+                          DropdownMenuItem<String?>(
+                            value: _notAssignedValue,
+                            child: Text(_notAssignedValue),
+                          ),
+                        DropdownMenuItem<String?>(
+                          value: 'Manager',
+                          child: Text('Manager'),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -725,7 +800,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             child: ElevatedButton(
               onPressed: () => _updateUserModuleAccess(
                 user,
-                selectedModuleAccess,
+                pdhSelected,
+                skillsHeatmapSelected,
                 selectedModuleRole,
               ),
               style: ElevatedButton.styleFrom(
