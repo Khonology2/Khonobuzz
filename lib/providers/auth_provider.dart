@@ -56,7 +56,7 @@ class AuthProvider extends ChangeNotifier {
     // Modified: added role and all onboarding parameters
 
     final url = Uri.parse(
-      'http://localhost:5000/api/auth/register',
+      'https://khonobuzz-backend.onrender.com/api/auth/register',
     ); // Your backend registration endpoint
     try {
       final response = await http.post(
@@ -191,7 +191,9 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> manualLogin(String email) async {
     // Removed password parameter
 
-    final url = Uri.parse('http://localhost:5000/api/auth/login');
+    final url = Uri.parse(
+      'https://khonobuzz-backend.onrender.com/api/auth/login',
+    );
     try {
       final response = await http
           .post(
@@ -272,7 +274,9 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> _attemptFallbackLogin(String email) async {
-    final userCheckUrl = Uri.parse('http://localhost:5000/api/users');
+    final userCheckUrl = Uri.parse(
+      'https://khonobuzz-backend.onrender.com/api/users',
+    );
     try {
       final userCheckResponse = await http
           .get(userCheckUrl)
@@ -371,7 +375,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:5000/api/users'),
+        Uri.parse('https://khonobuzz-backend.onrender.com/api/users'),
       );
 
       if (response.statusCode == 200) {

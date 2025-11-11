@@ -74,7 +74,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     });
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:5000/api/users'),
+        Uri.parse('https://khonobuzz-backend.onrender.com/api/users'),
       );
 
       if (response.statusCode != 200) {
@@ -180,7 +180,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
     try {
       final response = await http.patch(
-        Uri.parse('http://localhost:5000/api/users/${user.id}'),
+        Uri.parse(
+          'https://khonobuzz-backend.onrender.com/api/users/${user.id}',
+        ),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'role': user.role,

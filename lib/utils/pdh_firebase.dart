@@ -9,7 +9,7 @@ Future<void> syncUserToPDH(
 ) async {
   try {
     final response = await http.post(
-      Uri.parse('http://localhost:5000/api/pdh/sync-user'),
+      Uri.parse('https://khonobuzz-backend.onrender.com/api/pdh/sync-user'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'uid': uid,
@@ -34,7 +34,9 @@ Future<void> updatePDHUserPartial(
 }) async {
   try {
     final response = await http.patch(
-      Uri.parse('http://localhost:5000/api/pdh/update-user/$uid'),
+      Uri.parse(
+        'https://khonobuzz-backend.onrender.com/api/pdh/update-user/$uid',
+      ),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'userFields': userFields,

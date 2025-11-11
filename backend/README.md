@@ -28,7 +28,7 @@ cp .env.example .env
 python app.py
 ```
 
-The API will be available at `http://localhost:5000`
+The API will be available at `https://khonobuzz-backend.onrender.com`
 
 ## API Endpoints
 

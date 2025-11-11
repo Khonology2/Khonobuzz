@@ -121,7 +121,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     });
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:5000/api/users'),
+        Uri.parse('https://khonobuzz-backend.onrender.com/api/users'),
       );
 
       if (response.statusCode != 200) {
@@ -172,7 +172,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }) async {
     try {
       final response = await http.patch(
-        Uri.parse('http://localhost:5000/api/users/$userId'),
+        Uri.parse('https://khonobuzz-backend.onrender.com/api/users/$userId'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'role': newRole,
