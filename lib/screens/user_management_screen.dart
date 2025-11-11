@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:async'; // Import for TimeoutException
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../utils/pdh_firebase.dart';
 import '../models/managed_user.dart';
 
 class UserManagementScreen extends StatefulWidget {
@@ -201,6 +203,32 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             backgroundColor: const Color(0xFFC10D00),
           ),
         );
+      }
+
+      try {
+        // Sync with PDH
+        await updatePDHUserPartial(
+          userId,
+          {'role': newRole, 'status': newStatus, 'entity': entity},
+          onboardingFields: {
+            'role': newRole,
+            'status': newStatus,
+            'entity': entity,
+          },
+        );
+      } catch (e) {
+        debugPrint('PDH sync failed for user update: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'User info updated, but failed to sync with PDH.',
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
       }
 
       // Prefer backend canonical data if returned

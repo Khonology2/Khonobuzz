@@ -12,12 +12,18 @@ from fastapi import status # Import status for HTTP status codes
 from fastapi import HTTPException # Import HTTPException for authentication errors
 from typing import Optional
 
-from fastapi import Body
-
 load_dotenv()
 
 # Configuration
 FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH') or 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json'
+PDH_FIREBASE_CREDENTIALS_PATH = os.environ.get('PDH_FIREBASE_CREDENTIALS_PATH') or 'pdh-fe6eb-firebase-adminsdk-fbsvc-6fbc402974.json'
+
+# PDH Firestore App Initialization
+pdh_cred = credentials.Certificate(PDH_FIREBASE_CREDENTIALS_PATH)
+pdh_app = initialize_app(pdh_cred, name='pdhApp')
+pdh_db = firestore.client(app=pdh_app)
+
+from fastapi import Body
 
 # Pydantic models for request body validation
 class UserRegister(BaseModel):
@@ -79,6 +85,46 @@ app.add_middleware(
 )
 app.add_middleware(BrotliMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+@app.post("/api/pdh/sync-user")
+async def pdh_sync_user(data: dict):
+    try:
+        uid = data['uid']
+        user_data = data['userData']
+        onboarding_data = data['onboardingData']
+        
+        # Convert ISO strings back to datetime objects
+        for key in ['created_at', 'updated_at']:
+            if key in user_data and isinstance(user_data[key], str):
+                user_data[key] = datetime.fromisoformat(user_data[key].replace('Z', '+00:00'))
+        
+        for key in ['created_at', 'updated_at', 'first_valid', 'last_valid']:
+            if key in onboarding_data and isinstance(onboarding_data[key], str):
+                onboarding_data[key] = datetime.fromisoformat(onboarding_data[key].replace('Z', '+00:00'))
+        
+        pdh_db.collection('users').document(uid).set(user_data, merge=True)
+        pdh_db.collection('onboarding').document(uid).set(onboarding_data, merge=True)
+        
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH sync successful"})
+    except Exception as e:
+        print(f"[ERROR] During PDH sync: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.patch("/api/pdh/update-user/{uid}")
+async def pdh_update_user(uid: str, data: dict):
+    try:
+        user_fields = data.get('userFields')
+        onboarding_fields = data.get('onboardingFields')
+
+        if user_fields:
+            pdh_db.collection('users').document(uid).set(user_fields, merge=True)
+        if onboarding_fields:
+            pdh_db.collection('onboarding').document(uid).set(onboarding_fields, merge=True)
+            
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH update successful"})
+    except Exception as e:
+        print(f"[ERROR] During PDH update: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/")
 async def home():
@@ -293,26 +339,22 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
         user_ref.update(update_payload)
         print(f"[DEBUG] Firestore users/{user_id} updated with: {update_payload}")
 
+        # Always try to update the onboarding collection with any provided fields
+        onboarding_update_payload = {'updated_at': datetime.utcnow()}
+        if user_update.role is not None:
+            onboarding_update_payload['role'] = user_update.role
+        if user_update.status is not None:
+            onboarding_update_payload['status'] = user_update.status
         if user_update.entity is not None:
-            onboarding_query = (
-                db.collection('onboarding')
-                .where('user_id', '==', user_id)
-                .limit(1)
-                .stream()
-            )
-            onboarding_doc = None
-            for doc in onboarding_query:
-                onboarding_doc = doc
-                break
-            if onboarding_doc is not None:
-                onboarding_doc.reference.update({
-                    'entity': user_update.entity,
-                    'updated_at': datetime.utcnow(),
-                })
-                print(f"[DEBUG] Firestore onboarding for user_id={user_id} updated with entity={user_update.entity}")
+            onboarding_update_payload['entity'] = user_update.entity
+        if user_update.moduleAccess is not None:
+            onboarding_update_payload['moduleAccess'] = user_update.moduleAccess
+        if user_update.moduleRole is not None:
+            onboarding_update_payload['moduleRole'] = user_update.moduleRole
+        if user_update.moduleAccessRole is not None:
+            onboarding_update_payload['moduleAccessRole'] = user_update.moduleAccessRole
 
-        # Update onboarding collection for moduleAccess, moduleRole, and moduleAccessRole
-        if user_update.moduleAccess is not None or user_update.moduleRole is not None or user_update.moduleAccessRole is not None:
+        if len(onboarding_update_payload) > 1:  # at least updated_at is there
             onboarding_query = (
                 db.collection('onboarding')
                 .where('user_id', '==', user_id)
@@ -324,15 +366,8 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
                 onboarding_doc = doc
                 break
             if onboarding_doc is not None:
-                onboarding_update = {'updated_at': datetime.utcnow()}
-                if user_update.moduleAccess is not None:
-                    onboarding_update['moduleAccess'] = user_update.moduleAccess
-                if user_update.moduleRole is not None:
-                    onboarding_update['moduleRole'] = user_update.moduleRole
-                if user_update.moduleAccessRole is not None:
-                    onboarding_update['moduleAccessRole'] = user_update.moduleAccessRole
-                onboarding_doc.reference.update(onboarding_update)
-                print(f"[DEBUG] Firestore onboarding for user_id={user_id} updated with moduleAccess={user_update.moduleAccess}, moduleRole={user_update.moduleRole}, moduleAccessRole={user_update.moduleAccessRole}")
+                onboarding_doc.reference.update(onboarding_update_payload)
+                print(f"[DEBUG] Firestore onboarding for user_id={user_id} updated with: {onboarding_update_payload}")
 
         # Return the updated user document payload so clients can confirm changes immediately
         updated_doc = user_ref.get()

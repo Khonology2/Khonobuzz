@@ -1,37 +1,30 @@
-import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-
-FirebaseApp? _pdhApp;
-FirebaseFirestore? _pdhFirestore;
-
-Future<FirebaseFirestore> _getPdhFirestore() async {
-  if (_pdhFirestore != null) return _pdhFirestore!;
-  _pdhApp ??= await Firebase.initializeApp(
-    name: 'pdhApp',
-    options: const FirebaseOptions(
-      apiKey: 'AIzaSyAjg19Ej8fbUOfa6WYlEX-b4CNi-y0Lozc',
-      appId: '1:565445962523:web:a987a77ea9633d308401be',
-      messagingSenderId: '565445962523',
-      projectId: 'pdh-fe6eb',
-      authDomain: 'pdh-fe6eb.firebaseapp.com',
-      storageBucket: 'pdh-fe6eb.firebasestorage.app',
-    ),
-  );
-  _pdhFirestore = FirebaseFirestore.instanceFor(app: _pdhApp!);
-  return _pdhFirestore!;
-}
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 Future<void> syncUserToPDH(
   Map<String, dynamic> userData,
   Map<String, dynamic> onboardingData,
   String uid,
 ) async {
-  final fs = await _getPdhFirestore();
-  await fs.collection('users').doc(uid).set(userData, SetOptions(merge: true));
-  await fs
-      .collection('onboarding')
-      .doc(uid)
-      .set(onboardingData, SetOptions(merge: true));
+  try {
+    final response = await http.post(
+      Uri.parse('http://localhost:5000/api/pdh/sync-user'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'uid': uid,
+        'userData': userData,
+        'onboardingData': onboardingData,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to sync new user to PDH: ${response.body}');
+    }
+    debugPrint('Successfully synced new user $uid to PDH via backend.');
+  } catch (e) {
+    debugPrint('!!!!!!!! ERROR syncing new user $uid to PDH: $e !!!!!!!!!!');
+    rethrow;
+  }
 }
 
 Future<void> updatePDHUserPartial(
@@ -39,12 +32,21 @@ Future<void> updatePDHUserPartial(
   Map<String, dynamic> userFields, {
   Map<String, dynamic>? onboardingFields,
 }) async {
-  final fs = await _getPdhFirestore();
-  await fs.collection('users').doc(uid).set(userFields, SetOptions(merge: true));
-  if (onboardingFields != null) {
-    await fs
-        .collection('onboarding')
-        .doc(uid)
-        .set(onboardingFields, SetOptions(merge: true));
+  try {
+    final response = await http.patch(
+      Uri.parse('http://localhost:5000/api/pdh/update-user/$uid'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'userFields': userFields,
+        'onboardingFields': onboardingFields,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update user in PDH: ${response.body}');
+    }
+    debugPrint('Successfully updated user $uid in PDH via backend.');
+  } catch (e) {
+    debugPrint('!!!!!!!! ERROR updating user $uid in PDH: $e !!!!!!!!!!');
+    rethrow;
   }
 }

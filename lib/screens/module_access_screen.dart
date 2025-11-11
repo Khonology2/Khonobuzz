@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/managed_user.dart';
+import '../utils/pdh_firebase.dart';
 
 class ModuleAccessScreen extends StatefulWidget {
   const ModuleAccessScreen({super.key});
@@ -211,10 +212,46 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                 : null
           : (sanitizedModuleRole.isEmpty ? null : sanitizedModuleRole);
 
+      final updatedModuleAccessRole = backendUser != null
+          ? (backendUser['moduleAccessRole'] as String?)?.isNotEmpty == true
+                ? backendUser['moduleAccessRole'] as String
+                : null
+          : (combinedModuleAccess.isEmpty ? null : combinedModuleAccess);
+
       setState(() {
         user.moduleAccess = updatedModuleAccess;
         user.moduleRole = updatedModuleRole;
       });
+
+      try {
+        // Sync with PDH
+        await updatePDHUserPartial(
+          user.id,
+          {
+            'moduleAccess': updatedModuleAccess,
+            'moduleRole': updatedModuleRole,
+            'moduleAccessRole': updatedModuleAccessRole,
+          },
+          onboardingFields: {
+            'moduleAccess': updatedModuleAccess,
+            'moduleRole': updatedModuleRole,
+            'moduleAccessRole': updatedModuleAccessRole,
+          },
+        );
+      } catch (e) {
+        debugPrint('PDH sync failed for module access update: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Module access updated, but failed to sync with PDH.',
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

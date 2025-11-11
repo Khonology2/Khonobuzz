@@ -87,8 +87,8 @@ class AuthProvider extends ChangeNotifier {
             'name': '$firstName $lastName',
             'role': role ?? 'user',
             'status': 'Pending',
-            'created_at': DateTime.now().toUtc(),
-            'updated_at': DateTime.now().toUtc(),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
             'entity': '',
             'department': department ?? '',
             'designation': designation,
@@ -102,17 +102,25 @@ class AuthProvider extends ChangeNotifier {
             'designation': designation,
             'status': 'Pending',
             'role': role ?? 'user',
-            'first_valid': DateTime.utc(2025, 9, 25),
+            'first_valid': DateTime.utc(2025, 9, 25).toIso8601String(),
             'inserted_by': email,
-            'last_valid': DateTime.utc(2039, 12, 31),
+            'last_valid': DateTime.utc(2039, 12, 31).toIso8601String(),
             'onboarding_id': uid,
             'status_id': '',
             'updated_by': email,
-            'created_at': DateTime.now().toUtc(),
-            'updated_at': DateTime.now().toUtc(),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
             'entity': '',
           };
-          await syncUserToPDH(userData, onboardingData, uid).catchError((_) {});
+          try {
+            await syncUserToPDH(userData, onboardingData, uid);
+          } catch (e) {
+            debugPrint(
+              'Failed to sync new user to PDH during registration: $e',
+            );
+            // This error is logged for debugging, but we don't block the user
+            // from proceeding since the main registration was successful.
+          }
         }
 
         final prefs = await SharedPreferences.getInstance();

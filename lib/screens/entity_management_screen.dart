@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/managed_user.dart';
+import '../utils/pdh_firebase.dart';
 
 class EntityManagementScreen extends StatefulWidget {
   const EntityManagementScreen({super.key});
@@ -152,6 +153,28 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       setState(() {
         user.entity = updatedEntity;
       });
+
+      try {
+        // Sync with PDH
+        await updatePDHUserPartial(
+          user.id,
+          {'entity': updatedEntity},
+          onboardingFields: {'entity': updatedEntity},
+        );
+      } catch (e) {
+        debugPrint('PDH sync failed for entity update: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Entity updated, but failed to sync with PDH.',
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
