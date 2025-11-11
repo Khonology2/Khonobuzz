@@ -221,9 +221,12 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           SnackBar(
             content: Text(
               'Module access updated for ${user.name}.',
-              style: const TextStyle(fontFamily: 'Poppins'),
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+              ),
             ),
-            backgroundColor: Colors.green.shade600,
+            backgroundColor: const Color(0xFFC10D00),
           ),
         );
       }
@@ -459,11 +462,12 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Flexible(
-                    child: Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 8.0,
-                      runSpacing: 4.0,
-                      children: moduleAccessChips,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: moduleAccessChips,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8.0),
@@ -516,6 +520,33 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
+
+    if (accessList.isEmpty) {
+      return [
+        Padding(
+          padding: const EdgeInsets.only(right: 8.0),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12.0,
+              vertical: 4.0,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0x33FFFFFF),
+              borderRadius: BorderRadius.circular(20.0),
+            ),
+            child: Text(
+              _notAssignedValue,
+              style: const TextStyle(
+                fontSize: 12.0,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Poppins',
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ];
+    }
 
     return accessList.map((access) {
       return Padding(

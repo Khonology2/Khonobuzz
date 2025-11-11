@@ -158,9 +158,12 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           SnackBar(
             content: Text(
               'Entity updated for ${user.name}.',
-              style: const TextStyle(fontFamily: 'Poppins'),
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+              ),
             ),
-            backgroundColor: Colors.green.shade600,
+            backgroundColor: const Color(0xFFC10D00),
           ),
         );
       }

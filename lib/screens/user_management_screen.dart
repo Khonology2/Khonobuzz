@@ -187,6 +187,22 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'Failed to update user $userId: ${response.statusCode} ${response.body}',
         );
       }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'User updated for $firstName $lastName.',
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+              ),
+            ),
+            backgroundColor: const Color(0xFFC10D00),
+          ),
+        );
+      }
+
       // Prefer backend canonical data if returned
       try {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
