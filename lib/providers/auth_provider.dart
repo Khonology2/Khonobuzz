@@ -54,7 +54,7 @@ class AuthProvider extends ChangeNotifier {
     // Modified: added role and all onboarding parameters
 
     final url = Uri.parse(
-      'https://khonobuzz-backend.onrender.com/api/auth/register',
+      'http://localhost:5000/api/auth/register',
     ); // Your backend registration endpoint
     try {
       final response = await http.post(
@@ -87,6 +87,9 @@ class AuthProvider extends ChangeNotifier {
             'status': 'Pending',
             'created_at': DateTime.now().toUtc(),
             'updated_at': DateTime.now().toUtc(),
+            'entity': '',
+            'department': department ?? '',
+            'designation': designation,
           };
           final Map<String, dynamic> onboardingData = {
             'user_id': uid,
@@ -95,6 +98,8 @@ class AuthProvider extends ChangeNotifier {
             'surname': lastName,
             'department': department ?? '',
             'designation': designation,
+            'status': 'Pending',
+            'role': role ?? 'user',
             'first_valid': DateTime.utc(2025, 9, 25),
             'inserted_by': email,
             'last_valid': DateTime.utc(2039, 12, 31),
@@ -103,6 +108,7 @@ class AuthProvider extends ChangeNotifier {
             'updated_by': email,
             'created_at': DateTime.now().toUtc(),
             'updated_at': DateTime.now().toUtc(),
+            'entity': '',
           };
           await syncUserToPDH(userData, onboardingData, uid).catchError((_) {});
         }
@@ -111,19 +117,19 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = true;
         _userEmail = email;
         _userRole = role ?? 'user';
-        _initialScreenIndex = 8; // Set to Module Screen
-        _currentScreenIndex =
-            8; // Also save as current screen index for refresh persistence
+        // Both Staff and Admin users navigate to Modules screen (index 9) on login
+        _initialScreenIndex = 9;
+        _currentScreenIndex = 9;
         await prefs.setBool('isAuthenticated', true);
         await prefs.setString('userEmail', email);
         await prefs.setString('userRole', _userRole!);
         await prefs.setInt(
           'initialScreenIndex',
-          8,
+          9,
         ); // Store initial screen index
         await prefs.setInt(
           'currentScreenIndex',
-          8,
+          9,
         ); // Store current screen index for refresh
         _userAlreadyOnboarded =
             false; // Reset onboarding status for new registration
@@ -136,19 +142,19 @@ class AuthProvider extends ChangeNotifier {
         _userEmail = email;
         // Here, you might want to fetch the actual role of the existing user from the backend
         _userRole = role ?? 'user';
-        _initialScreenIndex = 8; // Set to Module Screen
-        _currentScreenIndex =
-            8; // Also save as current screen index for refresh persistence
+        // Both Staff and Admin users navigate to Modules screen (index 9) on login
+        _initialScreenIndex = 9;
+        _currentScreenIndex = 9;
         await prefs.setBool('isAuthenticated', true);
         await prefs.setString('userEmail', email);
         await prefs.setString('userRole', _userRole!);
         await prefs.setInt(
           'initialScreenIndex',
-          8,
+          9,
         ); // Store initial screen index
         await prefs.setInt(
           'currentScreenIndex',
-          8,
+          9,
         ); // Store current screen index for refresh
         _userAlreadyOnboarded = true; // Set onboarding status to true
         notifyListeners();
@@ -171,9 +177,7 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> manualLogin(String email) async {
     // Removed password parameter
 
-    final url = Uri.parse(
-      'https://khonobuzz-backend.onrender.com/api/auth/login',
-    );
+    final url = Uri.parse('http://localhost:5000/api/auth/login');
     try {
       final response = await http
           .post(
@@ -197,81 +201,31 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = true;
         _userEmail = responseData['user']['email'];
         _userRole = responseData['user']['role'] ?? 'Staff';
-        _initialScreenIndex = 8; // Set to Module Screen
-        _currentScreenIndex =
-            8; // Also save as current screen index for refresh persistence
+        // Both Staff and Admin users navigate to Modules screen (index 9) on login
+        _initialScreenIndex = 9;
+        _currentScreenIndex = 9;
         await prefs.setBool('isAuthenticated', true);
         await prefs.setString('userEmail', _userEmail!);
         await prefs.setString('userRole', _userRole!);
         await prefs.setInt(
           'initialScreenIndex',
-          8,
+          9,
         ); // Store initial screen index
         await prefs.setInt(
           'currentScreenIndex',
-          8,
+          9,
         ); // Store current screen index for refresh
         notifyListeners();
         return true;
-      } else if (response.statusCode == 404 || response.statusCode == 401) {
+      } else if (response.statusCode == 404 ||
+          response.statusCode == 401 ||
+          response.statusCode == 403) {
         // User not found or unauthorized - but still allow login if email exists in our system
         // Check if user exists by attempting to fetch user data
-        final userCheckUrl = Uri.parse(
-          'https://khonobuzz-backend.onrender.com/api/users',
-        );
-        try {
-          final userCheckResponse = await http
-              .get(userCheckUrl)
-              .timeout(
-                const Duration(seconds: 15),
-                onTimeout: () {
-                  throw TimeoutException('Request timed out');
-                },
-              );
-
-          if (userCheckResponse.statusCode == 200) {
-            final usersData = json.decode(userCheckResponse.body);
-            final users = (usersData['users'] as List<dynamic>? ?? []);
-            Map<String, dynamic>? foundUser;
-            try {
-              foundUser =
-                  users.firstWhere(
-                        (u) =>
-                            (u as Map<String, dynamic>)['email']
-                                ?.toString()
-                                .toLowerCase() ==
-                            email.toLowerCase(),
-                      )
-                      as Map<String, dynamic>?;
-            } catch (_) {
-              foundUser = null;
-            }
-
-            if (foundUser != null) {
-              // User exists in database, allow login
-              final prefs = await SharedPreferences.getInstance();
-              _isAuthenticated = true;
-              _userEmail = foundUser['email'] ?? email;
-              _userRole = foundUser['role'] ?? 'Staff';
-              _initialScreenIndex = 8; // Set to Module Screen
-              _currentScreenIndex =
-                  8; // Also save as current screen index for refresh persistence
-              await prefs.setBool('isAuthenticated', true);
-              await prefs.setString('userEmail', _userEmail!);
-              await prefs.setString('userRole', _userRole!);
-              await prefs.setInt('initialScreenIndex', 8);
-              await prefs.setInt(
-                'currentScreenIndex',
-                8,
-              ); // Store current screen index for refresh
-              notifyListeners();
-              return true;
-            }
-          }
-        } catch (_) {
-          // If user check fails, proceed with normal error handling
+        final success = await _attemptFallbackLogin(email);
+        if (success) {
+          return true;
         }
-
         _isAuthenticated = false;
         notifyListeners();
         return false;
@@ -281,16 +235,80 @@ class AuthProvider extends ChangeNotifier {
         return false;
       }
     } on TimeoutException catch (e) {
+      debugPrint('Manual login timeout: $e');
+      final success = await _attemptFallbackLogin(email);
+      if (success) {
+        return true;
+      }
       _isAuthenticated = false;
       notifyListeners();
-      debugPrint('Manual login timeout: $e');
       return false;
     } catch (e) {
+      debugPrint('Manual login error: $e');
+      final success = await _attemptFallbackLogin(email);
+      if (success) {
+        return true;
+      }
       _isAuthenticated = false;
       notifyListeners();
-      debugPrint('Manual login error: $e');
       return false;
     }
+  }
+
+  Future<bool> _attemptFallbackLogin(String email) async {
+    final userCheckUrl = Uri.parse('http://localhost:5000/api/users');
+    try {
+      final userCheckResponse = await http
+          .get(userCheckUrl)
+          .timeout(
+            const Duration(seconds: 20),
+            onTimeout: () {
+              throw TimeoutException('Request timed out');
+            },
+          );
+
+      if (userCheckResponse.statusCode == 200) {
+        final usersData = json.decode(userCheckResponse.body);
+        final users = (usersData['users'] as List<dynamic>? ?? []);
+        Map<String, dynamic>? foundUser;
+        try {
+          foundUser =
+              users.firstWhere(
+                    (u) =>
+                        (u as Map<String, dynamic>)['email']
+                            ?.toString()
+                            .toLowerCase() ==
+                        email.toLowerCase(),
+                  )
+                  as Map<String, dynamic>?;
+        } catch (_) {
+          foundUser = null;
+        }
+
+        if (foundUser != null) {
+          final prefs = await SharedPreferences.getInstance();
+          _isAuthenticated = true;
+          _userEmail = foundUser['email'] ?? email;
+          _userRole = foundUser['role'] ?? 'Staff';
+          // Both Staff and Admin users navigate to Modules screen (index 9) on login
+          _initialScreenIndex = 9;
+          _currentScreenIndex = 9;
+          await prefs.setBool('isAuthenticated', true);
+          await prefs.setString('userEmail', _userEmail!);
+          await prefs.setString('userRole', _userRole!);
+          await prefs.setInt('initialScreenIndex', 9);
+          await prefs.setInt(
+            'currentScreenIndex',
+            9,
+          ); // Store current screen index for refresh
+          notifyListeners();
+          return true;
+        }
+      }
+    } catch (e) {
+      debugPrint('Fallback login failed: $e');
+    }
+    return false;
   }
 
   Future<void> logout() async {

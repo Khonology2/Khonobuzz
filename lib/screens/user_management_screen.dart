@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import '../utils/pdh_firebase.dart';
+import '../models/managed_user.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -11,95 +11,8 @@ class UserManagementScreen extends StatefulWidget {
   State<UserManagementScreen> createState() => _UserManagementScreenState();
 }
 
-class User {
-  final String id;
-  final String firstName;
-  final String lastName;
-  final String email;
-  final String department; // Re-added department field
-  final String designation;
-  String role; // Default to 'Staff'
-  String status; // Default to 'Active'
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
-
-  // Combined name getter for UI display
-  String get name => '$firstName $lastName';
-
-  User({
-    required this.id,
-    required this.firstName,
-    required this.lastName,
-    required this.email,
-    required this.department, // Added to constructor
-    required this.designation,
-    this.role = 'Staff',
-    this.status = 'Active',
-    this.createdAt,
-    this.updatedAt,
-  });
-
-  // Factory constructor to create a User from combined Firestore data
-  factory User.fromFirestore(
-    String id,
-    Map<String, dynamic> userData,
-    Map<String, dynamic> onboardingData,
-  ) {
-    // Prioritize onboarding data for names, then fallback to user data
-    String firstName = onboardingData['firstName'] ?? '';
-    String lastName = onboardingData['lastName'] ?? '';
-
-    if (firstName.isEmpty && lastName.isEmpty) {
-      final userName = userData['name'] as String?;
-      if (userName != null && userName.isNotEmpty) {
-        final nameParts = userName.split(' ');
-        if (nameParts.isNotEmpty) {
-          firstName = nameParts[0];
-        }
-        if (nameParts.length > 1) {
-          lastName = nameParts.sublist(1).join(' ');
-        }
-      }
-    }
-
-    return User(
-      id: id,
-      firstName: firstName,
-      lastName: lastName,
-      email: userData['email'] ?? '',
-      department: onboardingData['department'] ?? '',
-      designation: onboardingData['designation'] ?? '',
-      role: userData['role'] ?? 'Staff', // Default to Staff if not in Firestore
-      status:
-          userData['status'] ??
-          'Active', // Default to Active if not in Firestore
-    );
-  }
-
-  factory User.fromApi(Map<String, dynamic> data) {
-    return User(
-      id: data['id'] ?? '',
-      firstName: data['firstName'] ?? '',
-      lastName: data['lastName'] ?? '',
-      email: data['email'] ?? '',
-      department: data['department'] ?? '',
-      designation: data['designation'] ?? '',
-      role: data['role'] ?? 'Staff',
-      status: data['status'] ?? 'Active',
-      createdAt: (data['createdAt'] is String &&
-              (data['createdAt'] as String).isNotEmpty)
-          ? DateTime.tryParse(data['createdAt'])
-          : null,
-      updatedAt: (data['updatedAt'] is String &&
-              (data['updatedAt'] as String).isNotEmpty)
-          ? DateTime.tryParse(data['updatedAt'])
-          : null,
-    );
-  }
-}
-
 class _UserManagementScreenState extends State<UserManagementScreen> {
-  List<User> _fetchedUsers = []; // List to hold fetched users
+  List<ManagedUser> _fetchedUsers = []; // List to hold fetched users
   bool _isLoading = true; // Loading state
 
   // Removed the static 'users' list as data will be fetched dynamically
@@ -142,16 +55,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     'Pending': Colors.orange.shade500,
   };
 
-  final List<String> userRoles = [
-    'Staff',
-    'Manager',
-    'Admin',
-  ];
+  final List<String> userRoles = ['Staff', 'Manager', 'Admin'];
 
   final TextEditingController _searchController = TextEditingController();
 
-  List<User> get _filteredUsers {
-    List<User> users = _fetchedUsers;
+  List<ManagedUser> get _filteredUsers {
+    List<ManagedUser> users = _fetchedUsers;
     final query = _searchController.text.toLowerCase();
 
     // Apply search query filter
@@ -206,22 +115,31 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       _isLoading = true;
     });
     try {
-      final response = await http
-          .get(Uri.parse('https://khonobuzz-backend.onrender.com/api/users'));
+      final response = await http.get(
+        Uri.parse('http://localhost:5000/api/users'),
+      );
 
       if (response.statusCode != 200) {
         throw Exception(
-            'Failed to fetch users: ${response.statusCode} ${response.body}');
+          'Failed to fetch users: ${response.statusCode} ${response.body}',
+        );
       }
 
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final usersData =
-          (decoded['users'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-      final usersList =
-          usersData.map((user) => User.fromApi(user)).toList(growable: false);
+      final usersData = (decoded['users'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+      final usersList = usersData
+          .map((user) => ManagedUser.fromApi(user))
+          .toList(growable: false);
       usersList.sort((a, b) {
-        final aKey = a.updatedAt ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bKey = b.updatedAt ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final aKey =
+            a.updatedAt ??
+            a.createdAt ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final bKey =
+            b.updatedAt ??
+            b.createdAt ??
+            DateTime.fromMillisecondsSinceEpoch(0);
         return bKey.compareTo(aKey);
       });
 
@@ -240,39 +158,45 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Future<void> _updateUserRoleAndStatus(
     String userId,
     String newRole,
-    String newStatus,
-    {
+    String newStatus, {
     required String firstName,
     required String lastName,
     required String department,
     required String designation,
-  }
-  ) async {
+    String? entity,
+  }) async {
     try {
       final response = await http.patch(
-        Uri.parse('https://khonobuzz-backend.onrender.com/api/users/$userId'),
+        Uri.parse('http://localhost:5000/api/users/$userId'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'role': newRole, 'status': newStatus}),
+        body: jsonEncode({
+          'role': newRole,
+          'status': newStatus,
+          'entity': entity,
+        }),
       );
 
+      debugPrint(
+        'Update user response: ${response.statusCode} ${response.body}',
+      );
       if (response.statusCode != 200) {
         throw Exception(
-            'Failed to update user $userId: ${response.statusCode} ${response.body}');
+          'Failed to update user $userId: ${response.statusCode} ${response.body}',
+        );
       }
-      await updatePDHUserPartial(userId, {
-        'role': newRole,
-        'status': newStatus,
-        'name': '$firstName $lastName',
-        'updated_at': DateTime.now().toUtc(),
-      }, onboardingFields: {
-        'name': firstName,
-        'surname': lastName,
-        'department': department,
-        'designation': designation,
-        'updated_at': DateTime.now().toUtc(),
-      });
-      // Refresh the user list after updating the role and status
-      _fetchUsersData();
+      // Prefer backend canonical data if returned
+      try {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
+        final backendUser = decoded?['user'] as Map<String, dynamic>?;
+        if (backendUser != null) {
+          // Use backend's canonical data by re-fetching the list
+          _fetchUsersData();
+        } else {
+          _fetchUsersData();
+        }
+      } catch (_) {
+        _fetchUsersData();
+      }
     } catch (e) {
       // Optionally show error to user
     }
@@ -518,9 +442,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const CircularProgressIndicator(
-              color: Color(0xFFC10D00),
-            ),
+            const CircularProgressIndicator(color: Color(0xFFC10D00)),
             const SizedBox(height: 24.0),
             Text(
               'Please wait. We\'re loading all users...',
@@ -560,7 +482,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 
-  Widget _buildUserRow(User user, bool isExpanded) {
+  Widget _buildUserRow(ManagedUser user, bool isExpanded) {
     return InkWell(
       onTap: () {
         setState(() {
@@ -679,7 +601,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 
-  Widget _buildDropdownContent(User user) {
+  Widget _buildDropdownContent(ManagedUser user) {
     String selectedRole = user.role;
     String selectedStatusLocal = user.status; // Local state for status
     return Container(
@@ -717,7 +639,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         borderRadius: BorderRadius.circular(8.0),
                       ),
                       child: DropdownButton<String>(
-                        value: userRoles.contains(selectedRole) ? selectedRole : null,
+                        value: userRoles.contains(selectedRole)
+                            ? selectedRole
+                            : null,
                         hint: const Text(
                           'Select role',
                           style: TextStyle(fontFamily: 'Poppins'),
@@ -767,7 +691,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         borderRadius: BorderRadius.circular(8.0),
                       ),
                       child: DropdownButton<String>(
-                        value: ['Active', 'Pending'].contains(selectedStatusLocal)
+                        value:
+                            ['Active', 'Pending'].contains(selectedStatusLocal)
                             ? selectedStatusLocal
                             : null,
                         hint: const Text(
@@ -812,6 +737,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 lastName: user.lastName,
                 department: user.department,
                 designation: user.designation,
+                entity: user.entity,
               );
             },
             style: ElevatedButton.styleFrom(

@@ -8,7 +8,9 @@ import 'screens/profile_screen.dart';
 import 'screens/project_data_screen.dart';
 import 'screens/projects_screen.dart';
 import 'screens/module_screen.dart'; // Import ModuleScreen
+import 'screens/entity_management_screen.dart';
 import 'screens/user_management_screen.dart';
+import 'screens/module_access_screen.dart';
 import 'screens/landing_screen.dart'; // Import LandingScreen
 import 'providers/auth_provider.dart';
 import 'widgets/side_menu.dart';
@@ -53,13 +55,14 @@ class MyApp extends StatelessWidget {
         ),
         home: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
+            // Always use Modules screen (index 9) for authenticated users on login
+            // This ensures both Staff and Admin users land on Modules screen
+            final initialIndex = authProvider.isAuthenticated ? 9 : null;
+
             return authProvider.isAuthenticated
                 ? MainScreen(
                     role: authProvider.userRole,
-                    initialIndex:
-                        authProvider.initialScreenIndex ??
-                        authProvider.currentScreenIndex ??
-                        0,
+                    initialIndex: initialIndex,
                   ) // Pass role and initialIndex to MainScreen
                 : LandingScreen(); // Start with LandingScreen
           },
@@ -85,48 +88,49 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
+  int _selectedIndex = 9; // Initialize to Modules screen (index 9)
+
+  // Check if current user is Admin
+  bool _isAdmin() {
+    final authProvider = context.read<AuthProvider>();
+    final role = authProvider.userRole?.toLowerCase() ?? '';
+    return role == 'admin';
+  }
+
+  // Check if screen index is Admin-only
+  bool _isAdminOnlyScreen(int index) {
+    // Indices 6 (User Management), 7 (Entity Management), and 8 (Module Access) are Admin-only
+    return index == 6 || index == 7 || index == 8;
+  }
+
+  // Get allowed screen index for Staff users
+  int _getAllowedScreenIndex(int requestedIndex) {
+    if (!_isAdmin() && _isAdminOnlyScreen(requestedIndex)) {
+      // Staff users trying to access Admin screens are redirected to Modules
+      return 9;
+    }
+    return requestedIndex;
+  }
 
   @override
   void initState() {
     super.initState();
-    // Set initial index if provided, prioritizing initialScreenIndex over currentScreenIndex
-    final authProvider = context.read<AuthProvider>();
-    final indexToUse =
-        widget.initialIndex ?? authProvider.currentScreenIndex ?? 0;
+    // Both Staff and Admin users should ALWAYS land on Modules screen (index 9) on login
+    // Ignore widget.initialIndex and always use Modules screen (index 9) to prevent
+    // old stored screen indices from interfering with login redirects
+    final finalIndex = 9; // Always Modules screen on login
 
-    if (indexToUse >= 0 && indexToUse < _screens.length) {
-      _selectedIndex = indexToUse;
-      // Save the initial index as current screen index for refresh persistence
-      // This ensures that if user refreshes immediately after login, they stay on the same screen
-      authProvider.saveCurrentScreenIndex(indexToUse);
-    } else {
-      // If invalid index, default to Module Screen (index 8)
-      _selectedIndex = 8;
-      authProvider.saveCurrentScreenIndex(8);
-    }
+    _selectedIndex = finalIndex;
 
-    // Clear the initial screen index after using it (but keep currentScreenIndex for refresh)
-    if (widget.initialIndex != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          context.read<AuthProvider>().clearInitialScreenIndex();
-        }
-      });
-    }
-    // Removed: Display SnackBar with role if available
-    // if (widget.role != null) {
-    //   WidgetsBinding.instance.addPostFrameCallback((_) {
-    //     if (mounted) {
-    //       ScaffoldMessenger.of(context).showSnackBar(
-    //         SnackBar(
-    //           content: Text('You have logged in as ${widget.role}'),
-    //           duration: const Duration(seconds: 2),
-    //         ),
-    //       );
-    //     }
-    //   });
-    // }
+    // Save the initial index as current screen index for refresh persistence
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final authProvider = context.read<AuthProvider>();
+        authProvider.saveCurrentScreenIndex(finalIndex);
+        // Clear the initial screen index after using it
+        authProvider.clearInitialScreenIndex();
+      }
+    });
   }
 
   List<Widget> get _screens => [
@@ -137,16 +141,42 @@ class _MainScreenState extends State<MainScreen> {
     const AnalyticsScreen(),
     const ProfileScreen(),
     const UserManagementScreen(),
-    const ProjectsScreen(), // Added for Assets
-    const ModuleScreen(),
+    const EntityManagementScreen(),
+    const ModuleAccessScreen(),
+    const ModuleScreen(), // Modules screen at index 9
+    const ProjectsScreen(), // Projects screen at index 10
   ];
 
   void _onItemTapped(int index) {
+    // Check if Staff user is trying to access Admin-only screen
+    final allowedIndex = _getAllowedScreenIndex(index);
+
+    if (!_isAdmin() && _isAdminOnlyScreen(index)) {
+      // Redirect Staff users to Modules screen if they try to access Admin screens
+      setState(() {
+        _selectedIndex = 9;
+      });
+      context.read<AuthProvider>().saveCurrentScreenIndex(9);
+
+      // Show message to user
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Access denied. Admin privileges required.',
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
+          backgroundColor: Color(0xFFC10D00),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     setState(() {
-      _selectedIndex = index;
+      _selectedIndex = allowedIndex;
     });
     // Save current screen index for refresh persistence
-    context.read<AuthProvider>().saveCurrentScreenIndex(index);
+    context.read<AuthProvider>().saveCurrentScreenIndex(allowedIndex);
   }
 
   @override

@@ -82,7 +82,7 @@ flutter:
     - assets/images/Business Growth_Development/Growth_Development_Red Badge_White.png
     - assets/images/Account_User Profile/red_user_profile.png
     - assets/images/Project Management/Project_Red Badge_White.png
-    - assets/images/HR_Team Management/red_Management_Red Badge_White.png # Updated path for User Management
+    - assets/images/HR_Team_Management/Management_White_Badge_Red.png
     - assets/images/Logout_KhonoBuzz.png # Added new logout asset
     - assets/images/Chatbot_Red.png
     - assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png
@@ -91,7 +91,12 @@ flutter:
     - assets/images/Project Management/Project Management_White Badge_Red.png
     - assets/images/Business Growth_Development/Business Growth_Development_White Badge_Red.png
     - assets/images/Account_User Profile/User Profile_White Badge_Red.png
-    - assets/images/HR_Team Management/HR_Team Management_White Badge_Red.png
+    - assets/images/HR_Team_Management/Management_White_Badge_Red.png
+    - assets/images/HR_Team_Management/red_Management_Red_Badge_White.png
+    - assets/images/Task_Management/Task_White Badge_Red.png
+    - assets/images/Task_Management/Task_Red Badge_White.png
+    - assets/images/Concentration_Key_Focus/Concentration_Key_Focus_Red_Badge_White.png
+    - assets/images/Concentration_Key_Focus/Concentration_Key_Focus_White_Badge_Red.png
     # - assets/images/Login_Lock/Lock_Red Badge_White.png # Removed old logout asset
 
   # An image asset can refer to one or more resolution-specific "variants", see

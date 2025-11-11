@@ -40,17 +40,17 @@ class _MenuItemWidgetState extends State<MenuItemWidget> {
 
   // Text style
   TextStyle get textStyle => const TextStyle(
-        fontFamily: 'Poppins', // Added Poppins font
-        color: Colors.white,
-        fontSize: 16.0,
-        fontWeight: FontWeight.w500,
-      );
+    fontFamily: 'Poppins', // Added Poppins font
+    color: Colors.white,
+    fontSize: 16.0,
+    fontWeight: FontWeight.w500,
+  );
 
   @override
   Widget build(BuildContext context) {
     // Determine which icon to show based on selection state
-    final String currentIconPath = widget.isSelected 
-        ? widget.selectedIconPath 
+    final String currentIconPath = widget.isSelected
+        ? widget.selectedIconPath
         : widget.unselectedIconPath;
 
     return MouseRegion(
@@ -59,28 +59,40 @@ class _MenuItemWidgetState extends State<MenuItemWidget> {
       onExit: (_) => setState(() => _isHovering = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        margin: EdgeInsets.symmetric(horizontal: widget.isExpanded ? 8 : 4, vertical: 2),
-         decoration: BoxDecoration(
-           color: widget.isSelected
-               ? const Color(0xFFC10D00) // Solid red for selected
-               : _isHovering
-               ? const Color(0xFFC10D00).withAlpha(44) // Light red for hover (doesn't override selected)
-               : Colors.transparent,
-           borderRadius: BorderRadius.circular(25), // Fully rounded circular/pill design
-         ),
+        margin: EdgeInsets.symmetric(
+          horizontal: widget.isExpanded ? 8 : 4,
+          vertical: 2,
+        ),
+        decoration: BoxDecoration(
+          color: widget.isSelected
+              ? const Color(0xFFC10D00) // Solid red for selected
+              : _isHovering
+              ? const Color(0xFFC10D00).withAlpha(
+                  44,
+                ) // Light red for hover (doesn't override selected)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(
+            25,
+          ), // Fully rounded circular/pill design
+        ),
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(25), // Fully rounded circular/pill design
+          borderRadius: BorderRadius.circular(
+            25,
+          ), // Fully rounded circular/pill design
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final bool showText = widget.isExpanded && constraints.maxWidth >= 150;
-              final EdgeInsets resolvedPadding = showText ? itemPadding : const EdgeInsets.all(8.0);
+              final bool showText =
+                  widget.isExpanded && constraints.maxWidth >= 150;
+              final EdgeInsets resolvedPadding = showText
+                  ? itemPadding
+                  : const EdgeInsets.all(8.0);
               return Padding(
                 padding: resolvedPadding,
                 child: Row(
                   mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: showText 
-                      ? MainAxisAlignment.start 
+                  mainAxisAlignment: showText
+                      ? MainAxisAlignment.start
                       : MainAxisAlignment.center,
                   children: [
                     // Icon container with dynamic icon switching
@@ -88,16 +100,21 @@ class _MenuItemWidgetState extends State<MenuItemWidget> {
                       duration: const Duration(milliseconds: 200),
                       width: iconSize,
                       height: iconSize,
-                       decoration: BoxDecoration(
-                         color: Colors.transparent, // Remove individual icon background
-                         borderRadius: BorderRadius.circular(25), // Fully rounded circular/pill design
-                       ),
+                      decoration: BoxDecoration(
+                        color: Colors
+                            .transparent, // Remove individual icon background
+                        borderRadius: BorderRadius.circular(
+                          25,
+                        ), // Fully rounded circular/pill design
+                      ),
                       child: Center(
                         child: AnimatedSwitcher(
                           duration: const Duration(milliseconds: 200),
                           child: Image.asset(
                             currentIconPath,
-                            key: ValueKey(currentIconPath), // Key for smooth animation
+                            key: ValueKey(
+                              currentIconPath,
+                            ), // Key for smooth animation
                             fit: BoxFit.contain,
                           ),
                         ),
@@ -130,10 +147,7 @@ class _LogoutMenuItem extends StatefulWidget {
   final bool isExpanded;
   final VoidCallback onTap;
 
-  const _LogoutMenuItem({
-    required this.isExpanded,
-    required this.onTap,
-  });
+  const _LogoutMenuItem({required this.isExpanded, required this.onTap});
 
   @override
   State<_LogoutMenuItem> createState() => _LogoutMenuItemState();
@@ -203,41 +217,55 @@ class _LogoutMenuItemState extends State<_LogoutMenuItem> {
       onExit: (_) => setState(() => _isHovering = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        margin: EdgeInsets.symmetric(horizontal: widget.isExpanded ? 8 : 4, vertical: 2),
-         decoration: BoxDecoration(
-           color: _isHovering
-               ? const Color(0xFFC10D00).withAlpha(44) // Light red for hover
-               : Colors.transparent,
-           borderRadius: BorderRadius.circular(25), // Fully rounded circular/pill design
-         ),
+        margin: EdgeInsets.symmetric(
+          horizontal: widget.isExpanded ? 8 : 4,
+          vertical: 2,
+        ),
+        decoration: BoxDecoration(
+          color: _isHovering
+              ? const Color(0xFFC10D00).withAlpha(44) // Light red for hover
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(
+            25,
+          ), // Fully rounded circular/pill design
+        ),
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(25), // Fully rounded circular/pill design
+          borderRadius: BorderRadius.circular(
+            25,
+          ), // Fully rounded circular/pill design
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final bool showText = widget.isExpanded && constraints.maxWidth >= 150;
-              final EdgeInsets resolvedPadding = showText ? itemPadding : const EdgeInsets.all(8.0);
+              final bool showText =
+                  widget.isExpanded && constraints.maxWidth >= 150;
+              final EdgeInsets resolvedPadding = showText
+                  ? itemPadding
+                  : const EdgeInsets.all(8.0);
               return Padding(
                 padding: resolvedPadding,
                 child: Row(
                   mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: showText 
-                      ? MainAxisAlignment.start 
+                  mainAxisAlignment: showText
+                      ? MainAxisAlignment.start
                       : MainAxisAlignment.center,
                   children: [
                     Container(
                       width: iconSize,
                       height: iconSize,
-                       decoration: BoxDecoration(
-                         color: Colors.transparent,
-                         borderRadius: BorderRadius.circular(25), // Fully rounded circular/pill design
-                       ),
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(
+                          25,
+                        ), // Fully rounded circular/pill design
+                      ),
                       child: Center(
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           child: Icon(
                             Icons.logout,
-                            color: _isHovering ? const Color(0xFFC10D00) : Colors.white, // Red on hover, white normally
+                            color: _isHovering
+                                ? const Color(0xFFC10D00)
+                                : Colors.white, // Red on hover, white normally
                             size: iconIconSize,
                           ),
                         ),
@@ -289,6 +317,13 @@ class _SideMenuState extends State<SideMenu> {
   // Fixed sidebar widths per design spec
   double get sidebarWidth => _isExpanded ? 260 : 64;
 
+  // Check if current user is Admin
+  bool get _isAdmin {
+    final authProvider = context.read<AuthProvider>();
+    final role = authProvider.userRole?.toLowerCase() ?? '';
+    return role == 'admin';
+  }
+
   @override
   Widget build(BuildContext context) {
     // No auto-collapse; fixed widths handle layout consistently
@@ -311,8 +346,10 @@ class _SideMenuState extends State<SideMenu> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
-                        child: InkWell( // Wrap the Image.asset with InkWell
-                          onTap: () { // Transfer onPressed logic here
+                        child: InkWell(
+                          // Wrap the Image.asset with InkWell
+                          onTap: () {
+                            // Transfer onPressed logic here
                             setState(() {
                               _isExpanded = !_isExpanded;
                             });
@@ -324,7 +361,9 @@ class _SideMenuState extends State<SideMenu> {
                                   : 'assets/images/discs.png',
                               height: _isExpanded ? 40 : 32,
                               width: _isExpanded ? null : 32,
-                              fit: _isExpanded ? BoxFit.contain : BoxFit.contain,
+                              fit: _isExpanded
+                                  ? BoxFit.contain
+                                  : BoxFit.contain,
                             ),
                           ),
                         ),
@@ -391,21 +430,52 @@ class _SideMenuState extends State<SideMenu> {
                   onTap: () => widget.onItemSelected(5),
                 ),
                 */
+                // User Management - Admin only
+                if (_isAdmin)
+                  MenuItemWidget(
+                    unselectedIconPath:
+                        'assets/images/HR_Team_Management/Management_White_Badge_Red.png',
+                    selectedIconPath:
+                        'assets/images/HR_Team_Management/red_Management_Red_Badge_White.png',
+                    title: 'User Management',
+                    isSelected: widget.selectedIndex == 6,
+                    isExpanded: _isExpanded,
+                    onTap: () => widget.onItemSelected(6),
+                  ),
+                // Entity Management - Admin only
+                if (_isAdmin)
+                  MenuItemWidget(
+                    unselectedIconPath:
+                        'assets/images/Task_Management/Task_White Badge_Red.png',
+                    selectedIconPath:
+                        'assets/images/Task_Management/Task_Red Badge_White.png',
+                    title: 'Entity Management',
+                    isSelected: widget.selectedIndex == 7,
+                    isExpanded: _isExpanded,
+                    onTap: () => widget.onItemSelected(7),
+                  ),
+                // Module Access - Admin only
+                if (_isAdmin)
+                  MenuItemWidget(
+                    unselectedIconPath:
+                        'assets/images/Concentration_Key_Focus/Concentration_Key_Focus_White_Badge_Red.png',
+                    selectedIconPath:
+                        'assets/images/Concentration_Key_Focus/Concentration_Key_Focus_Red_Badge_White.png',
+                    title: 'Module Access',
+                    isSelected: widget.selectedIndex == 8,
+                    isExpanded: _isExpanded,
+                    onTap: () => widget.onItemSelected(8),
+                  ),
+                // Modules - Available to all users (Staff and Admin)
                 MenuItemWidget(
-                  unselectedIconPath: 'assets/images/HR_Team Management/HR_Team Management_White Badge_Red.png',
-                  selectedIconPath: 'assets/images/HR_Team Management/red_Management_Red Badge_White.png',
-                  title: 'User Management',
-                  isSelected: widget.selectedIndex == 6,
-                  isExpanded: _isExpanded,
-                  onTap: () => widget.onItemSelected(6),
-                ),
-                MenuItemWidget(
-                  unselectedIconPath: 'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
-                  selectedIconPath: 'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
+                  unselectedIconPath:
+                      'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
+                  selectedIconPath:
+                      'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
                   title: 'Modules',
-                  isSelected: widget.selectedIndex == 8,
+                  isSelected: widget.selectedIndex == 9,
                   isExpanded: _isExpanded,
-                  onTap: () => widget.onItemSelected(8),
+                  onTap: () => widget.onItemSelected(9),
                 ),
                 const Divider(color: Colors.white54),
                 // Logout item with hover functionality

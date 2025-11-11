@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
-from brotli_asgi import BrotliMiddleware
+from brotli_asgi import BrotliMiddleware  # pyright: ignore[reportMissingImports]  # pyright: ignore[reportMissingImports]
 from firebase_admin import credentials, firestore, initialize_app
 from dotenv import load_dotenv
 import os
@@ -29,6 +29,7 @@ class UserRegister(BaseModel):
     role: str = "user"
     department: str = ""
     designation: str = ""
+    entity: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: str
@@ -54,8 +55,12 @@ class Role(BaseModel):
     pageAccess: PageAccess = PageAccess()
 
 class UserUpdate(BaseModel):
-    role: str
-    status: str
+    role: Optional[str] = None
+    status: Optional[str] = None
+    entity: Optional[str] = None
+    moduleAccess: Optional[str] = None
+    moduleRole: Optional[str] = None
+    moduleAccessRole: Optional[str] = None  # Combined field: "PDH - Employee", "PDH - Manager", "SOW Builder - Manager"
 
 # Initialize Firebase Admin SDK
 cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
@@ -113,6 +118,10 @@ async def register_user(user: UserRegister):
         if existing_users:
             return JSONResponse(status_code=409, content={"error": "User already exists"})
 
+        # Ensure entity is always present, defaulting to empty string
+        entity_value = user.entity if user.entity is not None else ''
+        print(f"[DEBUG] Entity value for new user: '{entity_value}' (type: {type(entity_value)})")
+        
         user_data = {
             'email': email,
             'password': password,
@@ -120,7 +129,13 @@ async def register_user(user: UserRegister):
             'role': role,
             'status': 'Pending', # Default new users to 'Pending'
             'created_at': datetime.utcnow(), # Consider using timezone-aware datetimes
-            'updated_at': datetime.utcnow()
+            'updated_at': datetime.utcnow(),
+            'entity': entity_value,  # Always include entity field
+            'department': department,
+            'designation': designation,
+            'moduleAccess': '',  # Initialize moduleAccess field
+            'moduleRole': '',  # Initialize moduleRole field
+            'moduleAccessRole': '',  # Initialize moduleAccessRole combined field
         }
         print(f"[DEBUG] User data being sent to Firestore (users collection - FastAPI): {user_data}")
 
@@ -142,7 +157,11 @@ async def register_user(user: UserRegister):
             'status_id': "",
             'updated_by': email,
             'created_at': datetime.utcnow(),
-            'updated_at': datetime.utcnow()
+            'updated_at': datetime.utcnow(),
+            'entity': entity_value,  # Always include entity field, same as users collection
+            'moduleAccess': '',  # Initialize moduleAccess field
+            'moduleRole': '',  # Initialize moduleRole field
+            'moduleAccessRole': '',  # Initialize moduleAccessRole combined field
         }
         print(f"[DEBUG] Onboarding data being sent to Firestore (onboarding collection - FastAPI): {onboarding_data}")
         
@@ -224,6 +243,10 @@ async def list_users():
                 'lastName': last_name,
                 'department': onboarding_info.get('department', ''),
                 'designation': onboarding_info.get('designation', ''),
+                'entity': user_info.get('entity') or onboarding_info.get('entity', ''),
+                'moduleAccess': user_info.get('moduleAccess') or onboarding_info.get('moduleAccess', ''),
+                'moduleRole': user_info.get('moduleRole') or onboarding_info.get('moduleRole', ''),
+                'moduleAccessRole': user_info.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', ''),
                 'createdAt': created_at_str,
                 'updatedAt': updated_at_str,
             }
@@ -243,13 +266,112 @@ async def list_users():
 @app.patch("/api/users/{user_id}")
 async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
     try:
+        print(f"[DEBUG] update_user called for user_id={user_id} with body={user_update.model_dump()}")
+        update_payload = {}
+        if user_update.role is not None:
+            update_payload['role'] = user_update.role
+        if user_update.status is not None:
+            update_payload['status'] = user_update.status
+        if user_update.entity is not None:
+            update_payload['entity'] = user_update.entity
+        if user_update.moduleAccess is not None:
+            update_payload['moduleAccess'] = user_update.moduleAccess
+        if user_update.moduleRole is not None:
+            update_payload['moduleRole'] = user_update.moduleRole
+        if user_update.moduleAccessRole is not None:
+            update_payload['moduleAccessRole'] = user_update.moduleAccessRole
+
+        if not update_payload:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={'error': 'No valid fields provided for update'},
+            )
+
+        update_payload['updated_at'] = datetime.utcnow()
+
         user_ref = db.collection('users').document(user_id)
-        user_ref.update({
-            'role': user_update.role,
-            'status': user_update.status,
-            'updated_at': datetime.utcnow(),
-        })
-        return JSONResponse(status_code=status.HTTP_200_OK, content={'message': 'User updated successfully'})
+        user_ref.update(update_payload)
+        print(f"[DEBUG] Firestore users/{user_id} updated with: {update_payload}")
+
+        if user_update.entity is not None:
+            onboarding_query = (
+                db.collection('onboarding')
+                .where('user_id', '==', user_id)
+                .limit(1)
+                .stream()
+            )
+            onboarding_doc = None
+            for doc in onboarding_query:
+                onboarding_doc = doc
+                break
+            if onboarding_doc is not None:
+                onboarding_doc.reference.update({
+                    'entity': user_update.entity,
+                    'updated_at': datetime.utcnow(),
+                })
+                print(f"[DEBUG] Firestore onboarding for user_id={user_id} updated with entity={user_update.entity}")
+
+        # Update onboarding collection for moduleAccess, moduleRole, and moduleAccessRole
+        if user_update.moduleAccess is not None or user_update.moduleRole is not None or user_update.moduleAccessRole is not None:
+            onboarding_query = (
+                db.collection('onboarding')
+                .where('user_id', '==', user_id)
+                .limit(1)
+                .stream()
+            )
+            onboarding_doc = None
+            for doc in onboarding_query:
+                onboarding_doc = doc
+                break
+            if onboarding_doc is not None:
+                onboarding_update = {'updated_at': datetime.utcnow()}
+                if user_update.moduleAccess is not None:
+                    onboarding_update['moduleAccess'] = user_update.moduleAccess
+                if user_update.moduleRole is not None:
+                    onboarding_update['moduleRole'] = user_update.moduleRole
+                if user_update.moduleAccessRole is not None:
+                    onboarding_update['moduleAccessRole'] = user_update.moduleAccessRole
+                onboarding_doc.reference.update(onboarding_update)
+                print(f"[DEBUG] Firestore onboarding for user_id={user_id} updated with moduleAccess={user_update.moduleAccess}, moduleRole={user_update.moduleRole}, moduleAccessRole={user_update.moduleAccessRole}")
+
+        # Return the updated user document payload so clients can confirm changes immediately
+        updated_doc = user_ref.get()
+        updated_data = updated_doc.to_dict() or {}
+        # Try to fetch onboarding info as well
+        onboarding_info = {}
+        onboarding_query2 = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
+        for ondoc in onboarding_query2:
+            onboarding_info = ondoc.to_dict() or {}
+            break
+
+        first_name = onboarding_info.get('firstName') or onboarding_info.get('name') or ''
+        last_name = onboarding_info.get('lastName') or onboarding_info.get('surname') or ''
+
+        created_at_val = updated_data.get('created_at')
+        created_at_dt = created_at_val if isinstance(created_at_val, datetime) else None
+        updated_at_val = updated_data.get('updated_at')
+        updated_at_dt = updated_at_val if isinstance(updated_at_val, datetime) else None
+        created_at_str = created_at_dt.isoformat() + 'Z' if created_at_dt else None
+        updated_at_str = updated_at_dt.isoformat() + 'Z' if updated_at_dt else None
+
+        user_payload = {
+            'id': user_id,
+            'email': updated_data.get('email', ''),
+            'role': updated_data.get('role', 'Staff'),
+            'status': updated_data.get('status', 'Active'),
+            'firstName': first_name,
+            'lastName': last_name,
+            'department': onboarding_info.get('department', ''),
+            'designation': onboarding_info.get('designation', ''),
+            'entity': updated_data.get('entity') or onboarding_info.get('entity', ''),
+            'moduleAccess': updated_data.get('moduleAccess') or onboarding_info.get('moduleAccess', ''),
+            'moduleRole': updated_data.get('moduleRole') or onboarding_info.get('moduleRole', ''),
+            'moduleAccessRole': updated_data.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', ''),
+            'createdAt': created_at_str,
+            'updatedAt': updated_at_str,
+        }
+
+        return JSONResponse(status_code=status.HTTP_200_OK, content={'message': 'User updated successfully', 'user': user_payload})
     except Exception as e:
         print(f"[ERROR] During user update: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -354,9 +476,13 @@ async def login_user(user_login: UserLogin):
         # if user_data['password'] != user_login.password:
         #     raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        # Check if user status is 'Active'
-        if user_data['status'] != 'Active':
-            raise HTTPException(status_code=403, detail="User not active. Please contact administrator.")
+        user_status = user_data.get('status', 'Pending')
+
+        if user_status != 'Active':
+            print(
+                "[DEBUG] Login proceeding for non-active user.",
+                f"Email: {user_login.email}, Status: {user_status}",
+            )
 
         # Successful login, return user data
         return JSONResponse(
@@ -367,7 +493,8 @@ async def login_user(user_login: UserLogin):
                     "id": users[0].id,
                     "email": user_data['email'],
                     "name": user_data.get('name', ''),
-                    "role": user_data.get('role', 'user')
+                    "role": user_data.get('role', 'user'),
+                    "status": user_status,
                 }
             }
         )
