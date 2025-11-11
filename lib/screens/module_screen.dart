@@ -90,9 +90,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     ? 500
                                     : constraints.maxWidth * 0.9)
                               : cardWidth,
-                          title: isMobile
-                              ? 'Personal Development Hub (PDH)'
-                              : 'Personal Development Hub (PDH)',
+                          title: 'Personal Development Hub',
                           buttonText: 'Launch Development Hub',
                           url: 'https://personal-developement-hub.netlify.app/',
                         ),
