@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/managed_user.dart';
 import '../utils/pdh_firebase.dart';
+import '../config/api_config.dart';
 
 class EntityManagementScreen extends StatefulWidget {
   const EntityManagementScreen({super.key});
@@ -23,6 +24,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   List<ManagedUser> _users = [];
   bool _isLoading = true;
   String? expandedUserId;
+  String? _updatingUserId; // Track which user is being updated
 
   Map<String, Color> get userStatusColors => {
     'Active': Colors.green.shade600,
@@ -67,9 +69,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       _isLoading = true;
     });
     try {
-      final response = await http.get(
-        Uri.parse('https://khonobuzz-backend.onrender.com/api/users'),
-      );
+      final response = await http.get(Uri.parse(ApiConfig.usersEndpoint));
 
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch users: ${response.statusCode}');
@@ -117,6 +117,10 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   }
 
   Future<void> _updateUserEntity(ManagedUser user, String? newEntity) async {
+    setState(() {
+      _updatingUserId = user.id;
+    });
+
     // Convert "Not Assigned" to empty string for backend
     final sanitizedEntity =
         (newEntity != null &&
@@ -126,9 +130,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         : '';
     try {
       final response = await http.patch(
-        Uri.parse(
-          'https://khonobuzz-backend.onrender.com/api/users/${user.id}',
-        ),
+        Uri.parse(ApiConfig.userEndpoint(user.id)),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'role': user.role,
@@ -205,7 +207,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         );
       }
     } finally {
-      await _fetchUsers();
+      setState(() {
+        _updatingUserId = null;
+      });
     }
   }
 
@@ -529,7 +533,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton(
-              onPressed: () => _updateUserEntity(user, selectedEntity),
+              onPressed: _updatingUserId == user.id
+                  ? null
+                  : () => _updateUserEntity(user, selectedEntity),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFC10D00),
                 foregroundColor: Colors.white,
@@ -537,10 +543,19 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                   borderRadius: BorderRadius.circular(8.0),
                 ),
               ),
-              child: const Text(
-                'Update Entity',
-                style: TextStyle(fontFamily: 'Poppins'),
-              ),
+              child: _updatingUserId == user.id
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Text(
+                      'Update Entity',
+                      style: TextStyle(fontFamily: 'Poppins'),
+                    ),
             ),
           ),
         ],

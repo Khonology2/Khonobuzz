@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http; // Import for making HTTP requests
 import 'dart:convert'; // Import for JSON encoding/decoding
 import 'dart:async'; // Import for TimeoutException
 import '../utils/pdh_firebase.dart';
+import '../config/api_config.dart';
 
 class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
@@ -56,7 +57,7 @@ class AuthProvider extends ChangeNotifier {
     // Modified: added role and all onboarding parameters
 
     final url = Uri.parse(
-      'https://khonobuzz-backend.onrender.com/api/auth/register',
+      ApiConfig.authRegisterEndpoint,
     ); // Your backend registration endpoint
     try {
       final response = await http.post(
@@ -192,7 +193,7 @@ class AuthProvider extends ChangeNotifier {
     // Removed password parameter
 
     final url = Uri.parse(
-      'https://khonobuzz-backend.onrender.com/api/auth/login',
+      ApiConfig.authLoginEndpoint,
     );
     try {
       final response = await http
@@ -275,7 +276,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> _attemptFallbackLogin(String email) async {
     final userCheckUrl = Uri.parse(
-      'https://khonobuzz-backend.onrender.com/api/users',
+      ApiConfig.usersEndpoint,
     );
     try {
       final userCheckResponse = await http
@@ -375,7 +376,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final response = await http.get(
-        Uri.parse('https://khonobuzz-backend.onrender.com/api/users'),
+        Uri.parse(ApiConfig.usersEndpoint),
       );
 
       if (response.statusCode == 200) {

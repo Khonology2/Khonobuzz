@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 
 Future<void> syncUserToPDH(
   Map<String, dynamic> userData,
@@ -9,7 +10,7 @@ Future<void> syncUserToPDH(
 ) async {
   try {
     final response = await http.post(
-      Uri.parse('https://khonobuzz-backend.onrender.com/api/pdh/sync-user'),
+      Uri.parse(ApiConfig.pdhSyncUserEndpoint),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'uid': uid,
@@ -34,9 +35,7 @@ Future<void> updatePDHUserPartial(
 }) async {
   try {
     final response = await http.patch(
-      Uri.parse(
-        'https://khonobuzz-backend.onrender.com/api/pdh/update-user/$uid',
-      ),
+      Uri.parse(ApiConfig.pdhUpdateUserEndpoint(uid)),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'userFields': userFields,

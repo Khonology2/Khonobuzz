@@ -73,15 +73,23 @@ cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
 initialize_app(cred)
 db = firestore.client()
 
-app = FastAPI()
+app = FastAPI(
+    title="Khonology Backend API",
+    description="Backend API for Khonology project management application",
+    version="1.0.0",
+)
 
 # Enable CORS for Flutter app
+# Note: When allow_credentials=True, you cannot use allow_origins=["*"]
+# For development: use ["*"] with allow_credentials=False to allow all origins
+# For production: specify exact origins in a list with allow_credentials=True
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins for development
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=False,  # Must be False when using "*" origin
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 app.add_middleware(BrotliMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=500)

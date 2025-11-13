@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../utils/pdh_firebase.dart';
 import '../models/managed_user.dart';
+import '../config/api_config.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -16,6 +17,7 @@ class UserManagementScreen extends StatefulWidget {
 class _UserManagementScreenState extends State<UserManagementScreen> {
   List<ManagedUser> _fetchedUsers = []; // List to hold fetched users
   bool _isLoading = true; // Loading state
+  String? _updatingUserId; // Track which user is being updated
 
   // Removed the static 'users' list as data will be fetched dynamically
   // final List<User> users = [
@@ -120,9 +122,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       _isLoading = true;
     });
     try {
-      final response = await http.get(
-        Uri.parse('https://khonobuzz-backend.onrender.com/api/users'),
-      );
+      final response = await http.get(Uri.parse(ApiConfig.usersEndpoint));
 
       if (response.statusCode != 200) {
         throw Exception(
@@ -170,9 +170,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     required String designation,
     String? entity,
   }) async {
+    setState(() {
+      _updatingUserId = userId;
+    });
+
     try {
       final response = await http.patch(
-        Uri.parse('https://khonobuzz-backend.onrender.com/api/users/$userId'),
+        Uri.parse(ApiConfig.userEndpoint(userId)),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'role': newRole,
@@ -231,21 +235,51 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         }
       }
 
-      // Prefer backend canonical data if returned
+      // Update local state with backend response
       try {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
         final backendUser = decoded?['user'] as Map<String, dynamic>?;
         if (backendUser != null) {
-          // Use backend's canonical data by re-fetching the list
-          _fetchUsersData();
+          // Update the user in the local list directly
+          final updatedUser = ManagedUser.fromApi(backendUser);
+          setState(() {
+            final index = _fetchedUsers.indexWhere((u) => u.id == userId);
+            if (index != -1) {
+              _fetchedUsers[index] = updatedUser;
+            }
+          });
         } else {
-          _fetchUsersData();
+          // Update local state directly
+          setState(() {
+            final index = _fetchedUsers.indexWhere((u) => u.id == userId);
+            if (index != -1) {
+              _fetchedUsers[index].role = newRole;
+              _fetchedUsers[index].status = newStatus;
+              if (entity != null) {
+                _fetchedUsers[index].entity = entity;
+              }
+            }
+          });
         }
       } catch (_) {
-        _fetchUsersData();
+        // Update local state directly if parsing fails
+        setState(() {
+          final index = _fetchedUsers.indexWhere((u) => u.id == userId);
+          if (index != -1) {
+            _fetchedUsers[index].role = newRole;
+            _fetchedUsers[index].status = newStatus;
+            if (entity != null) {
+              _fetchedUsers[index].entity = entity;
+            }
+          }
+        });
       }
     } catch (e) {
       // Optionally show error to user
+    } finally {
+      setState(() {
+        _updatingUserId = null;
+      });
     }
   }
 
@@ -784,18 +818,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           const SizedBox(height: 16.0), // Spacing before the update button
           // Update Button
           ElevatedButton(
-            onPressed: () {
-              _updateUserRoleAndStatus(
-                user.id,
-                user.role,
-                user.status,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                department: user.department,
-                designation: user.designation,
-                entity: user.entity,
-              );
-            },
+            onPressed: _updatingUserId == user.id
+                ? null
+                : () {
+                    _updateUserRoleAndStatus(
+                      user.id,
+                      user.role,
+                      user.status,
+                      firstName: user.firstName,
+                      lastName: user.lastName,
+                      department: user.department,
+                      designation: user.designation,
+                      entity: user.entity,
+                    );
+                  },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFC10D00),
               foregroundColor: Colors.white,
@@ -803,10 +839,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 borderRadius: BorderRadius.circular(8.0),
               ),
             ),
-            child: const Text(
-              'Update',
-              style: TextStyle(fontFamily: 'Poppins'),
-            ),
+            child: _updatingUserId == user.id
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text('Update', style: TextStyle(fontFamily: 'Poppins')),
           ),
         ],
       ),

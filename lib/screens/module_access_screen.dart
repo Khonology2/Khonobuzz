@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/managed_user.dart';
 import '../utils/pdh_firebase.dart';
+import '../config/api_config.dart';
 
 class ModuleAccessScreen extends StatefulWidget {
   const ModuleAccessScreen({super.key});
@@ -23,6 +24,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   List<ManagedUser> _users = [];
   bool _isLoading = true;
   String? expandedUserId;
+  String? _updatingUserId; // Track which user is being updated
 
   Map<String, Color> get userStatusColors => {
     'Active': Colors.green.shade600,
@@ -73,9 +75,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       _isLoading = true;
     });
     try {
-      final response = await http.get(
-        Uri.parse('https://khonobuzz-backend.onrender.com/api/users'),
-      );
+      final response = await http.get(Uri.parse(ApiConfig.usersEndpoint));
 
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch users: ${response.statusCode}');
@@ -140,6 +140,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     bool skillsHeatmapSelected,
     String? newModuleRole,
   ) async {
+    setState(() {
+      _updatingUserId = user.id;
+    });
     // Build moduleAccess string from checkboxes
     List<String> accessList = [];
     if (pdhSelected) accessList.add('PDH');
@@ -180,9 +183,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
     try {
       final response = await http.patch(
-        Uri.parse(
-          'https://khonobuzz-backend.onrender.com/api/users/${user.id}',
-        ),
+        Uri.parse(ApiConfig.userEndpoint(user.id)),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'role': user.role,
@@ -220,6 +221,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                 : null
           : (combinedModuleAccess.isEmpty ? null : combinedModuleAccess);
 
+      // Update local state with backend response
       setState(() {
         user.moduleAccess = updatedModuleAccess;
         user.moduleRole = updatedModuleRole;
@@ -282,7 +284,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         );
       }
     } finally {
-      await _fetchUsers();
+      setState(() {
+        _updatingUserId = null;
+      });
     }
   }
 
@@ -897,12 +901,14 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton(
-              onPressed: () => _updateUserModuleAccess(
-                user,
-                pdhSelected,
-                skillsHeatmapSelected,
-                selectedModuleRole,
-              ),
+              onPressed: _updatingUserId == user.id
+                  ? null
+                  : () => _updateUserModuleAccess(
+                      user,
+                      pdhSelected,
+                      skillsHeatmapSelected,
+                      selectedModuleRole,
+                    ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFC10D00),
                 foregroundColor: Colors.white,
@@ -910,10 +916,19 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   borderRadius: BorderRadius.circular(8.0),
                 ),
               ),
-              child: const Text(
-                'Update Module Access',
-                style: TextStyle(fontFamily: 'Poppins'),
-              ),
+              child: _updatingUserId == user.id
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Text(
+                      'Update Module Access',
+                      style: TextStyle(fontFamily: 'Poppins'),
+                    ),
             ),
           ),
         ],
