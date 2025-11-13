@@ -91,7 +91,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     : constraints.maxWidth * 0.9)
                               : cardWidth,
                           title: 'Personal Development Hub',
-                          buttonText: 'Launch Development Hub',
+                          buttonText: 'Launch',
                           url: 'https://pdhproject.netlify.app/',
                         ),
                       );
@@ -113,7 +113,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     : constraints.maxWidth * 0.9)
                               : cardWidth,
                           title: 'Resource Capacity & Skills Heatmap',
-                          buttonText: 'Launch Heatmap',
+                          buttonText: 'Launch',
                           url: 'https://resource-capacity.netlify.app/',
                         ),
                       );

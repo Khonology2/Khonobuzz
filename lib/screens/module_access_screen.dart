@@ -426,11 +426,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
     final moduleAccessChips = _buildModuleAccessChips(user.moduleAccess);
-    if (user.moduleAccess != null &&
-        user.moduleAccess!.split(',').map((e) => e.trim()).contains('PDH') &&
-        user.moduleRole != null) {
-      moduleAccessChips.add(_buildModuleRoleChip(user.moduleRole));
-    }
     return InkWell(
       onTap: () {
         setState(() {
@@ -612,28 +607,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         ),
       );
     }).toList();
-  }
-
-  Widget _buildModuleRoleChip(String? moduleRole) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-        decoration: BoxDecoration(
-          color: const Color(0x33FFFFFF),
-          borderRadius: BorderRadius.circular(20.0),
-        ),
-        child: Text(
-          moduleRole ?? '',
-          style: const TextStyle(
-            fontSize: 12.0,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Poppins',
-            color: Colors.white,
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildModuleAccessPanel(ManagedUser user) {
