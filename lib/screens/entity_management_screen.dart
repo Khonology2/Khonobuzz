@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 
 import '../models/managed_user.dart';
 import '../utils/pdh_firebase.dart';
 import '../config/api_config.dart';
+import '../providers/user_provider.dart';
 
 class EntityManagementScreen extends StatefulWidget {
   const EntityManagementScreen({super.key});
@@ -21,10 +24,10 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   static const double _badgeAreaWidth = 200.0;
   static const String _notAssignedValue = 'Not Assigned';
 
-  List<ManagedUser> _users = [];
-  bool _isLoading = true;
   String? expandedUserId;
   String? _updatingUserId; // Track which user is being updated
+  Timer? _debounceTimer;
+  String _searchQuery = '';
 
   Map<String, Color> get userStatusColors => {
     'Active': Colors.green.shade600,
@@ -39,10 +42,13 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   };
 
   List<ManagedUser> get _filteredUsers {
-    final query = _searchController.text.toLowerCase();
-    if (query.isEmpty) return _users;
+    final userProvider = Provider.of<UserProvider>(context);
+    final users = userProvider.users;
+    final query = _searchQuery.toLowerCase();
 
-    return _users.where((user) {
+    if (query.isEmpty) return users;
+
+    return users.where((user) {
       return user.name.toLowerCase().contains(query) ||
           user.email.toLowerCase().contains(query) ||
           user.department.toLowerCase().contains(query) ||
@@ -54,66 +60,32 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchUsers();
-    _searchController.addListener(() => setState(() {}));
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    // Fetch users if not cached or cache expired
+    userProvider.fetchUsers();
+    // Refresh in background if cache exists
+    if (userProvider.hasCachedData) {
+      userProvider.refreshUsersInBackground();
+    }
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          _searchQuery = _searchController.text;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
-  }
-
-  Future<void> _fetchUsers() async {
-    setState(() {
-      _isLoading = true;
-    });
-    try {
-      final response = await http.get(Uri.parse(ApiConfig.usersEndpoint));
-
-      if (response.statusCode != 200) {
-        throw Exception('Failed to fetch users: ${response.statusCode}');
-      }
-
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final usersData = (decoded['users'] as List<dynamic>? ?? [])
-          .cast<Map<String, dynamic>>();
-
-      final users = usersData
-          .map((user) => ManagedUser.fromApi(user))
-          .toList(growable: false);
-
-      users.sort((a, b) {
-        final aKey =
-            a.updatedAt ??
-            a.createdAt ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        final bKey =
-            b.updatedAt ??
-            b.createdAt ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        return bKey.compareTo(aKey);
-      });
-
-      setState(() {
-        _users = users;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      // ignore: use_build_context_synchronously
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Unable to load users. Please try again.',
-            style: const TextStyle(fontFamily: 'Poppins'),
-          ),
-          backgroundColor: Colors.red.shade600,
-        ),
-      );
-    }
   }
 
   Future<void> _updateUserEntity(ManagedUser user, String? newEntity) async {
@@ -157,6 +129,11 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       setState(() {
         user.entity = updatedEntity;
       });
+
+      // Update user in provider cache
+      // ignore: use_build_context_synchronously
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      userProvider.updateUser(user);
 
       try {
         // Sync with PDH
@@ -286,6 +263,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           onPressed: () {
             setState(() {
               _searchController.clear();
+              _searchQuery = '';
             });
           },
         ),
@@ -302,7 +280,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   }
 
   Widget _buildUserList() {
-    if (_isLoading) {
+    final userProvider = Provider.of<UserProvider>(context);
+
+    if (userProvider.isLoading && userProvider.users.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

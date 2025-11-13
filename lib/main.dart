@@ -13,6 +13,7 @@ import 'screens/user_management_screen.dart';
 import 'screens/module_access_screen.dart';
 import 'screens/landing_screen.dart'; // Import LandingScreen
 import 'providers/auth_provider.dart';
+import 'providers/user_provider.dart';
 import 'widgets/side_menu.dart';
 import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
 import 'firebase_options.dart'; // Import generated Firebase options
@@ -33,7 +34,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => AuthProvider())],
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+      ],
       child: MaterialApp(
         title: 'Khonology',
         theme: ThemeData(

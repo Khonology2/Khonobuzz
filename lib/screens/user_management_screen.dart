@@ -1,11 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:async'; // Import for TimeoutException
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import '../utils/pdh_firebase.dart';
 import '../models/managed_user.dart';
 import '../config/api_config.dart';
+import '../providers/user_provider.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -15,9 +17,9 @@ class UserManagementScreen extends StatefulWidget {
 }
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
-  List<ManagedUser> _fetchedUsers = []; // List to hold fetched users
-  bool _isLoading = true; // Loading state
   String? _updatingUserId; // Track which user is being updated
+  Timer? _debounceTimer;
+  String _searchQuery = '';
 
   // Removed the static 'users' list as data will be fetched dynamically
   // final List<User> users = [
@@ -34,12 +36,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   String? _selectedDepartment;
   String? _selectedDesignation;
 
-  Set<String> get _availableStatuses =>
-      _fetchedUsers.map((user) => user.status).toSet();
-  Set<String> get _availableDepartments =>
-      _fetchedUsers.map((user) => user.department).toSet();
-  Set<String> get _availableDesignations =>
-      _fetchedUsers.map((user) => user.designation).toSet();
+  Set<String> get _availableStatuses {
+    final userProvider = Provider.of<UserProvider>(context);
+    return userProvider.users.map((user) => user.status).toSet();
+  }
+
+  Set<String> get _availableDepartments {
+    final userProvider = Provider.of<UserProvider>(context);
+    return userProvider.users.map((user) => user.department).toSet();
+  }
+
+  Set<String> get _availableDesignations {
+    final userProvider = Provider.of<UserProvider>(context);
+    return userProvider.users.map((user) => user.designation).toSet();
+  }
 
   final Map<String, Color> userStatusColors = {
     'Active': Colors.green.shade600,
@@ -67,8 +77,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   List<ManagedUser> get _filteredUsers {
-    List<ManagedUser> users = _fetchedUsers;
-    final query = _searchController.text.toLowerCase();
+    final userProvider = Provider.of<UserProvider>(context);
+    List<ManagedUser> users = userProvider.users;
+    final query = _searchQuery.toLowerCase();
 
     // Apply search query filter
     if (query.isNotEmpty) {
@@ -103,6 +114,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -110,54 +122,25 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchUsersData(); // Fetch users when the screen initializes
-    _searchController.addListener(() {
-      setState(() {});
-    });
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    // Fetch users if not cached or cache expired
+    userProvider.fetchUsers();
+    // Refresh in background if cache exists
+    if (userProvider.hasCachedData) {
+      userProvider.refreshUsersInBackground();
+    }
+    _searchController.addListener(_onSearchChanged);
   }
 
-  Future<void> _fetchUsersData() async {
-    // Renamed from _fetchOnboardingUsers
-    setState(() {
-      _isLoading = true;
-    });
-    try {
-      final response = await http.get(Uri.parse(ApiConfig.usersEndpoint));
-
-      if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to fetch users: ${response.statusCode} ${response.body}',
-        );
+  void _onSearchChanged() {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          _searchQuery = _searchController.text;
+        });
       }
-
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final usersData = (decoded['users'] as List<dynamic>? ?? [])
-          .cast<Map<String, dynamic>>();
-      final usersList = usersData
-          .map((user) => ManagedUser.fromApi(user))
-          .toList(growable: false);
-      usersList.sort((a, b) {
-        final aKey =
-            a.updatedAt ??
-            a.createdAt ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        final bKey =
-            b.updatedAt ??
-            b.createdAt ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        return bKey.compareTo(aKey);
-      });
-
-      setState(() {
-        _fetchedUsers = usersList;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      // Optionally show a SnackBar or alert to the user
-    }
+    });
   }
 
   Future<void> _updateUserRoleAndStatus(
@@ -236,43 +219,40 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
 
       // Update local state with backend response
+      // ignore: use_build_context_synchronously
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
       try {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
         final backendUser = decoded?['user'] as Map<String, dynamic>?;
         if (backendUser != null) {
-          // Update the user in the local list directly
+          // Update the user in the provider cache
           final updatedUser = ManagedUser.fromApi(backendUser);
-          setState(() {
-            final index = _fetchedUsers.indexWhere((u) => u.id == userId);
-            if (index != -1) {
-              _fetchedUsers[index] = updatedUser;
-            }
-          });
+          userProvider.updateUser(updatedUser);
         } else {
-          // Update local state directly
-          setState(() {
-            final index = _fetchedUsers.indexWhere((u) => u.id == userId);
-            if (index != -1) {
-              _fetchedUsers[index].role = newRole;
-              _fetchedUsers[index].status = newStatus;
-              if (entity != null) {
-                _fetchedUsers[index].entity = entity;
-              }
+          // Update user in provider cache directly
+          final users = userProvider.users;
+          final index = users.indexWhere((u) => u.id == userId);
+          if (index != -1) {
+            users[index].role = newRole;
+            users[index].status = newStatus;
+            if (entity != null) {
+              users[index].entity = entity;
             }
-          });
+            userProvider.updateUser(users[index]);
+          }
         }
       } catch (_) {
-        // Update local state directly if parsing fails
-        setState(() {
-          final index = _fetchedUsers.indexWhere((u) => u.id == userId);
-          if (index != -1) {
-            _fetchedUsers[index].role = newRole;
-            _fetchedUsers[index].status = newStatus;
-            if (entity != null) {
-              _fetchedUsers[index].entity = entity;
-            }
+        // Update user in provider cache directly if parsing fails
+        final users = userProvider.users;
+        final index = users.indexWhere((u) => u.id == userId);
+        if (index != -1) {
+          users[index].role = newRole;
+          users[index].status = newStatus;
+          if (entity != null) {
+            users[index].entity = entity;
           }
-        });
+          userProvider.updateUser(users[index]);
+        }
       }
     } catch (e) {
       // Optionally show error to user
@@ -500,6 +480,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               onPressed: () {
                 setState(() {
                   _searchController.clear();
+                  _searchQuery = '';
                 });
               },
             ),
@@ -518,7 +499,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Widget _buildUserList() {
-    if (_isLoading) {
+    final userProvider = Provider.of<UserProvider>(context);
+
+    if (userProvider.isLoading && userProvider.users.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -538,7 +521,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       );
     }
 
-    if (_fetchedUsers.isEmpty) {
+    if (userProvider.users.isEmpty && !userProvider.isLoading) {
       return const Center(
         child: Text(
           'No onboarding users found.',
