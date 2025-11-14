@@ -10,6 +10,7 @@ import '../utils/pdh_firebase.dart'
     show updatePDHUserPartial, updateSkillsHeatmapUserPartial;
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
+import '../providers/auth_provider.dart';
 
 class EntityManagementScreen extends StatefulWidget {
   const EntityManagementScreen({super.key});
@@ -90,6 +91,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   }
 
   Future<void> _updateUserEntity(ManagedUser user, String? newEntity) async {
+    final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
     setState(() {
       _updatingUserId = user.id;
     });
@@ -109,6 +111,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           'role': user.role,
           'status': user.status,
           'entity': sanitizedEntity,
+          if (adminEmail.isNotEmpty) 'adminApproved': adminEmail,
         }),
       );
 
@@ -136,12 +139,21 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       userProvider.updateUser(user);
 
+      final adminField = adminEmail.isNotEmpty
+          ? {
+              'admin': {'approved': adminEmail},
+            }
+          : null;
+
       try {
         // Sync with PDH
         await updatePDHUserPartial(
           user.id,
-          {'entity': updatedEntity},
-          onboardingFields: {'entity': updatedEntity},
+          {'entity': updatedEntity, if (adminField != null) ...adminField},
+          onboardingFields: {
+            'entity': updatedEntity,
+            if (adminField != null) ...adminField,
+          },
         );
       } catch (e) {
         debugPrint('PDH sync failed for entity update: $e');
@@ -162,8 +174,11 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         // Sync with Skills Heatmap
         await updateSkillsHeatmapUserPartial(
           user.id,
-          {'entity': updatedEntity},
-          onboardingFields: {'entity': updatedEntity},
+          {'entity': updatedEntity, if (adminField != null) ...adminField},
+          onboardingFields: {
+            'entity': updatedEntity,
+            if (adminField != null) ...adminField,
+          },
         );
       } catch (e) {
         debugPrint('Skills Heatmap sync failed for entity update: $e');

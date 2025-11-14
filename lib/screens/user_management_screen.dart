@@ -9,6 +9,7 @@ import '../utils/pdh_firebase.dart'
 import '../models/managed_user.dart';
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
+import '../providers/auth_provider.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -158,6 +159,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       _updatingUserId = userId;
     });
 
+    final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
+
     try {
       final response = await http.patch(
         Uri.parse(ApiConfig.userEndpoint(userId)),
@@ -166,6 +169,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'role': newRole,
           'status': newStatus,
           'entity': entity,
+          if (adminEmail.isNotEmpty) 'adminApproved': adminEmail,
         }),
       );
 
@@ -193,15 +197,27 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         );
       }
 
+      final adminField = adminEmail.isNotEmpty
+          ? {
+              'admin': {'approved': adminEmail},
+            }
+          : null;
+
       try {
         // Sync with PDH
         await updatePDHUserPartial(
           userId,
-          {'role': newRole, 'status': newStatus, 'entity': entity},
+          {
+            'role': newRole,
+            'status': newStatus,
+            'entity': entity,
+            if (adminField != null) ...adminField,
+          },
           onboardingFields: {
             'role': newRole,
             'status': newStatus,
             'entity': entity,
+            if (adminField != null) ...adminField,
           },
         );
       } catch (e) {
@@ -223,11 +239,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         // Sync with Skills Heatmap
         await updateSkillsHeatmapUserPartial(
           userId,
-          {'role': newRole, 'status': newStatus, 'entity': entity},
+          {
+            'role': newRole,
+            'status': newStatus,
+            'entity': entity,
+            if (adminField != null) ...adminField,
+          },
           onboardingFields: {
             'role': newRole,
             'status': newStatus,
             'entity': entity,
+            if (adminField != null) ...adminField,
           },
         );
       } catch (e) {

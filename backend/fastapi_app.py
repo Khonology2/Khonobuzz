@@ -73,6 +73,7 @@ class UserUpdate(BaseModel):
     moduleAccess: Optional[str] = None
     moduleRole: Optional[str] = None
     moduleAccessRole: Optional[str] = None  # Combined field: "PDH - Employee", "PDH - Manager", "SOW Builder - Manager"
+    adminApproved: Optional[str] = None
 
 # Initialize Firebase Admin SDK
 cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
@@ -380,6 +381,8 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
             update_payload['moduleRole'] = user_update.moduleRole
         if user_update.moduleAccessRole is not None:
             update_payload['moduleAccessRole'] = user_update.moduleAccessRole
+        if user_update.adminApproved is not None:
+            update_payload['admin'] = {'approved': user_update.adminApproved}
 
         if not update_payload:
             return JSONResponse(
@@ -407,6 +410,8 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
             onboarding_update_payload['moduleRole'] = user_update.moduleRole
         if user_update.moduleAccessRole is not None:
             onboarding_update_payload['moduleAccessRole'] = user_update.moduleAccessRole
+        if user_update.adminApproved is not None:
+            onboarding_update_payload['admin'] = {'approved': user_update.adminApproved}
 
         if len(onboarding_update_payload) > 1:  # at least updated_at is there
             onboarding_query = (

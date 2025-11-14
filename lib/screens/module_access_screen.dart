@@ -10,6 +10,7 @@ import '../utils/pdh_firebase.dart'
     show updatePDHUserPartial, updateSkillsHeatmapUserPartial;
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
+import '../providers/auth_provider.dart';
 
 class ModuleAccessScreen extends StatefulWidget {
   const ModuleAccessScreen({super.key});
@@ -113,6 +114,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     bool skillsHeatmapSelected,
     String? newModuleRole,
   ) async {
+    final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
     setState(() {
       _updatingUserId = user.id;
     });
@@ -164,6 +166,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           'moduleAccess': sanitizedModuleAccess,
           'moduleRole': sanitizedModuleRole,
           'moduleAccessRole': combinedModuleAccess, // Combined field
+          if (adminEmail.isNotEmpty) 'adminApproved': adminEmail,
         }),
       );
 
@@ -205,6 +208,12 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       userProvider.updateUser(user);
 
+      final adminField = adminEmail.isNotEmpty
+          ? {
+              'admin': {'approved': adminEmail},
+            }
+          : null;
+
       try {
         // Sync with PDH
         await updatePDHUserPartial(
@@ -213,11 +222,13 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             'moduleAccess': updatedModuleAccess,
             'moduleRole': updatedModuleRole,
             'moduleAccessRole': updatedModuleAccessRole,
+            if (adminField != null) ...adminField,
           },
           onboardingFields: {
             'moduleAccess': updatedModuleAccess,
             'moduleRole': updatedModuleRole,
             'moduleAccessRole': updatedModuleAccessRole,
+            if (adminField != null) ...adminField,
           },
         );
       } catch (e) {
@@ -243,11 +254,13 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             'moduleAccess': updatedModuleAccess,
             'moduleRole': updatedModuleRole,
             'moduleAccessRole': updatedModuleAccessRole,
+            if (adminField != null) ...adminField,
           },
           onboardingFields: {
             'moduleAccess': updatedModuleAccess,
             'moduleRole': updatedModuleRole,
             'moduleAccessRole': updatedModuleAccessRole,
+            if (adminField != null) ...adminField,
           },
         );
       } catch (e) {
