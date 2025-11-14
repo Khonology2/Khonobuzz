@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "146462615171",
+    "project_id": "khonology-buzz-build-web-app",
+    "storage_bucket": "khonology-buzz-build-web-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:146462615171:android:b97f7498cb7d8b0858ddb6",
+        "android_client_info": {
+          "package_name": "com.example.khonology_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZXIpuDg31mfdw_kwMi_f3rsbnFxY3sBI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

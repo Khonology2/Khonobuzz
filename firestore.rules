@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Primary user records
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Onboarding metadata synced from PDH
+    match /onboarding/{userId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Deny access to everything else unless explicitly allowed
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

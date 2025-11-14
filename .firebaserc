@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "khonology-buzz-build-web-app",
+    "firebase deploy --only firestore:rules": "khonology-buzz-build-web-app"
+  },
+  "targets": {},
+  "etags": {}
+}
