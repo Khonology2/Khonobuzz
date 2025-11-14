@@ -15,5 +15,9 @@ class ApiConfig {
   static String get pdhSyncUserEndpoint => '$baseUrl/api/pdh/sync-user';
   static String pdhUpdateUserEndpoint(String uid) =>
       '$baseUrl/api/pdh/update-user/$uid';
+  static String get skillsHeatmapSyncUserEndpoint =>
+      '$baseUrl/api/skills-heatmap/sync-user';
+  static String skillsHeatmapUpdateUserEndpoint(String uid) =>
+      '$baseUrl/api/skills-heatmap/update-user/$uid';
   static String userEndpoint(String userId) => '$baseUrl/api/users/$userId';
 }

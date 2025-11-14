@@ -4,7 +4,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import '../utils/pdh_firebase.dart';
+import '../utils/pdh_firebase.dart'
+    show updatePDHUserPartial, updateSkillsHeatmapUserPartial;
 import '../models/managed_user.dart';
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
@@ -216,6 +217,22 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             ),
           );
         }
+      }
+
+      try {
+        // Sync with Skills Heatmap
+        await updateSkillsHeatmapUserPartial(
+          userId,
+          {'role': newRole, 'status': newStatus, 'entity': entity},
+          onboardingFields: {
+            'role': newRole,
+            'status': newStatus,
+            'entity': entity,
+          },
+        );
+      } catch (e) {
+        debugPrint('Skills Heatmap sync failed for user update: $e');
+        // Don't show error to user, just log it
       }
 
       // Update local state with backend response

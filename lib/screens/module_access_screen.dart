@@ -6,7 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../models/managed_user.dart';
-import '../utils/pdh_firebase.dart';
+import '../utils/pdh_firebase.dart'
+    show updatePDHUserPartial, updateSkillsHeatmapUserPartial;
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 
@@ -232,6 +233,26 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             ),
           );
         }
+      }
+
+      try {
+        // Sync with Skills Heatmap
+        await updateSkillsHeatmapUserPartial(
+          user.id,
+          {
+            'moduleAccess': updatedModuleAccess,
+            'moduleRole': updatedModuleRole,
+            'moduleAccessRole': updatedModuleAccessRole,
+          },
+          onboardingFields: {
+            'moduleAccess': updatedModuleAccess,
+            'moduleRole': updatedModuleRole,
+            'moduleAccessRole': updatedModuleAccessRole,
+          },
+        );
+      } catch (e) {
+        debugPrint('Skills Heatmap sync failed for module access update: $e');
+        // Don't show error to user, just log it
       }
 
       if (mounted) {

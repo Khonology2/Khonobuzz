@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http; // Import for making HTTP requests
 import 'dart:convert'; // Import for JSON encoding/decoding
 import 'dart:async'; // Import for TimeoutException
-import '../utils/pdh_firebase.dart';
+import '../utils/pdh_firebase.dart' show syncUserToPDH, syncUserToSkillsHeatmap;
 import '../config/api_config.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -70,7 +70,7 @@ class AuthProvider extends ChangeNotifier {
           'name': '$firstName $lastName',
           'firstName': firstName, // Added to match Pydantic model
           'lastName': lastName, // Added to match Pydantic model
-          'role': role ?? 'user',
+          'khonobuzz_role': role ?? 'user',
           'department': department ?? '', // Handle nullable department
           'designation': designation,
         }),
@@ -86,7 +86,7 @@ class AuthProvider extends ChangeNotifier {
             'email': email,
             'password': 'password',
             'name': '$firstName $lastName',
-            'role': role ?? 'user',
+            'khonobuzz_role': role ?? 'user',
             'status': 'Pending',
             'created_at': DateTime.now().toUtc().toIso8601String(),
             'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -102,7 +102,7 @@ class AuthProvider extends ChangeNotifier {
             'department': department ?? '',
             'designation': designation,
             'status': 'Pending',
-            'role': role ?? 'user',
+            'khonobuzz_role': role ?? 'user',
             'first_valid': DateTime.utc(2025, 9, 25).toIso8601String(),
             'inserted_by': email,
             'last_valid': DateTime.utc(2039, 12, 31).toIso8601String(),
@@ -118,6 +118,15 @@ class AuthProvider extends ChangeNotifier {
           } catch (e) {
             debugPrint(
               'Failed to sync new user to PDH during registration: $e',
+            );
+            // This error is logged for debugging, but we don't block the user
+            // from proceeding since the main registration was successful.
+          }
+          try {
+            await syncUserToSkillsHeatmap(userData, onboardingData, uid);
+          } catch (e) {
+            debugPrint(
+              'Failed to sync new user to Skills Heatmap during registration: $e',
             );
             // This error is logged for debugging, but we don't block the user
             // from proceeding since the main registration was successful.
@@ -192,9 +201,7 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> manualLogin(String email) async {
     // Removed password parameter
 
-    final url = Uri.parse(
-      ApiConfig.authLoginEndpoint,
-    );
+    final url = Uri.parse(ApiConfig.authLoginEndpoint);
     try {
       final response = await http
           .post(
@@ -217,7 +224,7 @@ class AuthProvider extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         _isAuthenticated = true;
         _userEmail = responseData['user']['email'];
-        _userRole = responseData['user']['role'] ?? 'Staff';
+        _userRole = responseData['user']['khonobuzz_role'] ?? 'Staff';
         // Both Staff and Admin users navigate to Modules screen (index 9) on login
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
@@ -275,9 +282,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> _attemptFallbackLogin(String email) async {
-    final userCheckUrl = Uri.parse(
-      ApiConfig.usersEndpoint,
-    );
+    final userCheckUrl = Uri.parse(ApiConfig.usersEndpoint);
     try {
       final userCheckResponse = await http
           .get(userCheckUrl)
@@ -310,7 +315,7 @@ class AuthProvider extends ChangeNotifier {
           final prefs = await SharedPreferences.getInstance();
           _isAuthenticated = true;
           _userEmail = foundUser['email'] ?? email;
-          _userRole = foundUser['role'] ?? 'Staff';
+          _userRole = foundUser['khonobuzz_role'] ?? 'Staff';
           // Both Staff and Admin users navigate to Modules screen (index 9) on login
           _initialScreenIndex = 9;
           _currentScreenIndex = 9;
@@ -375,9 +380,7 @@ class AuthProvider extends ChangeNotifier {
     }
 
     try {
-      final response = await http.get(
-        Uri.parse(ApiConfig.usersEndpoint),
-      );
+      final response = await http.get(Uri.parse(ApiConfig.usersEndpoint));
 
       if (response.statusCode == 200) {
         final usersData = json.decode(response.body);

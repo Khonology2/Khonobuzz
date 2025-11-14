@@ -6,7 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../models/managed_user.dart';
-import '../utils/pdh_firebase.dart';
+import '../utils/pdh_firebase.dart'
+    show updatePDHUserPartial, updateSkillsHeatmapUserPartial;
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 
@@ -155,6 +156,18 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
             ),
           );
         }
+      }
+
+      try {
+        // Sync with Skills Heatmap
+        await updateSkillsHeatmapUserPartial(
+          user.id,
+          {'entity': updatedEntity},
+          onboardingFields: {'entity': updatedEntity},
+        );
+      } catch (e) {
+        debugPrint('Skills Heatmap sync failed for entity update: $e');
+        // Don't show error to user, just log it
       }
 
       if (mounted) {

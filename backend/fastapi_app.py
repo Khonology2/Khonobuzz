@@ -17,11 +17,17 @@ load_dotenv()
 # Configuration
 FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH') or 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json'
 PDH_FIREBASE_CREDENTIALS_PATH = os.environ.get('PDH_FIREBASE_CREDENTIALS_PATH') or 'pdh-fe6eb-firebase-adminsdk-fbsvc-6fbc402974.json'
+SKILLS_HEATMAP_FIREBASE_CREDENTIALS_PATH = os.environ.get('SKILLS_HEATMAP_FIREBASE_CREDENTIALS_PATH') or 'resource-capacity-3b654-firebase-adminsdk-fbsvc-71599861bf.json'
 
 # PDH Firestore App Initialization
 pdh_cred = credentials.Certificate(PDH_FIREBASE_CREDENTIALS_PATH)
 pdh_app = initialize_app(pdh_cred, name='pdhApp')
 pdh_db = firestore.client(app=pdh_app)
+
+# Skills Heatmap Firestore App Initialization
+skills_heatmap_cred = credentials.Certificate(SKILLS_HEATMAP_FIREBASE_CREDENTIALS_PATH)
+skills_heatmap_app = initialize_app(skills_heatmap_cred, name='skillsHeatmapApp')
+skills_heatmap_db = firestore.client(app=skills_heatmap_app)
 
 from fastapi import Body
 
@@ -132,6 +138,46 @@ async def pdh_update_user(uid: str, data: dict):
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH update successful"})
     except Exception as e:
         print(f"[ERROR] During PDH update: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/skills-heatmap/sync-user")
+async def skills_heatmap_sync_user(data: dict):
+    try:
+        uid = data['uid']
+        user_data = data['userData']
+        onboarding_data = data['onboardingData']
+        
+        # Convert ISO strings back to datetime objects
+        for key in ['created_at', 'updated_at']:
+            if key in user_data and isinstance(user_data[key], str):
+                user_data[key] = datetime.fromisoformat(user_data[key].replace('Z', '+00:00'))
+        
+        for key in ['created_at', 'updated_at', 'first_valid', 'last_valid']:
+            if key in onboarding_data and isinstance(onboarding_data[key], str):
+                onboarding_data[key] = datetime.fromisoformat(onboarding_data[key].replace('Z', '+00:00'))
+        
+        skills_heatmap_db.collection('users').document(uid).set(user_data, merge=True)
+        skills_heatmap_db.collection('onboarding').document(uid).set(onboarding_data, merge=True)
+        
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Skills Heatmap sync successful"})
+    except Exception as e:
+        print(f"[ERROR] During Skills Heatmap sync: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.patch("/api/skills-heatmap/update-user/{uid}")
+async def skills_heatmap_update_user(uid: str, data: dict):
+    try:
+        user_fields = data.get('userFields')
+        onboarding_fields = data.get('onboardingFields')
+
+        if user_fields:
+            skills_heatmap_db.collection('users').document(uid).set(user_fields, merge=True)
+        if onboarding_fields:
+            skills_heatmap_db.collection('onboarding').document(uid).set(onboarding_fields, merge=True)
+            
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Skills Heatmap update successful"})
+    except Exception as e:
+        print(f"[ERROR] During Skills Heatmap update: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/")
