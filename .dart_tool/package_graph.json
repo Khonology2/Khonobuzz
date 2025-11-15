@@ -1,10 +1,10 @@
 {
   "roots": [
-    "khonology_app"
+    "khonobuzz"
   ],
   "packages": [
     {
-      "name": "khonology_app",
+      "name": "khonobuzz",
       "version": "1.0.0+1",
       "dependencies": [
         "cloud_firestore",
