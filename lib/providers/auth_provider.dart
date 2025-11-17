@@ -70,7 +70,7 @@ class AuthProvider extends ChangeNotifier {
           'name': '$firstName $lastName',
           'firstName': firstName, // Added to match Pydantic model
           'lastName': lastName, // Added to match Pydantic model
-          'khonobuzz_role': role ?? 'user',
+          'role': role ?? 'Staff',
           'department': department ?? '', // Handle nullable department
           'designation': designation,
         }),
@@ -80,13 +80,14 @@ class AuthProvider extends ChangeNotifier {
         // User registered successfully
         final responseData = json.decode(response.body);
 
-        final String uid = responseData['user']?['id'] ?? '';
+        final userPayload = responseData['user'] as Map<String, dynamic>? ?? {};
+        final String uid = userPayload['id'] ?? '';
         if (uid.isNotEmpty) {
           final Map<String, dynamic> userData = {
             'email': email,
             'password': 'password',
             'name': '$firstName $lastName',
-            'khonobuzz_role': role ?? 'user',
+            'role': role ?? 'Staff',
             'status': 'Pending',
             'created_at': DateTime.now().toUtc().toIso8601String(),
             'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -102,7 +103,7 @@ class AuthProvider extends ChangeNotifier {
             'department': department ?? '',
             'designation': designation,
             'status': 'Pending',
-            'khonobuzz_role': role ?? 'user',
+            'role': role ?? 'Staff',
             'first_valid': DateTime.utc(2025, 9, 25).toIso8601String(),
             'inserted_by': email,
             'last_valid': DateTime.utc(2039, 12, 31).toIso8601String(),
@@ -136,7 +137,7 @@ class AuthProvider extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         _isAuthenticated = true;
         _userEmail = email;
-        _userRole = role ?? 'user';
+        _userRole = userPayload['role'] ?? role ?? 'Staff';
         // Both Staff and Admin users navigate to Modules screen (index 9) on login
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
@@ -158,31 +159,9 @@ class AuthProvider extends ChangeNotifier {
         fetchCurrentUserModuleAccess();
         return true; // Indicate success
       } else if (response.statusCode == 409) {
-        // If user already exists, proceed as if logged in or attempt a login API call if available
-        final prefs = await SharedPreferences.getInstance();
-        _isAuthenticated = true;
-        _userEmail = email;
-        // Here, you might want to fetch the actual role of the existing user from the backend
-        _userRole = role ?? 'user';
-        // Both Staff and Admin users navigate to Modules screen (index 9) on login
-        _initialScreenIndex = 9;
-        _currentScreenIndex = 9;
-        await prefs.setBool('isAuthenticated', true);
-        await prefs.setString('userEmail', email);
-        await prefs.setString('userRole', _userRole!);
-        await prefs.setInt(
-          'initialScreenIndex',
-          9,
-        ); // Store initial screen index
-        await prefs.setInt(
-          'currentScreenIndex',
-          9,
-        ); // Store current screen index for refresh
-        _userAlreadyOnboarded = true; // Set onboarding status to true
-        notifyListeners();
-        // Fetch module access after login
-        fetchCurrentUserModuleAccess();
-        return true; // Indicate success
+        // User already exists; attempt fallback login to fetch real role
+        final fallbackSuccess = await _attemptFallbackLogin(email);
+        return fallbackSuccess;
       } else {
         // Handle other errors
         _isAuthenticated = false;
@@ -223,8 +202,9 @@ class AuthProvider extends ChangeNotifier {
 
         final prefs = await SharedPreferences.getInstance();
         _isAuthenticated = true;
-        _userEmail = responseData['user']['email'];
-        _userRole = responseData['user']['khonobuzz_role'] ?? 'Staff';
+        final userPayload = responseData['user'] as Map<String, dynamic>? ?? {};
+        _userEmail = userPayload['email'];
+        _userRole = userPayload['role'] ?? 'Staff';
         // Both Staff and Admin users navigate to Modules screen (index 9) on login
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
@@ -315,7 +295,7 @@ class AuthProvider extends ChangeNotifier {
           final prefs = await SharedPreferences.getInstance();
           _isAuthenticated = true;
           _userEmail = foundUser['email'] ?? email;
-          _userRole = foundUser['khonobuzz_role'] ?? 'Staff';
+          _userRole = foundUser['role'] ?? 'Staff';
           // Both Staff and Admin users navigate to Modules screen (index 9) on login
           _initialScreenIndex = 9;
           _currentScreenIndex = 9;

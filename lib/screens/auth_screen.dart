@@ -1,7 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:provider/provider.dart'; // Import for AuthProvider
 import '../providers/auth_provider.dart'; // Import AuthProvider
@@ -28,6 +28,60 @@ class AuthScreenState extends State<AuthScreen> {
         _discsOpacity = 1.0;
       });
     });
+
+    // Handle Microsoft sign-in redirect result (for web with PKCE)
+    if (kIsWeb) {
+      _handleRedirectResult();
+    }
+  }
+
+  Future<void> _handleRedirectResult() async {
+    try {
+      final credential = await fb_auth.FirebaseAuth.instance
+          .getRedirectResult();
+      if (credential.user != null) {
+        final email = credential.user?.email;
+        if (email != null && email.toLowerCase().endsWith('@khonology.com')) {
+          if (!mounted) return;
+          final success = await context.read<AuthProvider>().login(
+            email,
+            role: null,
+          );
+          if (!mounted) return;
+
+          if (success) {
+            // After successful Microsoft login, go directly to MainScreen with Module Screen
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (context) => const MainScreen(
+                  initialIndex: 8, // Navigate to Module Screen
+                ),
+              ),
+              (route) => false,
+            );
+          } else {
+            if (!mounted) return;
+            await fb_auth.FirebaseAuth.instance.signOut();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Login failed. Please try again later.'),
+              ),
+            );
+          }
+        } else {
+          await fb_auth.FirebaseAuth.instance.signOut();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Only khonology.com accounts are allowed'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Silently handle redirect errors (user might not have initiated a redirect)
+      debugPrint('Redirect result error: $e');
+    }
   }
 
   @override
@@ -78,8 +132,11 @@ class AuthScreenState extends State<AuthScreen> {
 
                         fb_auth.UserCredential credential;
                         if (kIsWeb) {
-                          credential = await fb_auth.FirebaseAuth.instance
-                              .signInWithPopup(provider);
+                          // Use signInWithRedirect for web to support PKCE (required by Microsoft)
+                          await fb_auth.FirebaseAuth.instance
+                              .signInWithRedirect(provider);
+                          // The redirect will be handled by getRedirectResult in initState
+                          return;
                         } else {
                           credential = await fb_auth.FirebaseAuth.instance
                               .signInWithProvider(provider);
@@ -101,10 +158,9 @@ class AuthScreenState extends State<AuthScreen> {
                         }
 
                         if (!mounted) return;
-                        final success = await context.read<AuthProvider>().login(
-                          email,
-                          role: null,
-                        );
+                        final success = await context
+                            .read<AuthProvider>()
+                            .login(email, role: null);
                         if (!mounted) return;
 
                         if (!success) {
