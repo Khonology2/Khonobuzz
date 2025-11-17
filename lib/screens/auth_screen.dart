@@ -1,41 +1,22 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
-import 'package:flutter_aad_oauth/flutter_aad_oauth.dart'; // Import for AAD OAuth
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:provider/provider.dart'; // Import for AuthProvider
 import '../providers/auth_provider.dart'; // Import AuthProvider
-import 'dart:convert'; // Import for JSON decoding
 import 'manual_login_screen.dart'; // Import ManualLoginScreen
 import '../main.dart'; // For MainScreen navigation
 import 'onboarding_screen.dart'; // Import OnboardingScreen
 
 class AuthScreen extends StatefulWidget {
-  final FlutterAadOauth oauth; // Receive the oauth object
-  const AuthScreen({super.key, required this.oauth}); // Update constructor
+  const AuthScreen({super.key});
 
   @override
   AuthScreenState createState() => AuthScreenState();
 }
 
 class AuthScreenState extends State<AuthScreen> {
-  String? _extractEmailFromIdToken(String? idToken) {
-    if (idToken == null) return null;
-    try {
-      final parts = idToken.split('.');
-      if (parts.length != 3) return null;
-      final normalized = base64Url.normalize(parts[1]);
-      final payload = String.fromCharCodes(base64Url.decode(normalized));
-      final Map<String, dynamic> claims =
-          jsonDecode(payload) as Map<String, dynamic>;
-      final value =
-          (claims['preferred_username'] ?? claims['upn'] ?? claims['email'])
-              ?.toString();
-      return value;
-    } catch (_) {
-      return null;
-    }
-  }
-
   double _discsOpacity = 0.0; // Initial opacity for discs.png
 
   @override
@@ -92,17 +73,22 @@ class AuthScreenState extends State<AuthScreen> {
                     color: const Color(0xFFC10D00),
                     onPressed: () async {
                       try {
-                        widget.oauth.setContext(context);
-                        await widget.oauth.logout();
-                        if (!mounted) return;
-                        await widget.oauth.login();
-                        if (!mounted) return;
-                        final idToken = await widget.oauth.getIdToken();
-                        final email = _extractEmailFromIdToken(idToken);
+                        // Use FirebaseAuth Microsoft provider instead of direct AAD
+                        final provider = fb_auth.OAuthProvider('microsoft.com');
+
+                        fb_auth.UserCredential credential;
+                        if (kIsWeb) {
+                          credential = await fb_auth.FirebaseAuth.instance
+                              .signInWithPopup(provider);
+                        } else {
+                          credential = await fb_auth.FirebaseAuth.instance
+                              .signInWithProvider(provider);
+                        }
+
+                        final email = credential.user?.email;
                         if (email == null ||
                             !email.toLowerCase().endsWith('@khonology.com')) {
-                          await widget.oauth.logout();
-                          if (!mounted) return;
+                          await fb_auth.FirebaseAuth.instance.signOut();
                           if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -113,12 +99,25 @@ class AuthScreenState extends State<AuthScreen> {
                           );
                           return;
                         }
+
                         if (!mounted) return;
-                        await context.read<AuthProvider>().login(
+                        final success = await context.read<AuthProvider>().login(
                           email,
                           role: null,
-                        ); // Role is not selected on this screen yet
+                        );
                         if (!mounted) return;
+
+                        if (!success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Login failed. Please try again later.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+
                         // After successful Microsoft login, go directly to MainScreen with Module Screen
                         Navigator.of(context).pushAndRemoveUntil(
                           MaterialPageRoute(
@@ -157,8 +156,7 @@ class AuthScreenState extends State<AuthScreen> {
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (context) =>
-                              OnboardingScreen(oauth: widget.oauth),
+                          builder: (context) => const OnboardingScreen(),
                         ),
                       );
                     },

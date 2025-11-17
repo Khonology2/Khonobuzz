@@ -1,7 +1,6 @@
 // ignore_for_file: use_build_context_synchronously, dead_code
 
 import 'package:flutter/material.dart';
-import 'package:flutter_aad_oauth/flutter_aad_oauth.dart'; // Import for AAD OAuth
 import 'package:provider/provider.dart'; // Import for AuthProvider
 import '../providers/auth_provider.dart'; // Import AuthProvider
 import 'lobby_screen.dart'; // Import LobbyScreen
@@ -9,11 +8,9 @@ import 'dart:async'; // Import Timer
 import '../widgets/animations/loading_button.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  final FlutterAadOauth oauth; // Receive the oauth object
   const OnboardingScreen({
     super.key,
-    required this.oauth,
-  }); // Update constructor
+  });
 
   @override
   OnboardingScreenState createState() => OnboardingScreenState();
@@ -383,8 +380,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                         if (!mounted) return;
                         Navigator.of(context).pushAndRemoveUntil(
                           MaterialPageRoute(
-                            builder: (context) =>
-                                LobbyScreen(oauth: widget.oauth),
+                            builder: (context) => const LobbyScreen(),
                           ),
                           (route) => false,
                         );
