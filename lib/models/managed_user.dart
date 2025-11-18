@@ -10,6 +10,7 @@ class ManagedUser {
   String? entity;
   String? moduleAccess; // PDH or SOW Builder
   String? moduleRole; // Employee or Manager (depends on moduleAccess)
+  String? moduleAccessRole; // Combined field like "PDH - Employee, Skills Heatmap - Manager"
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -27,6 +28,7 @@ class ManagedUser {
     this.entity,
     this.moduleAccess,
     this.moduleRole,
+    this.moduleAccessRole,
     this.createdAt,
     this.updatedAt,
   });
@@ -98,6 +100,11 @@ class ManagedUser {
       entity: entityValue,
       moduleAccess: moduleAccessValue,
       moduleRole: moduleRoleValue,
+      moduleAccessRole: (onboardingData['moduleAccessRole'] as String?)?.isNotEmpty == true
+          ? onboardingData['moduleAccessRole'] as String
+          : (userData['moduleAccessRole'] as String?)?.isNotEmpty == true
+              ? userData['moduleAccessRole'] as String
+              : null,
     );
   }
 
@@ -122,6 +129,9 @@ class ManagedUser {
           : null,
       moduleRole: (data['moduleRole'] as String?)?.isNotEmpty == true
           ? data['moduleRole'] as String
+          : null,
+      moduleAccessRole: (data['moduleAccessRole'] as String?)?.isNotEmpty == true
+          ? data['moduleAccessRole'] as String
           : null,
       createdAt: createdAtRaw is String && createdAtRaw.isNotEmpty
           ? DateTime.tryParse(createdAtRaw)

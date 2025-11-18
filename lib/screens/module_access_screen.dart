@@ -22,6 +22,7 @@ class ModuleAccessScreen extends StatefulWidget {
 class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   final TextEditingController _searchController = TextEditingController();
   final List<String> _moduleRoleOptionsPDH = ['Employee', 'Manager'];
+  final List<String> _moduleRoleOptionsRecruitment = ['Admin', 'Hiring Manager', 'Candidate'];
   static const double _designationColumnWidth = 240.0;
   static const double _badgeAreaWidth = 220.0;
   static const String _notAssignedValue = 'Not Assigned';
@@ -30,6 +31,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   String? _updatingUserId; // Track which user is being updated
   Timer? _debounceTimer;
   String _searchQuery = '';
+  // Track selected recruitment role per user to persist selection
+  final Map<String, String?> _selectedRecruitmentRoles = {};
 
   Map<String, Color> get userStatusColors => {
     'Active': Colors.green.shade600,
@@ -89,6 +92,34 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     });
   }
 
+  void _refreshRecruitmentRoleCache(ManagedUser user) {
+    // Extract and cache recruitment role from user's moduleAccessRole
+    if (user.moduleAccessRole != null && user.moduleAccessRole!.isNotEmpty) {
+      final parts = user.moduleAccessRole!.split(', ');
+      for (var part in parts) {
+        final trimmedPart = part.trim();
+        if (trimmedPart.startsWith('Automated Recruitment Workflow - ')) {
+          final extractedRole = trimmedPart.replaceFirst('Automated Recruitment Workflow - ', '').trim();
+          // Match with exact option value (case-insensitive)
+          final roleLower = extractedRole.toLowerCase();
+          for (var option in _moduleRoleOptionsRecruitment) {
+            if (option.toLowerCase() == roleLower) {
+              _selectedRecruitmentRoles[user.id] = option;
+              return;
+            }
+          }
+          // If no exact match, use the extracted role as-is
+          if (extractedRole.isNotEmpty) {
+            _selectedRecruitmentRoles[user.id] = extractedRole;
+          }
+          return;
+        }
+      }
+    }
+    // If no recruitment role found, set to Not Assigned
+    _selectedRecruitmentRoles[user.id] = _notAssignedValue;
+  }
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
@@ -100,10 +131,12 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     ManagedUser user,
     bool pdhSelected,
     bool skillsHeatmapSelected,
+    bool recruitmentSelected,
   ) {
     List<String> accessList = [];
     if (pdhSelected) accessList.add('PDH');
     if (skillsHeatmapSelected) accessList.add('Skills Heatmap');
+    if (recruitmentSelected) accessList.add('Automated Recruitment Workflow');
 
     user.moduleAccess = accessList.isEmpty ? null : accessList.join(',');
   }
@@ -112,7 +145,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     ManagedUser user,
     bool pdhSelected,
     bool skillsHeatmapSelected,
+    bool recruitmentSelected,
     String? newModuleRole,
+    String? newRecruitmentRole,
   ) async {
     final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
     setState(() {
@@ -122,15 +157,19 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     List<String> accessList = [];
     if (pdhSelected) accessList.add('PDH');
     if (skillsHeatmapSelected) accessList.add('Skills Heatmap');
+    if (recruitmentSelected) accessList.add('Automated Recruitment Workflow');
 
     final sanitizedModuleAccess = accessList.isEmpty
         ? ''
         : accessList.join(',');
 
     // Determine moduleRole based on moduleAccess
+    // For PDH, use the selected role (Employee or Manager)
+    // For Recruitment, we'll store the role in a separate field or combine it
     String sanitizedModuleRole = '';
+    String sanitizedRecruitmentRole = '';
+    
     if (pdhSelected) {
-      // For PDH, use the selected role (Employee or Manager)
       sanitizedModuleRole =
           (newModuleRole != null &&
               newModuleRole.trim().isNotEmpty &&
@@ -138,8 +177,19 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           ? newModuleRole.trim()
           : '';
     }
+    
+    if (recruitmentSelected) {
+      sanitizedRecruitmentRole =
+          (newRecruitmentRole != null &&
+              newRecruitmentRole.trim().isNotEmpty &&
+              newRecruitmentRole != _notAssignedValue)
+          ? newRecruitmentRole.trim()
+          : '';
+    }
+    
     // Note: Skills Heatmap always has Manager role, but we don't store it separately
     // The moduleRole field is specifically for PDH
+    // For Recruitment, we'll include it in the combined field
 
     // Create combined moduleAccessRole field
     List<String> combinedParts = [];
@@ -150,6 +200,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     }
     if (skillsHeatmapSelected) {
       combinedParts.add('Skills Heatmap - Manager');
+    }
+    if (recruitmentSelected && sanitizedRecruitmentRole.isNotEmpty) {
+      combinedParts.add('Automated Recruitment Workflow - $sanitizedRecruitmentRole');
+    } else if (recruitmentSelected) {
+      combinedParts.add('Automated Recruitment Workflow');
     }
 
     String combinedModuleAccess = combinedParts.isEmpty
@@ -201,6 +256,30 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       setState(() {
         user.moduleAccess = updatedModuleAccess;
         user.moduleRole = updatedModuleRole;
+        user.moduleAccessRole = updatedModuleAccessRole;
+        
+        // Update cached recruitment role if moduleAccessRole was updated
+        if (updatedModuleAccessRole != null && updatedModuleAccessRole.isNotEmpty) {
+          final parts = updatedModuleAccessRole.split(', ');
+          for (var part in parts) {
+            final trimmedPart = part.trim();
+            if (trimmedPart.startsWith('Automated Recruitment Workflow - ')) {
+              final extractedRole = trimmedPart.replaceFirst('Automated Recruitment Workflow - ', '').trim();
+              // Match with exact option value
+              final roleLower = extractedRole.toLowerCase();
+              for (var option in _moduleRoleOptionsRecruitment) {
+                if (option.toLowerCase() == roleLower) {
+                  _selectedRecruitmentRoles[user.id] = option;
+                  break;
+                }
+              }
+              break;
+            }
+          }
+        } else if (!recruitmentSelected) {
+          // Clear cached role if recruitment is not selected
+          _selectedRecruitmentRoles[user.id] = _notAssignedValue;
+        }
       });
 
       // Update user in provider cache
@@ -443,7 +522,13 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     return InkWell(
       onTap: () {
         setState(() {
-          expandedUserId = isExpanded ? null : user.id;
+          if (!isExpanded) {
+            // When expanding, refresh the cached recruitment role from user data
+            expandedUserId = user.id;
+            _refreshRecruitmentRoleCache(user);
+          } else {
+            expandedUserId = null;
+          }
         });
       },
       child: Container(
@@ -617,6 +702,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               fontFamily: 'Poppins',
               color: Colors.white,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
           ),
         ),
       );
@@ -639,12 +727,48 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     bool skillsHeatmapSelected = selectedModuleAccessList.contains(
       'Skills Heatmap',
     );
+    bool recruitmentSelected = selectedModuleAccessList.contains(
+      'Automated Recruitment Workflow',
+    );
 
     // Use "Not Assigned" as default if moduleRole is null or empty
     String? selectedModuleRole =
         (user.moduleRole == null || user.moduleRole!.isEmpty)
         ? _notAssignedValue
         : user.moduleRole;
+    
+    // Extract recruitment role from moduleAccessRole if it exists
+    // First check if we have a cached selection for this user
+    String? selectedRecruitmentRole = _selectedRecruitmentRoles[user.id];
+    
+    // If no cached selection, extract from user's moduleAccessRole
+    if (selectedRecruitmentRole == null) {
+      selectedRecruitmentRole = _notAssignedValue;
+      if (user.moduleAccessRole != null && user.moduleAccessRole!.isNotEmpty) {
+        final parts = user.moduleAccessRole!.split(', ');
+        for (var part in parts) {
+          final trimmedPart = part.trim();
+          if (trimmedPart.startsWith('Automated Recruitment Workflow - ')) {
+            final extractedRole = trimmedPart.replaceFirst('Automated Recruitment Workflow - ', '').trim();
+            // Check if the extracted role matches one of our options (case-insensitive)
+            final roleLower = extractedRole.toLowerCase();
+            for (var option in _moduleRoleOptionsRecruitment) {
+              if (option.toLowerCase() == roleLower) {
+                selectedRecruitmentRole = option; // Use the exact option value
+                break;
+              }
+            }
+            // If no match found but we have a role, use it as-is
+            if (selectedRecruitmentRole == _notAssignedValue && extractedRole.isNotEmpty) {
+              selectedRecruitmentRole = extractedRole;
+            }
+            break;
+          }
+        }
+      }
+      // Cache the extracted value
+      _selectedRecruitmentRoles[user.id] = selectedRecruitmentRole;
+    }
 
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -690,12 +814,13 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           user,
                           pdhSelected,
                           skillsHeatmapSelected,
+                          recruitmentSelected,
                         );
                         // If PDH is unchecked and no role selected, clear module role
                         if (!pdhSelected &&
                             selectedModuleRole != _notAssignedValue) {
-                          // Only clear if Skills Heatmap is also not selected
-                          if (!skillsHeatmapSelected) {
+                          // Only clear if Skills Heatmap and Recruitment are also not selected
+                          if (!skillsHeatmapSelected && !recruitmentSelected) {
                             selectedModuleRole = _notAssignedValue;
                             user.moduleRole = null;
                           }
@@ -810,6 +935,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           user,
                           pdhSelected,
                           skillsHeatmapSelected,
+                          recruitmentSelected,
                         );
                       });
                     },
@@ -883,6 +1009,116 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 16.0), // Spacing between rows
+          // Automated Recruitment Workflow Row: Checkbox + Module Role Dropdown
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Automated Recruitment Workflow Checkbox
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 8.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2C3E50),
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: CheckboxListTile(
+                    title: const Text(
+                      'Automated Recruitment Workflow',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    value: recruitmentSelected,
+                    activeColor: const Color(0xFFC10D00),
+                    checkColor: Colors.white,
+                    onChanged: (bool? value) {
+                      setState(() {
+                        recruitmentSelected = value ?? false;
+                        _updateModuleAccessList(
+                          user,
+                          pdhSelected,
+                          skillsHeatmapSelected,
+                          recruitmentSelected,
+                        );
+                      });
+                    },
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(
+                width: 16.0,
+              ), // Spacing between checkbox and dropdown
+              // Module Role Dropdown for Automated Recruitment Workflow
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 8.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: recruitmentSelected
+                        ? const Color(0xFF2C3E50)
+                        : const Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      value: recruitmentSelected
+                          ? (_selectedRecruitmentRoles[user.id] ?? selectedRecruitmentRole)
+                          : _notAssignedValue,
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF2C3E50),
+                      icon: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.white70,
+                      ),
+                      hint: const Text(
+                        'Module Role',
+                        style: TextStyle(
+                          color: Colors.white60,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                      style: TextStyle(
+                        color: recruitmentSelected ? Colors.white : Colors.white54,
+                        fontFamily: 'Poppins',
+                      ),
+                      onChanged: recruitmentSelected
+                          ? (value) {
+                              setState(() {
+                                if (value == _notAssignedValue) {
+                                  _selectedRecruitmentRoles[user.id] = _notAssignedValue;
+                                } else {
+                                  _selectedRecruitmentRoles[user.id] = value;
+                                }
+                              });
+                            }
+                          : null,
+                      items: <DropdownMenuItem<String?>>[
+                        DropdownMenuItem<String?>(
+                          value: _notAssignedValue,
+                          child: Text(_notAssignedValue),
+                        ),
+                        ..._moduleRoleOptionsRecruitment.map(
+                          (option) => DropdownMenuItem<String?>(
+                            value: option,
+                            child: Text(option),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 16.0), // Spacing before the update button
           // Update Button
           Align(
@@ -894,7 +1130,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       user,
                       pdhSelected,
                       skillsHeatmapSelected,
+                      recruitmentSelected,
                       selectedModuleRole,
+                      _selectedRecruitmentRoles[user.id] ?? _notAssignedValue,
                     ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFC10D00),

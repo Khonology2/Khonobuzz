@@ -1,18 +1,31 @@
-class ApiConfig {
-  // For local development:
-  // - Use 'http://localhost:5000' for iOS simulator or web
-  // - Use 'http://10.0.2.2:5000' for Android emulator
-  // - Use 'http://127.0.0.1:5000' for desktop
-  static const String baseUrl = 'http://localhost:5000';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
-  // For production, use:
-  // static const String baseUrl = 'https://khonobuzz-backend.onrender.com';
+class ApiConfig {
+  // Automatically detect environment and use appropriate backend URL
+  // For production web (deployed on Netlify): use Render backend
+  // For local development: use localhost
+  static String get baseUrl {
+    if (kIsWeb) {
+      // Check if running on production domain (Netlify)
+      final uri = Uri.base;
+      if (uri.host.contains('netlify.app') ||
+          uri.host.contains('khonobuzz-web')) {
+        return 'https://khonobuzz-backend-i24f.onrender.com';
+      }
+      // For local web development
+      return 'http://localhost:5000';
+    }
+    // For mobile/desktop platforms
+    // Android emulator uses 10.0.2.2, iOS simulator uses localhost
+    return 'http://localhost:5000';
+  }
 
   // API endpoints
   static String get usersEndpoint => '$baseUrl/api/users';
   static String get authRegisterEndpoint => '$baseUrl/api/auth/register';
   static String get authLoginEndpoint => '$baseUrl/api/auth/login';
-  static String authTokenEndpoint(String email) => '$baseUrl/api/auth/token?email=${Uri.encodeComponent(email)}';
+  static String authTokenEndpoint(String email) =>
+      '$baseUrl/api/auth/token?email=${Uri.encodeComponent(email)}';
   static String get pdhSyncUserEndpoint => '$baseUrl/api/pdh/sync-user';
   static String pdhUpdateUserEndpoint(String uid) =>
       '$baseUrl/api/pdh/update-user/$uid';

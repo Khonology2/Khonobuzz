@@ -40,9 +40,17 @@ This document lists all sensitive information and configuration values that shou
 
 ### CORS Settings
 - **CORS_ORIGINS** - Comma-separated list of allowed origins for CORS
-  - Example: `https://yourdomain.com,https://app.yourdomain.com`
-  - For development: `*` (already hardcoded, but should be restricted in production)
+  - Example: `https://khonobuzz-web.netlify.app,https://yourdomain.com`
+  - For development: `*` (default, allows all origins)
+  - **IMPORTANT**: The production frontend URL (`https://khonobuzz-web.netlify.app`) is automatically added to allowed origins
 - **CORS_ALLOW_CREDENTIALS** - Whether to allow credentials in CORS (True/False)
+  - Defaults to `True` in production, `False` in development
+
+### Render Deployment Notes
+When deploying to Render, the backend automatically detects production environment and:
+- Uses specific CORS origins (including Netlify frontend) instead of wildcard
+- Enables credentials for secure cookie/auth token handling
+- The frontend URL `https://khonobuzz-web.netlify.app` is automatically included
 
 ## 📝 Complete .env Template
 

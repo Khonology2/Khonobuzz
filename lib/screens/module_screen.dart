@@ -34,11 +34,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Determine the max width for the card content to match the HTML's max-w-xl
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final double availableWidth = screenWidth - 32.0; // Account for padding
-    final double cardWidth =
-        (availableWidth / 2) - 10.0; // Split in half with spacing
 
     return Scaffold(
       body: Container(
@@ -63,13 +58,17 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     final hasSkillsHeatmapAccess = authProvider.hasModuleAccess(
                       'Skills Heatmap',
                     );
+                    final hasRecruitmentAccess = authProvider.hasModuleAccess(
+                      'Automated Recruitment Workflow',
+                    ) || authProvider.hasModuleAccess('Recruitment');
 
                     // Admin users see all cards, Staff users see only cards they have access to
                     final showPDH = isAdmin || hasPDHAccess;
                     final showSkillsHeatmap = isAdmin || hasSkillsHeatmapAccess;
+                    final showRecruitment = isAdmin || hasRecruitmentAccess;
 
                     // If no cards to show, show a message
-                    if (!showPDH && !showSkillsHeatmap) {
+                    if (!showPDH && !showSkillsHeatmap && !showRecruitment) {
                       return const Center(
                         child: Text(
                           'No module access assigned. Please contact your administrator.',
@@ -86,15 +85,27 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     final bool isMobile = constraints.maxWidth < 768;
                     final List<Widget> cards = [];
 
+                    // Count how many cards will be shown
+                    int cardCount = 0;
+                    if (showPDH) cardCount++;
+                    if (showSkillsHeatmap) cardCount++;
+                    if (showRecruitment) cardCount++;
+                    
+                    // Calculate available width and card width based on number of cards
+                    final double availableWidth = constraints.maxWidth - 32.0; // Account for padding
+                    final double calculatedCardWidth = isMobile
+                        ? (constraints.maxWidth > 500
+                              ? 500
+                              : constraints.maxWidth * 0.9)
+                        : cardCount > 0
+                            ? (availableWidth - (20.0 * (cardCount - 1))) / cardCount
+                            : 300.0; // Default fallback width
+
                     if (showPDH) {
                       cards.add(
                         _buildModuleCard(
                           context: context,
-                          cardWidth: isMobile
-                              ? (constraints.maxWidth > 500
-                                    ? 500
-                                    : constraints.maxWidth * 0.9)
-                              : cardWidth,
+                          cardWidth: calculatedCardWidth,
                           title: 'Personal Development Hub',
                           buttonText: 'Launch',
                           url: 'https://pdhproject.netlify.app/',
@@ -112,14 +123,28 @@ class _ModuleScreenState extends State<ModuleScreen> {
                       cards.add(
                         _buildModuleCard(
                           context: context,
-                          cardWidth: isMobile
-                              ? (constraints.maxWidth > 500
-                                    ? 500
-                                    : constraints.maxWidth * 0.9)
-                              : cardWidth,
+                          cardWidth: calculatedCardWidth,
                           title: 'Resource Capacity & Skills Heatmap',
                           buttonText: 'Launch',
                           url: 'https://resource-capacity.netlify.app/',
+                        ),
+                      );
+                    }
+
+                    if (showRecruitment) {
+                      if (cards.isNotEmpty && isMobile) {
+                        cards.add(const SizedBox(height: 20.0));
+                      } else if (cards.isNotEmpty && !isMobile) {
+                        cards.add(const SizedBox(width: 20.0));
+                      }
+
+                      cards.add(
+                        _buildModuleCard(
+                          context: context,
+                          cardWidth: calculatedCardWidth,
+                          title: 'Automated Recruitment Workflow',
+                          buttonText: 'Launch',
+                          url: 'https://chimerical-quokka-d580e5.netlify.app/',
                         ),
                       );
                     }
@@ -186,16 +211,19 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 32.0,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
+                  Flexible(
+                    child: Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: cardWidth > 300 ? 26.0 : cardWidth > 200 ? 22.0 : 18.0,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        height: 1.3,
+                      ),
+                      maxLines: 5,
+                      overflow: TextOverflow.visible,
                     ),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   if (subtitle != null && subtitle.isNotEmpty) ...[
                     const SizedBox(height: 12.0),
@@ -250,19 +278,26 @@ class _ModuleScreenState extends State<ModuleScreen> {
         secureUrl = 'https://$secureUrl';
       }
 
-      // Get user token from AuthProvider
-      final authProvider = context.read<AuthProvider>();
-      String? token = authProvider.userToken;
+      // Check if this is a PDH URL (only PDH should get the token)
+      final bool isPDHUrl = secureUrl.contains('pdhproject.netlify.app') ||
+          secureUrl.contains('pdh');
 
-      // If token is not available, try to fetch it
-      if (token == null && authProvider.userEmail != null) {
-        await authProvider.fetchUserToken();
+      // Get user token from AuthProvider only if it's a PDH URL
+      String? token;
+      if (isPDHUrl) {
+        final authProvider = context.read<AuthProvider>();
         token = authProvider.userToken;
+
+        // If token is not available, try to fetch it
+        if (token == null && authProvider.userEmail != null) {
+          await authProvider.fetchUserToken();
+          token = authProvider.userToken;
+        }
       }
 
-      // Append token as query parameter if available
+      // Append token as query parameter only for PDH URLs
       Uri uri = Uri.parse(secureUrl);
-      if (token != null && token.isNotEmpty) {
+      if (isPDHUrl && token != null && token.isNotEmpty) {
         uri = uri.replace(queryParameters: {
           ...uri.queryParameters,
           'token': token,
