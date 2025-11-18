@@ -12,6 +12,7 @@ class ApiConfig {
   static String get usersEndpoint => '$baseUrl/api/users';
   static String get authRegisterEndpoint => '$baseUrl/api/auth/register';
   static String get authLoginEndpoint => '$baseUrl/api/auth/login';
+  static String authTokenEndpoint(String email) => '$baseUrl/api/auth/token?email=${Uri.encodeComponent(email)}';
   static String get pdhSyncUserEndpoint => '$baseUrl/api/pdh/sync-user';
   static String pdhUpdateUserEndpoint(String uid) =>
       '$baseUrl/api/pdh/update-user/$uid';

@@ -19,10 +19,15 @@ class _ModuleScreenState extends State<ModuleScreen> {
   @override
   void initState() {
     super.initState();
-    // Fetch user module access when screen loads
+    // Fetch user module access and token when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        context.read<AuthProvider>().fetchCurrentUserModuleAccess();
+        final authProvider = context.read<AuthProvider>();
+        authProvider.fetchCurrentUserModuleAccess();
+        // Fetch token if not already loaded
+        if (authProvider.userToken == null) {
+          authProvider.fetchUserToken();
+        }
       }
     });
   }
@@ -236,8 +241,34 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Future<void> _launchUrl(String url) async {
-    final Uri uri = Uri.parse(url);
     try {
+      // Ensure URL uses HTTPS for secure transmission
+      String secureUrl = url;
+      if (secureUrl.startsWith('http://')) {
+        secureUrl = secureUrl.replaceFirst('http://', 'https://');
+      } else if (!secureUrl.startsWith('https://')) {
+        secureUrl = 'https://$secureUrl';
+      }
+
+      // Get user token from AuthProvider
+      final authProvider = context.read<AuthProvider>();
+      String? token = authProvider.userToken;
+
+      // If token is not available, try to fetch it
+      if (token == null && authProvider.userEmail != null) {
+        await authProvider.fetchUserToken();
+        token = authProvider.userToken;
+      }
+
+      // Append token as query parameter if available
+      Uri uri = Uri.parse(secureUrl);
+      if (token != null && token.isNotEmpty) {
+        uri = uri.replace(queryParameters: {
+          ...uri.queryParameters,
+          'token': token,
+        });
+      }
+
       final bool launched = await launchUrl(
         uri,
         mode: LaunchMode.platformDefault,
@@ -245,15 +276,25 @@ class _ModuleScreenState extends State<ModuleScreen> {
       );
       if (!mounted) return;
       if (!launched) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Could not open link')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not open link',
+              style: TextStyle(fontFamily: 'Poppins'),
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Could not open link')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error opening link: ${e.toString()}',
+            style: const TextStyle(fontFamily: 'Poppins'),
+          ),
+        ),
+      );
     }
   }
 }

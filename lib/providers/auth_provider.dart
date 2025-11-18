@@ -16,6 +16,7 @@ class AuthProvider extends ChangeNotifier {
   int?
   _currentScreenIndex; // Track current screen index for refresh persistence
   String? _userModuleAccess; // Store current user's module access
+  String? _userToken; // Store current user's encrypted token
 
   bool get isAuthenticated => _isAuthenticated;
   String? get userEmail => _userEmail;
@@ -27,6 +28,7 @@ class AuthProvider extends ChangeNotifier {
   int? get currentScreenIndex =>
       _currentScreenIndex; // Getter for current screen index
   String? get userModuleAccess => _userModuleAccess; // Getter for module access
+  String? get userToken => _userToken; // Getter for user token
 
   AuthProvider() {
     _loadAuthState();
@@ -43,6 +45,7 @@ class AuthProvider extends ChangeNotifier {
     _currentScreenIndex = prefs.getInt(
       'currentScreenIndex',
     ); // Load current screen index for refresh persistence
+    _userToken = prefs.getString('userToken'); // Load user token
     notifyListeners();
   }
 
@@ -82,6 +85,11 @@ class AuthProvider extends ChangeNotifier {
 
         final userPayload = responseData['user'] as Map<String, dynamic>? ?? {};
         final String uid = userPayload['id'] ?? '';
+        // Get token from response if available
+        final String? tokenFromResponse = responseData.containsKey('token')
+            ? responseData['token'] as String?
+            : null;
+
         if (uid.isNotEmpty) {
           final Map<String, dynamic> userData = {
             'email': email,
@@ -114,6 +122,15 @@ class AuthProvider extends ChangeNotifier {
             'updated_at': DateTime.now().toUtc().toIso8601String(),
             'entity': '',
           };
+
+          // Include token in onboarding data if available from response
+          if (tokenFromResponse != null) {
+            onboardingData['token'] = tokenFromResponse;
+            onboardingData['token_updated_at'] = DateTime.now()
+                .toUtc()
+                .toIso8601String();
+          }
+
           try {
             await syncUserToPDH(userData, onboardingData, uid);
           } catch (e) {
@@ -138,6 +155,11 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = true;
         _userEmail = email;
         _userRole = userPayload['role'] ?? role ?? 'Staff';
+        // Store token if present in response
+        if (tokenFromResponse != null) {
+          _userToken = tokenFromResponse;
+          await prefs.setString('userToken', _userToken!);
+        }
         // Both Staff and Admin users navigate to Modules screen (index 9) on login
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
@@ -157,6 +179,10 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         // Fetch module access after login
         fetchCurrentUserModuleAccess();
+        // Fetch token if not present
+        if (_userToken == null) {
+          await fetchUserToken();
+        }
         return true; // Indicate success
       } else if (response.statusCode == 409) {
         // User already exists; attempt fallback login to fetch real role
@@ -205,6 +231,11 @@ class AuthProvider extends ChangeNotifier {
         final userPayload = responseData['user'] as Map<String, dynamic>? ?? {};
         _userEmail = userPayload['email'];
         _userRole = userPayload['role'] ?? 'Staff';
+        // Store token if present in response
+        if (responseData.containsKey('token')) {
+          _userToken = responseData['token'] as String?;
+          await prefs.setString('userToken', _userToken!);
+        }
         // Both Staff and Admin users navigate to Modules screen (index 9) on login
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
@@ -222,6 +253,10 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         // Fetch module access after login
         fetchCurrentUserModuleAccess();
+        // Fetch token if not present
+        if (_userToken == null) {
+          await fetchUserToken();
+        }
         return true;
       } else if (response.statusCode == 404 ||
           response.statusCode == 401 ||
@@ -310,6 +345,8 @@ class AuthProvider extends ChangeNotifier {
           notifyListeners();
           // Fetch module access after fallback login
           fetchCurrentUserModuleAccess();
+          // Fetch token after fallback login
+          await fetchUserToken();
           return true;
         }
       }
@@ -327,11 +364,13 @@ class AuthProvider extends ChangeNotifier {
     _initialScreenIndex = null; // Clear initial screen index
     _currentScreenIndex = null; // Clear current screen index
     _userModuleAccess = null; // Clear module access
+    _userToken = null; // Clear user token
     await prefs.remove('isAuthenticated');
     await prefs.remove('userEmail');
     await prefs.remove('userRole'); // New: Remove user role
     await prefs.remove('initialScreenIndex'); // Remove initial screen index
     await prefs.remove('currentScreenIndex'); // Remove current screen index
+    await prefs.remove('userToken'); // Remove user token
     notifyListeners();
   }
 
@@ -405,5 +444,46 @@ class AuthProvider extends ChangeNotifier {
         .where((e) => e.isNotEmpty)
         .toList();
     return accessList.contains(moduleName);
+  }
+
+  // Fetch user token from backend
+  Future<void> fetchUserToken() async {
+    if (_userEmail == null) {
+      _userToken = null;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final response = await http
+          .get(Uri.parse(ApiConfig.authTokenEndpoint(_userEmail!)))
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw Exception('Request timeout. Please check your connection.');
+            },
+          );
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        _userToken = responseData['token'] as String?;
+
+        // Store token in SharedPreferences
+        if (_userToken != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('userToken', _userToken!);
+        }
+
+        notifyListeners();
+      } else {
+        debugPrint('Error fetching user token: ${response.statusCode}');
+        _userToken = null;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error fetching user token: $e');
+      _userToken = null;
+      notifyListeners();
+    }
   }
 }

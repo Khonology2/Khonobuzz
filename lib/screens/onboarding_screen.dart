@@ -168,180 +168,305 @@ class OnboardingScreenState extends State<OnboardingScreen>
                   const SizedBox(height: 48),
                   // Text fields
                   Center(
-                    child: SizedBox(
-                      width:
-                          590, // Reduced to fit within available space (287 + 16 + 287 = 590)
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 287, // Reduced to fit within constraints
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        // Calculate responsive width (max 590, but respect available space)
+                        final maxWidth = constraints.maxWidth > 0
+                            ? constraints.maxWidth.clamp(0.0, 590.0)
+                            : 590.0;
+                        final isNarrow = maxWidth < 590;
+                        
+                        // For narrow screens, stack vertically; otherwise side by side
+                        if (isNarrow || constraints.maxWidth < 600) {
+                          return SizedBox(
+                            width: maxWidth,
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildTextField(
-                                  label: 'First Name',
-                                  controller: _firstNameController,
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      _buildTextField(
+                                        label: 'First Name',
+                                        controller: _firstNameController,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      _buildTextField(
+                                        label: 'Email Address',
+                                        hintText: 'example@khonology.com',
+                                        controller: _emailController,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                                 const SizedBox(height: 16),
-                                _buildTextField(
-                                  label: 'Email Address',
-                                  hintText: 'example@khonology.com',
-                                  controller: _emailController,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          SizedBox(
-                            width: 287, // Reduced to fit within constraints
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildTextField(
-                                  label: 'Surname',
-                                  controller: _lastNameController,
-                                ),
-                                const SizedBox(height: 16),
-                                // Department dropdown
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    const Text(
-                                      'Department',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontFamily: 'Poppins',
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      _buildTextField(
+                                        label: 'Surname',
+                                        controller: _lastNameController,
                                       ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    DropdownButtonFormField<String>(
-                                      initialValue: _selectedDepartment,
-                                      dropdownColor: Colors.grey[800],
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontFamily: 'Poppins',
-                                      ),
-                                      decoration: InputDecoration(
-                                        filled: true,
-                                        fillColor: Colors.grey[800]!.withValues(
-                                          alpha: 0.5,
-                                        ),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            25.0,
-                                          ),
-                                          borderSide: BorderSide.none,
-                                        ),
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                              horizontal: 16.0,
-                                              vertical: 12.0,
+                                      const SizedBox(height: 16),
+                                      // Department dropdown
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          const Text(
+                                            'Department',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              fontFamily: 'Poppins',
                                             ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          DropdownButtonFormField<String>(
+                                            initialValue: _selectedDepartment,
+                                            dropdownColor: Colors.grey[800],
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontFamily: 'Poppins',
+                                            ),
+                                            decoration: InputDecoration(
+                                              filled: true,
+                                              fillColor: Colors.grey[800]!.withValues(
+                                                alpha: 0.5,
+                                              ),
+                                              border: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(
+                                                  25.0,
+                                                ),
+                                                borderSide: BorderSide.none,
+                                              ),
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 16.0,
+                                                    vertical: 12.0,
+                                                  ),
+                                            ),
+                                            hint: Text(
+                                              'Select Department',
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontFamily: 'Poppins',
+                                              ),
+                                            ),
+                                            items: _departments.map((
+                                              String department,
+                                            ) {
+                                              return DropdownMenuItem<String>(
+                                                value: department,
+                                                child: Text(department),
+                                              );
+                                            }).toList(),
+                                            onChanged: (String? newValue) {
+                                              setState(() {
+                                                _selectedDepartment = newValue;
+                                              });
+                                            },
+                                            validator: (value) {
+                                              if (value == null || value.isEmpty) {
+                                                return 'Please select a department';
+                                              }
+                                              return null;
+                                            },
+                                          ),
+                                        ],
                                       ),
-                                      hint: Text(
-                                        'Select Department',
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontFamily: 'Poppins',
-                                        ),
-                                      ),
-                                      items: _departments.map((
-                                        String department,
-                                      ) {
-                                        return DropdownMenuItem<String>(
-                                          value: department,
-                                          child: Text(department),
-                                        );
-                                      }).toList(),
-                                      onChanged: (String? newValue) {
-                                        setState(() {
-                                          _selectedDepartment = newValue;
-                                        });
-                                      },
-                                      validator: (value) {
-                                        if (value == null || value.isEmpty) {
-                                          return 'Please select a department';
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                        ],
+                          );
+                        } else {
+                            // Wide screen: side by side layout
+                            return SizedBox(
+                              width: maxWidth,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        _buildTextField(
+                                          label: 'First Name',
+                                          controller: _firstNameController,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        _buildTextField(
+                                          label: 'Email Address',
+                                          hintText: 'example@khonology.com',
+                                          controller: _emailController,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        _buildTextField(
+                                          label: 'Surname',
+                                          controller: _lastNameController,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        // Department dropdown
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          children: [
+                                            const Text(
+                                              'Department',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontFamily: 'Poppins',
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            DropdownButtonFormField<String>(
+                                              initialValue: _selectedDepartment,
+                                              dropdownColor: Colors.grey[800],
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontFamily: 'Poppins',
+                                              ),
+                                              decoration: InputDecoration(
+                                                filled: true,
+                                                fillColor: Colors.grey[800]!.withValues(
+                                                  alpha: 0.5,
+                                                ),
+                                                border: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(
+                                                    25.0,
+                                                  ),
+                                                  borderSide: BorderSide.none,
+                                                ),
+                                                contentPadding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 16.0,
+                                                      vertical: 12.0,
+                                                    ),
+                                              ),
+                                              hint: Text(
+                                                'Select Department',
+                                                style: TextStyle(
+                                                  color: Colors.grey[600],
+                                                  fontFamily: 'Poppins',
+                                                ),
+                                              ),
+                                              items: _departments.map((
+                                                String department,
+                                              ) {
+                                                return DropdownMenuItem<String>(
+                                                  value: department,
+                                                  child: Text(department),
+                                                );
+                                              }).toList(),
+                                              onChanged: (String? newValue) {
+                                                setState(() {
+                                                  _selectedDepartment = newValue;
+                                                });
+                                              },
+                                              validator: (value) {
+                                                if (value == null || value.isEmpty) {
+                                                  return 'Please select a department';
+                                                }
+                                                return null;
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                        },
                       ),
                     ),
-                  ),
                   const SizedBox(height: 16),
                   // Replaced _buildTextField for Designation with DropdownButtonFormField
                   Center(
-                    child: SizedBox(
-                      width: 590, // Full width matching the two columns above
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const Text(
-                            'Designation',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontFamily: 'Poppins',
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            initialValue: _selectedDesignation,
-                            dropdownColor: Colors.grey[800],
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontFamily: 'Poppins',
-                            ),
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: Colors.grey[800]!.withValues(
-                                alpha: 0.5,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(25.0),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16.0,
-                                vertical: 12.0,
-                              ),
-                            ),
-                            hint: Text(
-                              'Select Designation',
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final maxWidth = constraints.maxWidth > 0
+                            ? constraints.maxWidth.clamp(0.0, 590.0)
+                            : 590.0;
+                        return SizedBox(
+                          width: maxWidth,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                            const Text(
+                              'Designation',
+                              textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: Colors.grey[600],
+                                color: Colors.white,
+                                fontSize: 16,
                                 fontFamily: 'Poppins',
                               ),
                             ),
-                            items: _designations.map((String designation) {
-                              return DropdownMenuItem<String>(
-                                value: designation,
-                                child: Text(designation),
-                              );
-                            }).toList(),
-                            onChanged: (String? newValue) {
-                              setState(() {
-                                _selectedDesignation = newValue;
-                              });
-                            },
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please select a designation';
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
-                      ),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<String>(
+                              initialValue: _selectedDesignation,
+                              dropdownColor: Colors.grey[800],
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Poppins',
+                              ),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: Colors.grey[800]!.withValues(
+                                  alpha: 0.5,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(25.0),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16.0,
+                                  vertical: 12.0,
+                                ),
+                              ),
+                              hint: Text(
+                                'Select Designation',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              items: _designations.map((String designation) {
+                                return DropdownMenuItem<String>(
+                                  value: designation,
+                                  child: Text(designation),
+                                );
+                              }).toList(),
+                              onChanged: (String? newValue) {
+                                setState(() {
+                                  _selectedDesignation = newValue;
+                                });
+                              },
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please select a designation';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                      },
                     ),
                   ),
                   const SizedBox(height: 32),

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from brotli_asgi import BrotliMiddleware  # pyright: ignore[reportMissingImports]  # pyright: ignore[reportMissingImports]
@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi import status # Import status for HTTP status codes
 from fastapi import HTTPException # Import HTTPException for authentication errors
 from typing import Optional
+from token_utils import generate_and_encrypt_token
 
 load_dotenv()
 
@@ -90,10 +91,19 @@ app = FastAPI(
 # Note: When allow_credentials=True, you cannot use allow_origins=["*"]
 # For development: use ["*"] with allow_credentials=False to allow all origins
 # For production: specify exact origins in a list with allow_credentials=True
+cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
+if cors_origins_env == '*':
+    cors_origins = ["*"]
+    cors_allow_credentials = False
+else:
+    # Split comma-separated origins
+    cors_origins = [origin.strip() for origin in cors_origins_env.split(',')]
+    cors_allow_credentials = os.environ.get('CORS_ALLOW_CREDENTIALS', 'False').lower() == 'true'
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
-    allow_credentials=False,  # Must be False when using "*" origin
+    allow_origins=cors_origins,
+    allow_credentials=cors_allow_credentials,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -117,6 +127,25 @@ async def pdh_sync_user(data: dict):
             if key in onboarding_data and isinstance(onboarding_data[key], str):
                 onboarding_data[key] = datetime.fromisoformat(onboarding_data[key].replace('Z', '+00:00'))
         
+        # Generate token if moduleAccessRole is present or if token is already in onboarding_data
+        module_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
+        user_email = user_data.get('email', '') or onboarding_data.get('email', '')
+        
+        # Use existing token from onboarding_data if present, otherwise generate new one
+        if 'token' not in onboarding_data or not onboarding_data.get('token'):
+            if module_role and user_email:
+                try:
+                    encrypted_token = generate_and_encrypt_token(
+                        user_id=uid,
+                        email=user_email,
+                        module_role=module_role,
+                    )
+                    onboarding_data['token'] = encrypted_token
+                    onboarding_data['token_updated_at'] = datetime.utcnow()
+                    print(f"[DEBUG] Token generated during PDH sync for user_id: {uid}")
+                except Exception as token_error:
+                    print(f"[ERROR] Failed to generate token during PDH sync: {token_error}")
+        
         pdh_db.collection('users').document(uid).set(user_data, merge=True)
         pdh_db.collection('onboarding').document(uid).set(onboarding_data, merge=True)
         
@@ -131,9 +160,41 @@ async def pdh_update_user(uid: str, data: dict):
         user_fields = data.get('userFields')
         onboarding_fields = data.get('onboardingFields')
 
+        # Check if moduleAccessRole is being updated - regenerate token if so
+        should_regenerate_token = False
+        new_module_role = ''
+        user_email = ''
+        
+        if onboarding_fields and 'moduleAccessRole' in onboarding_fields:
+            should_regenerate_token = True
+            new_module_role = onboarding_fields.get('moduleAccessRole', '')
+        elif user_fields and 'moduleAccessRole' in user_fields:
+            should_regenerate_token = True
+            new_module_role = user_fields.get('moduleAccessRole', '')
+        
         if user_fields:
             pdh_db.collection('users').document(uid).set(user_fields, merge=True)
+            user_email = user_fields.get('email', '')
+        
         if onboarding_fields:
+            # Get email if not already found
+            if not user_email:
+                user_email = onboarding_fields.get('email', '')
+            
+            # Regenerate token if moduleAccessRole changed
+            if should_regenerate_token and user_email:
+                try:
+                    encrypted_token = generate_and_encrypt_token(
+                        user_id=uid,
+                        email=user_email,
+                        module_role=new_module_role,
+                    )
+                    onboarding_fields['token'] = encrypted_token
+                    onboarding_fields['token_updated_at'] = datetime.utcnow()
+                    print(f"[DEBUG] Token regenerated during PDH update for user_id: {uid}")
+                except Exception as token_error:
+                    print(f"[ERROR] Failed to regenerate token during PDH update: {token_error}")
+            
             pdh_db.collection('onboarding').document(uid).set(onboarding_fields, merge=True)
             
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH update successful"})
@@ -157,6 +218,25 @@ async def skills_heatmap_sync_user(data: dict):
             if key in onboarding_data and isinstance(onboarding_data[key], str):
                 onboarding_data[key] = datetime.fromisoformat(onboarding_data[key].replace('Z', '+00:00'))
         
+        # Generate token if moduleAccessRole is present or if token is already in onboarding_data
+        module_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
+        user_email = user_data.get('email', '') or onboarding_data.get('email', '')
+        
+        # Use existing token from onboarding_data if present, otherwise generate new one
+        if 'token' not in onboarding_data or not onboarding_data.get('token'):
+            if module_role and user_email:
+                try:
+                    encrypted_token = generate_and_encrypt_token(
+                        user_id=uid,
+                        email=user_email,
+                        module_role=module_role,
+                    )
+                    onboarding_data['token'] = encrypted_token
+                    onboarding_data['token_updated_at'] = datetime.utcnow()
+                    print(f"[DEBUG] Token generated during Skills Heatmap sync for user_id: {uid}")
+                except Exception as token_error:
+                    print(f"[ERROR] Failed to generate token during Skills Heatmap sync: {token_error}")
+        
         skills_heatmap_db.collection('users').document(uid).set(user_data, merge=True)
         skills_heatmap_db.collection('onboarding').document(uid).set(onboarding_data, merge=True)
         
@@ -171,9 +251,41 @@ async def skills_heatmap_update_user(uid: str, data: dict):
         user_fields = data.get('userFields')
         onboarding_fields = data.get('onboardingFields')
 
+        # Check if moduleAccessRole is being updated - regenerate token if so
+        should_regenerate_token = False
+        new_module_role = ''
+        user_email = ''
+        
+        if onboarding_fields and 'moduleAccessRole' in onboarding_fields:
+            should_regenerate_token = True
+            new_module_role = onboarding_fields.get('moduleAccessRole', '')
+        elif user_fields and 'moduleAccessRole' in user_fields:
+            should_regenerate_token = True
+            new_module_role = user_fields.get('moduleAccessRole', '')
+        
         if user_fields:
             skills_heatmap_db.collection('users').document(uid).set(user_fields, merge=True)
+            user_email = user_fields.get('email', '')
+        
         if onboarding_fields:
+            # Get email if not already found
+            if not user_email:
+                user_email = onboarding_fields.get('email', '')
+            
+            # Regenerate token if moduleAccessRole changed
+            if should_regenerate_token and user_email:
+                try:
+                    encrypted_token = generate_and_encrypt_token(
+                        user_id=uid,
+                        email=user_email,
+                        module_role=new_module_role,
+                    )
+                    onboarding_fields['token'] = encrypted_token
+                    onboarding_fields['token_updated_at'] = datetime.utcnow()
+                    print(f"[DEBUG] Token regenerated during Skills Heatmap update for user_id: {uid}")
+                except Exception as token_error:
+                    print(f"[ERROR] Failed to regenerate token during Skills Heatmap update: {token_error}")
+            
             skills_heatmap_db.collection('onboarding').document(uid).set(onboarding_fields, merge=True)
             
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Skills Heatmap update successful"})
@@ -244,6 +356,22 @@ async def register_user(user: UserRegister):
         user_id = doc_ref[1].id
         print(f"[DEBUG] Firestore doc_ref for users (FastAPI): {doc_ref}, User ID: {user_id}")
 
+        # Get module role (will be empty for new users, but included for consistency)
+        module_role = ''
+        
+        # Generate and encrypt token
+        encrypted_token = None
+        try:
+            encrypted_token = generate_and_encrypt_token(
+                user_id=user_id,
+                email=email,
+                module_role=module_role,
+            )
+            print(f"[DEBUG] Token generated for new user: {user_id}")
+        except Exception as token_error:
+            print(f"[ERROR] Failed to generate token during registration: {token_error}")
+            # Continue with registration even if token generation fails
+
         onboarding_data = {
             'user_id': user_id,
             'email': email,
@@ -264,21 +392,33 @@ async def register_user(user: UserRegister):
             'moduleRole': '',  # Initialize moduleRole field
             'moduleAccessRole': '',  # Initialize moduleAccessRole combined field
         }
+        
+        # Add token to onboarding data if generated successfully
+        if encrypted_token:
+            onboarding_data['token'] = encrypted_token
+            onboarding_data['token_updated_at'] = datetime.utcnow()
+        
         print(f"[DEBUG] Onboarding data being sent to Firestore (onboarding collection - FastAPI): {onboarding_data}")
         
         db.collection('onboarding').add(onboarding_data) # Synchronous call
 
+        response_content = {
+            "message": "User created successfully",
+            "user": {
+                "id": user_id,
+                "email": email,
+                "name": full_name,
+                "role": role
+            }
+        }
+        
+        # Include token in response if generated
+        if encrypted_token:
+            response_content["token"] = encrypted_token
+
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
-            content={
-                "message": "User created successfully",
-                "user": {
-                    "id": user_id,
-                    "email": email,
-                    "name": full_name,
-                    "role": role
-                }
-            }
+            content=response_content
         )
 
     except Exception as e:
@@ -413,6 +553,9 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
         if user_update.adminApproved is not None:
             onboarding_update_payload['admin'] = {'approved': user_update.adminApproved}
 
+        # Check if moduleAccessRole is being updated - if so, regenerate token
+        should_regenerate_token = user_update.moduleAccessRole is not None
+        
         if len(onboarding_update_payload) > 1:  # at least updated_at is there
             onboarding_query = (
                 db.collection('onboarding')
@@ -427,6 +570,36 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
             if onboarding_doc is not None:
                 onboarding_doc.reference.update(onboarding_update_payload)
                 print(f"[DEBUG] Firestore onboarding for user_id={user_id} updated with: {onboarding_update_payload}")
+                
+                # Regenerate token if moduleAccessRole changed
+                if should_regenerate_token:
+                    try:
+                        # Get user email for token generation
+                        user_email = updated_data.get('email', '')
+                        if not user_email:
+                            # Try to get from onboarding
+                            onboarding_data = onboarding_doc.to_dict() or {}
+                            user_email = onboarding_data.get('email', '')
+                        
+                        # Get the new module role
+                        new_module_role = user_update.moduleAccessRole or ''
+                        
+                        # Generate new encrypted token
+                        encrypted_token = generate_and_encrypt_token(
+                            user_id=user_id,
+                            email=user_email,
+                            module_role=new_module_role,
+                        )
+                        
+                        # Update onboarding document with new token
+                        onboarding_doc.reference.update({
+                            'token': encrypted_token,
+                            'token_updated_at': datetime.utcnow(),
+                        })
+                        print(f"[DEBUG] Token regenerated and stored for user_id={user_id} with moduleAccessRole={new_module_role}")
+                    except Exception as token_error:
+                        print(f"[ERROR] Failed to regenerate token during user update: {token_error}")
+                        # Continue with update even if token regeneration fails
 
         # Return the updated user document payload so clients can confirm changes immediately
         updated_doc = user_ref.get()
@@ -566,6 +739,7 @@ async def login_user(user_login: UserLogin):
             return JSONResponse(status_code=404, content={"error": "User not found"})
 
         user_data = users[0].to_dict()
+        user_id = users[0].id
         # Authenticate user (e.g., check password) - REMOVED PASSWORD CHECK
         # if user_data['password'] != user_login.password:
         #     raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -578,19 +752,105 @@ async def login_user(user_login: UserLogin):
                 f"Email: {user_login.email}, Status: {user_status}",
             )
 
-        # Successful login, return user data
+        # Get module role from onboarding collection
+        onboarding_query = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
+        onboarding_data = {}
+        module_role = ""
+        
+        for onboarding_doc in onboarding_query:
+            onboarding_data = onboarding_doc.to_dict() or {}
+            module_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
+            break
+        
+        # If not found in onboarding, try users collection
+        if not module_role:
+            module_role = user_data.get('moduleAccessRole', '')
+
+        # Generate and encrypt token
+        encrypted_token = None
+        try:
+            encrypted_token = generate_and_encrypt_token(
+                user_id=user_id,
+                email=user_data['email'],
+                module_role=module_role,
+            )
+            
+            # Store encrypted token in onboarding collection (khonobuzz)
+            if onboarding_data:
+                # Update existing onboarding document
+                onboarding_doc_ref = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
+                for doc in onboarding_doc_ref:
+                    doc.reference.update({
+                        'token': encrypted_token,
+                        'token_updated_at': datetime.utcnow(),
+                        'updated_at': datetime.utcnow(),
+                    })
+                    print(f"[DEBUG] Token stored in onboarding collection for user_id: {user_id}")
+                    break
+            else:
+                # Create onboarding document if it doesn't exist
+                onboarding_data = {
+                    'user_id': user_id,
+                    'email': user_data['email'],
+                    'token': encrypted_token,
+                    'token_updated_at': datetime.utcnow(),
+                    'created_at': datetime.utcnow(),
+                    'updated_at': datetime.utcnow(),
+                }
+                db.collection('onboarding').add(onboarding_data)
+                print(f"[DEBUG] Created onboarding document with token for user_id: {user_id}")
+            
+            # Sync token to PDH onboarding collection
+            try:
+                pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
+                pdh_onboarding_ref.set({
+                    'token': encrypted_token,
+                    'token_updated_at': datetime.utcnow(),
+                    'updated_at': datetime.utcnow(),
+                }, merge=True)
+                print(f"[DEBUG] Token synced to PDH onboarding collection for user_id: {user_id}")
+            except Exception as pdh_sync_error:
+                print(f"[ERROR] Failed to sync token to PDH: {pdh_sync_error}")
+            
+            # Sync token to Skills Heatmap onboarding collection
+            try:
+                skills_heatmap_onboarding_ref = skills_heatmap_db.collection('onboarding').document(user_id)
+                skills_heatmap_onboarding_ref.set({
+                    'token': encrypted_token,
+                    'token_updated_at': datetime.utcnow(),
+                    'updated_at': datetime.utcnow(),
+                }, merge=True)
+                print(f"[DEBUG] Token synced to Skills Heatmap onboarding collection for user_id: {user_id}")
+            except Exception as skills_sync_error:
+                print(f"[ERROR] Failed to sync token to Skills Heatmap: {skills_sync_error}")
+                
+        except Exception as token_error:
+            print(f"[ERROR] Failed to generate or store token: {token_error}")
+            # Continue with login even if token generation fails
+
+        # Successful login, return user data with token
+        response_content = {
+            "message": "Login successful",
+            "user": {
+                "id": user_id,
+                "email": user_data['email'],
+                "name": user_data.get('name', ''),
+                "role": user_data.get('role', 'user'),
+                "status": user_status,
+                "moduleAccessRole": module_role,
+            }
+        }
+        
+        # Include token in response (optional - you may want to remove this for security)
+        # For now, we'll include it so the client can use it
+        try:
+            response_content["token"] = encrypted_token
+        except:
+            pass  # Token generation may have failed
+
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content={
-                "message": "Login successful",
-                "user": {
-                    "id": users[0].id,
-                    "email": user_data['email'],
-                    "name": user_data.get('name', ''),
-                    "role": user_data.get('role', 'user'),
-                    "status": user_status,
-                }
-            }
+            content=response_content
         )
 
     except HTTPException as e:
@@ -598,4 +858,89 @@ async def login_user(user_login: UserLogin):
         return JSONResponse(status_code=e.status_code, content={"error": e.detail})
     except Exception as e:
         print(f"[ERROR] During FastAPI login: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/auth/token")
+async def get_user_token(email: str = Query(..., description="User email address")):
+    """
+    Get the encrypted token for a user by email.
+    This endpoint allows authenticated users to retrieve their token
+    for appending to module links.
+    """
+    try:
+        print(f"[DEBUG] Token fetch request for email: {email}")
+        
+        # Find user by email
+        users_ref = db.collection('users')
+        query = users_ref.where('email', '==', email).limit(1)
+        users = query.get()
+        
+        if not users:
+            print(f"[DEBUG] User not found: {email}")
+            return JSONResponse(status_code=404, content={"error": "User not found"})
+        
+        user_id = users[0].id
+        user_data = users[0].to_dict()
+        
+        # Get token from onboarding collection
+        onboarding_query = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
+        encrypted_token = None
+        module_role = ""
+        
+        for onboarding_doc in onboarding_query:
+            onboarding_data = onboarding_doc.to_dict() or {}
+            encrypted_token = onboarding_data.get('token')
+            module_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
+            break
+        
+        # If no token found, generate a new one
+        if not encrypted_token:
+            print(f"[DEBUG] No token found, generating new token for user_id: {user_id}")
+            try:
+                encrypted_token = generate_and_encrypt_token(
+                    user_id=user_id,
+                    email=user_data['email'],
+                    module_role=module_role,
+                )
+                
+                # Store the new token
+                onboarding_query = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
+                found_doc = False
+                for doc in onboarding_query:
+                    doc.reference.update({
+                        'token': encrypted_token,
+                        'token_updated_at': datetime.utcnow(),
+                        'updated_at': datetime.utcnow(),
+                    })
+                    found_doc = True
+                    break
+                
+                if not found_doc:
+                    # Create onboarding document if it doesn't exist
+                    onboarding_data = {
+                        'user_id': user_id,
+                        'email': user_data['email'],
+                        'token': encrypted_token,
+                        'token_updated_at': datetime.utcnow(),
+                        'created_at': datetime.utcnow(),
+                        'updated_at': datetime.utcnow(),
+                    }
+                    db.collection('onboarding').add(onboarding_data)
+                    
+            except Exception as token_error:
+                print(f"[ERROR] Failed to generate token: {token_error}")
+                return JSONResponse(status_code=500, content={"error": "Failed to generate token"})
+        
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "token": encrypted_token,
+                "email": user_data['email'],
+                "moduleAccessRole": module_role,
+            }
+        )
+        
+    except Exception as e:
+        print(f"[ERROR] During token fetch: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
