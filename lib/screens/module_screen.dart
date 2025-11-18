@@ -108,7 +108,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                           cardWidth: calculatedCardWidth,
                           title: 'Personal Development Hub',
                           buttonText: 'Launch',
-                          url: 'https://pdhproject.netlify.app/',
+                          url: 'https://personal-development-hub-pdh.netlify.app/',
                         ),
                       );
                     }
