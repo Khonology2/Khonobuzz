@@ -34,7 +34,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -58,9 +57,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     final hasSkillsHeatmapAccess = authProvider.hasModuleAccess(
                       'Skills Heatmap',
                     );
-                    final hasRecruitmentAccess = authProvider.hasModuleAccess(
-                      'Automated Recruitment Workflow',
-                    ) || authProvider.hasModuleAccess('Recruitment');
+                    final hasRecruitmentAccess =
+                        authProvider.hasModuleAccess(
+                          'Automated Recruitment Workflow',
+                        ) ||
+                        authProvider.hasModuleAccess('Recruitment');
 
                     // Admin users see all cards, Staff users see only cards they have access to
                     final showPDH = isAdmin || hasPDHAccess;
@@ -90,16 +91,18 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     if (showPDH) cardCount++;
                     if (showSkillsHeatmap) cardCount++;
                     if (showRecruitment) cardCount++;
-                    
+
                     // Calculate available width and card width based on number of cards
-                    final double availableWidth = constraints.maxWidth - 32.0; // Account for padding
+                    final double availableWidth =
+                        constraints.maxWidth - 32.0; // Account for padding
                     final double calculatedCardWidth = isMobile
                         ? (constraints.maxWidth > 500
                               ? 500
                               : constraints.maxWidth * 0.9)
                         : cardCount > 0
-                            ? (availableWidth - (20.0 * (cardCount - 1))) / cardCount
-                            : 300.0; // Default fallback width
+                        ? (availableWidth - (20.0 * (cardCount - 1))) /
+                              cardCount
+                        : 300.0; // Default fallback width
 
                     if (showPDH) {
                       cards.add(
@@ -108,7 +111,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
                           cardWidth: calculatedCardWidth,
                           title: 'Personal Development Hub',
                           buttonText: 'Launch',
-                          url: 'https://personal-development-hub-pdh.netlify.app/',
+                          url:
+                              'https://personal-development-hub-pdh.netlify.app/',
                         ),
                       );
                     }
@@ -216,7 +220,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                       title,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: cardWidth > 300 ? 26.0 : cardWidth > 200 ? 22.0 : 18.0,
+                        fontSize: cardWidth > 300
+                            ? 26.0
+                            : cardWidth > 200
+                            ? 22.0
+                            : 18.0,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
                         height: 1.3,
@@ -279,7 +287,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
       }
 
       // Check if this is a PDH URL (only PDH should get the token)
-      final bool isPDHUrl = secureUrl.contains('pdhproject.netlify.app') ||
+      final bool isPDHUrl =
+          secureUrl.contains('pdhproject.netlify.app') ||
           secureUrl.contains('pdh');
 
       // Get user token from AuthProvider only if it's a PDH URL
@@ -298,10 +307,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
       // Append token as query parameter only for PDH URLs
       Uri uri = Uri.parse(secureUrl);
       if (isPDHUrl && token != null && token.isNotEmpty) {
-        uri = uri.replace(queryParameters: {
-          ...uri.queryParameters,
-          'token': token,
-        });
+        // Uri.replace() automatically URL-encodes query parameters
+        uri = uri.replace(
+          queryParameters: {...uri.queryParameters, 'token': token},
+        );
       }
 
       final bool launched = await launchUrl(

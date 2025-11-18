@@ -845,58 +845,32 @@ async def login_user(user_login: UserLogin):
         if not module_role:
             module_role = user_data.get('moduleAccessRole', '')
 
-        # Check if existing token is valid before generating a new one
+        # Always generate a new token on each login for security and freshness
         encrypted_token = None
-        should_generate_new_token = True
+        try:
+            encrypted_token = generate_and_encrypt_token(
+                user_id=user_id,
+                email=user_data['email'],
+                module_role=module_role,
+            )
+            print(f"[DEBUG] Generated new token for user_id: {user_id} on login")
+        except Exception as token_error:
+            print(f"[ERROR] Failed to generate token during login: {token_error}")
+            # Continue with login even if token generation fails
         
-        if onboarding_data and onboarding_data.get('token'):
-            existing_token = onboarding_data.get('token')
-            
-            # Check if token is valid and module role hasn't changed
-            try:
-                token_payload = verify_token(existing_token)
-                
-                # Check if module role matches and token is not expired
-                if token_payload.get('module_role') == module_role:
-                    # Token is valid and module role hasn't changed - reuse it
-                    encrypted_token = existing_token
-                    should_generate_new_token = False
-                    print(f"[DEBUG] Reusing existing valid token for user_id: {user_id}")
-                else:
-                    # Module role changed - need new token
-                    print(f"[DEBUG] Module role changed for user_id: {user_id} (token: '{token_payload.get('module_role')}', current: '{module_role}'), generating new token")
-            except Exception as token_error:
-                # Token is invalid or expired - need new token
-                print(f"[DEBUG] Existing token invalid/expired for user_id: {user_id}: {token_error}")
-        
-        # Generate new token only if needed
-        if should_generate_new_token:
-            try:
-                encrypted_token = generate_and_encrypt_token(
-                    user_id=user_id,
-                    email=user_data['email'],
-                    module_role=module_role,
-                )
-                print(f"[DEBUG] Generated new token for user_id: {user_id}")
-            except Exception as token_error:
-                print(f"[ERROR] Failed to generate token during login: {token_error}")
-                # Continue with login even if token generation fails
-        
-        # Store/update token in onboarding collection (khonobuzz)
+        # Store/update token in onboarding collection (khonobuzz) and sync to all collections
         if encrypted_token:
+            # Update or create onboarding document in main collection
             if onboarding_data:
                 # Update existing onboarding document
                 onboarding_doc_ref = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
                 for doc in onboarding_doc_ref:
-                    update_data = {
+                    doc.reference.update({
                         'token': encrypted_token,
                         'token_updated_at': datetime.utcnow(),
                         'updated_at': datetime.utcnow(),
-                    }
-                    # Only update token_updated_at if we generated a new token
-                    if should_generate_new_token:
-                        doc.reference.update(update_data)
-                        print(f"[DEBUG] Token updated in onboarding collection for user_id: {user_id}")
+                    })
+                    print(f"[DEBUG] Token updated in main onboarding collection for user_id: {user_id}")
                     break
             else:
                 # Create onboarding document if it doesn't exist
@@ -911,30 +885,29 @@ async def login_user(user_login: UserLogin):
                 db.collection('onboarding').add(onboarding_data)
                 print(f"[DEBUG] Created onboarding document with token for user_id: {user_id}")
             
-            # Sync token to PDH and Skills Heatmap onboarding collections
-            # Only sync if we generated a new token (to avoid unnecessary writes)
-            if should_generate_new_token:
-                try:
-                    pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
-                    pdh_onboarding_ref.set({
-                        'token': encrypted_token,
-                        'token_updated_at': datetime.utcnow(),
-                        'updated_at': datetime.utcnow(),
-                    }, merge=True)
-                    print(f"[DEBUG] Token synced to PDH onboarding collection for user_id: {user_id}")
-                except Exception as pdh_sync_error:
-                    print(f"[ERROR] Failed to sync token to PDH: {pdh_sync_error}")
-                
-                try:
-                    skills_heatmap_onboarding_ref = skills_heatmap_db.collection('onboarding').document(user_id)
-                    skills_heatmap_onboarding_ref.set({
-                        'token': encrypted_token,
-                        'token_updated_at': datetime.utcnow(),
-                        'updated_at': datetime.utcnow(),
-                    }, merge=True)
-                    print(f"[DEBUG] Token synced to Skills Heatmap onboarding collection for user_id: {user_id}")
-                except Exception as skills_sync_error:
-                    print(f"[ERROR] Failed to sync token to Skills Heatmap: {skills_sync_error}")
+            # Always sync token to PDH onboarding collection
+            try:
+                pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
+                pdh_onboarding_ref.set({
+                    'token': encrypted_token,
+                    'token_updated_at': datetime.utcnow(),
+                    'updated_at': datetime.utcnow(),
+                }, merge=True)
+                print(f"[DEBUG] Token synced to PDH onboarding collection for user_id: {user_id}")
+            except Exception as pdh_sync_error:
+                print(f"[ERROR] Failed to sync token to PDH: {pdh_sync_error}")
+            
+            # Always sync token to Skills Heatmap onboarding collection
+            try:
+                skills_heatmap_onboarding_ref = skills_heatmap_db.collection('onboarding').document(user_id)
+                skills_heatmap_onboarding_ref.set({
+                    'token': encrypted_token,
+                    'token_updated_at': datetime.utcnow(),
+                    'updated_at': datetime.utcnow(),
+                }, merge=True)
+                print(f"[DEBUG] Token synced to Skills Heatmap onboarding collection for user_id: {user_id}")
+            except Exception as skills_sync_error:
+                print(f"[ERROR] Failed to sync token to Skills Heatmap: {skills_sync_error}")
 
         # Successful login, return user data with token
         response_content = {

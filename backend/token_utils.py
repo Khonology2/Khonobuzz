@@ -44,7 +44,8 @@ else:
 
 def generate_jwt_token(user_id: str, email: str, module_role: str = "", expiration_hours: int = None) -> str:
     """
-    Generate a JWT token containing user information.
+    Generate a compact JWT token containing user information.
+    Uses shortened field names to reduce token size.
     
     Args:
         user_id: The user's unique identifier
@@ -53,19 +54,23 @@ def generate_jwt_token(user_id: str, email: str, module_role: str = "", expirati
         expiration_hours: Token expiration time in hours (defaults to JWT_EXPIRATION_HOURS)
     
     Returns:
-        A JWT token string
+        A compact JWT token string
     """
     if expiration_hours is None:
         expiration_hours = JWT_EXPIRATION_HOURS
     
-    expiration_time = datetime.utcnow() + timedelta(hours=expiration_hours)
+    # Use Unix timestamp (integer) instead of datetime object for smaller size
+    now = int(datetime.utcnow().timestamp())
+    exp = now + (expiration_hours * 3600)  # Convert hours to seconds
     
+    # Use shortened field names to reduce payload size
+    # 'uid' instead of 'user_id', 'e' instead of 'email', 'r' instead of 'module_role'
     payload = {
-        'user_id': user_id,
-        'email': email,
-        'module_role': module_role,
-        'exp': expiration_time,
-        'iat': datetime.utcnow(),
+        'uid': user_id,      # Shortened from 'user_id'
+        'e': email,          # Shortened from 'email'
+        'r': module_role,    # Shortened from 'module_role'
+        'exp': exp,          # Unix timestamp (integer)
+        # Removed 'iat' to save space (exp is sufficient for validation)
     }
     
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
@@ -114,12 +119,13 @@ def decrypt_token(encrypted_token: str) -> str:
 def verify_token(token: str) -> dict:
     """
     Verify and decode a JWT token.
+    Returns payload with expanded field names for backward compatibility.
     
     Args:
         token: The JWT token string (can be encrypted or plain)
     
     Returns:
-        The decoded token payload as a dictionary
+        The decoded token payload as a dictionary with expanded field names
     
     Raises:
         jwt.ExpiredSignatureError: If the token has expired
@@ -134,7 +140,18 @@ def verify_token(token: str) -> dict:
             pass
         
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        return payload
+        
+        # Expand shortened field names for backward compatibility
+        # This allows existing code to use 'user_id', 'email', 'module_role'
+        expanded_payload = {
+            'user_id': payload.get('uid', payload.get('user_id', '')),  # Support both formats
+            'email': payload.get('e', payload.get('email', '')),
+            'module_role': payload.get('r', payload.get('module_role', '')),
+            'exp': payload.get('exp'),
+            'iat': payload.get('iat', payload.get('exp', 0) - 86400),  # Default iat if missing
+        }
+        
+        return expanded_payload
     except jwt.ExpiredSignatureError:
         raise jwt.ExpiredSignatureError("Token has expired")
     except jwt.InvalidTokenError as e:
