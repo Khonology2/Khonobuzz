@@ -258,9 +258,18 @@ class AuthProvider extends ChangeNotifier {
           await fetchUserToken();
         }
         return true;
+      } else if (response.statusCode == 403) {
+        // User account is not active (Pending status)
+        final responseData = json.decode(response.body);
+        final errorMessage = responseData['error'] as String? ?? 
+            'Your account is pending approval. Please wait for admin activation.';
+        debugPrint('Login rejected: $errorMessage');
+        _isAuthenticated = false;
+        notifyListeners();
+        // Store error message for display (you can access this via a getter if needed)
+        throw Exception(errorMessage);
       } else if (response.statusCode == 404 ||
-          response.statusCode == 401 ||
-          response.statusCode == 403) {
+          response.statusCode == 401) {
         // User not found or unauthorized - but still allow login if email exists in our system
         // Check if user exists by attempting to fetch user data
         final success = await _attemptFallbackLogin(email);
@@ -327,6 +336,15 @@ class AuthProvider extends ChangeNotifier {
         }
 
         if (foundUser != null) {
+          // Check user status - reject if not Active
+          final userStatus = foundUser['status']?.toString() ?? 'Pending';
+          if (userStatus != 'Active') {
+            debugPrint('Fallback login rejected: User status is $userStatus');
+            _isAuthenticated = false;
+            notifyListeners();
+            return false;
+          }
+          
           final prefs = await SharedPreferences.getInstance();
           _isAuthenticated = true;
           _userEmail = foundUser['email'] ?? email;

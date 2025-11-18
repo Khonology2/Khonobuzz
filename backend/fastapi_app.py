@@ -818,10 +818,17 @@ async def login_user(user_login: UserLogin):
 
         user_status = user_data.get('status', 'Pending')
 
+        # Reject login if user status is not 'Active'
         if user_status != 'Active':
             print(
-                "[DEBUG] Login proceeding for non-active user.",
-                f"Email: {user_login.email}, Status: {user_status}",
+                f"[DEBUG] Login rejected for non-active user. Email: {user_login.email}, Status: {user_status}",
+            )
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={
+                    "error": f"Your account status is '{user_status}'. Please wait for admin approval to activate your account.",
+                    "status": user_status
+                }
             )
 
         # Get module role from onboarding collection

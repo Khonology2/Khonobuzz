@@ -292,25 +292,42 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                       }
 
                       final authProvider = context.read<AuthProvider>();
-                      final success = await authProvider.manualLogin(email);
+                      try {
+                        final success = await authProvider.manualLogin(email);
 
-                      if (!mounted) return;
+                        if (!mounted) return;
 
-                      if (success) {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(
-                            builder: (context) => const MainScreen(
-                              initialIndex: 8, // Navigate to Module Screen
+                        if (success) {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(
+                              builder: (context) => const MainScreen(
+                                initialIndex: 8, // Navigate to Module Screen
+                              ),
                             ),
-                          ),
-                          (route) => false,
-                        );
-                      } else {
+                            (route) => false,
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Login failed. Please check your email address and try again.',
+                              ),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        // Handle 403 error (Pending status) or other exceptions
+                        if (!mounted) return;
+                        final errorMessage = e.toString().replaceFirst('Exception: ', '');
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
+                          SnackBar(
                             content: Text(
-                              'Login failed. Please check your email address and try again.',
+                              errorMessage.isNotEmpty 
+                                  ? errorMessage 
+                                  : 'Login failed. Please check your email address and try again.',
                             ),
+                            backgroundColor: Colors.orange,
+                            duration: const Duration(seconds: 4),
                           ),
                         );
                       }
