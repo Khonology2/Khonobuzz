@@ -9,10 +9,10 @@ import 'dart:async'; // Import Timer
 import '../widgets/animations/loading_button.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  final FlutterAadOauth oauth; // Receive the oauth object
+  final FlutterAadOauth? oauth; // Optional oauth object (for backward compatibility)
   const OnboardingScreen({
     super.key,
-    required this.oauth,
+    this.oauth,
   }); // Update constructor
 
   @override

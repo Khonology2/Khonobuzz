@@ -3,9 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io' show Platform;
-import 'package:flutter_aad_oauth/model/config.dart'; // Import for AAD OAuth config
+import 'package:flutter_aad_oauth/model/config.dart'; // Import for AAD OAuth config (still used for aadConfig)
 import 'auth_screen.dart'; // Import AuthScreen
-import 'package:flutter_aad_oauth/flutter_aad_oauth.dart'; // Import FlutterAadOauth
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -220,10 +219,10 @@ class _LandingScreenState extends State<LandingScreen>
                       redirectUri: redirectUri,
                       responseType: responseType,
                     );
-                    FlutterAadOauth oauth = FlutterAadOauth(aadConfig);
+                    // Note: AuthScreen now uses Firebase Auth, oauth parameter no longer needed
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => AuthScreen(oauth: oauth),
+                        builder: (context) => const AuthScreen(),
                       ),
                     );
                   },

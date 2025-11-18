@@ -18,6 +18,7 @@ class AuthScreen extends StatefulWidget {
 
 class AuthScreenState extends State<AuthScreen> {
   double _discsOpacity = 0.0; // Initial opacity for discs.png
+  bool _isCheckingRedirect = false; // Flag to prevent multiple redirect checks
 
   @override
   void initState() {
@@ -30,24 +31,39 @@ class AuthScreenState extends State<AuthScreen> {
     });
 
     // Handle Microsoft sign-in redirect result (for web with PKCE)
+    // Wait a bit for Firebase to be fully initialized
     if (kIsWeb) {
-      _handleRedirectResult();
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _handleRedirectResult();
+      });
     }
   }
 
   Future<void> _handleRedirectResult() async {
+    if (_isCheckingRedirect) return; // Prevent multiple simultaneous checks
+    _isCheckingRedirect = true;
+
     try {
+      debugPrint('Checking for redirect result...');
       final credential = await fb_auth.FirebaseAuth.instance
           .getRedirectResult();
+
       if (credential.user != null) {
+        debugPrint('Redirect result found, user: ${credential.user?.email}');
         final email = credential.user?.email;
         if (email != null && email.toLowerCase().endsWith('@khonology.com')) {
-          if (!mounted) return;
+          if (!mounted) {
+            _isCheckingRedirect = false;
+            return;
+          }
           final success = await context.read<AuthProvider>().login(
             email,
             role: null,
           );
-          if (!mounted) return;
+          if (!mounted) {
+            _isCheckingRedirect = false;
+            return;
+          }
 
           if (success) {
             // After successful Microsoft login, go directly to MainScreen with Module Screen
@@ -60,7 +76,10 @@ class AuthScreenState extends State<AuthScreen> {
               (route) => false,
             );
           } else {
-            if (!mounted) return;
+            if (!mounted) {
+              _isCheckingRedirect = false;
+              return;
+            }
             await fb_auth.FirebaseAuth.instance.signOut();
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -70,17 +89,33 @@ class AuthScreenState extends State<AuthScreen> {
           }
         } else {
           await fb_auth.FirebaseAuth.instance.signOut();
-          if (!mounted) return;
+          if (!mounted) {
+            _isCheckingRedirect = false;
+            return;
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Only khonology.com accounts are allowed'),
             ),
           );
         }
+      } else {
+        debugPrint('No redirect result found');
       }
-    } catch (e) {
-      // Silently handle redirect errors (user might not have initiated a redirect)
+    } catch (e, stackTrace) {
+      // Log errors for debugging
       debugPrint('Redirect result error: $e');
+      debugPrint('Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Authentication error: ${e.toString()}'),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      _isCheckingRedirect = false;
     }
   }
 
@@ -133,6 +168,9 @@ class AuthScreenState extends State<AuthScreen> {
                         fb_auth.UserCredential credential;
                         if (kIsWeb) {
                           // Use signInWithRedirect for web to support PKCE (required by Microsoft)
+                          debugPrint(
+                            'Initiating Microsoft sign-in redirect...',
+                          );
                           await fb_auth.FirebaseAuth.instance
                               .signInWithRedirect(provider);
                           // The redirect will be handled by getRedirectResult in initState

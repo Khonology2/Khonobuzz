@@ -4,8 +4,8 @@ import 'package:flutter_aad_oauth/flutter_aad_oauth.dart'; // Import FlutterAadO
 import 'package:video_player/video_player.dart';
 
 class LobbyScreen extends StatefulWidget {
-  final FlutterAadOauth oauth; // Receive the oauth object
-  const LobbyScreen({super.key, required this.oauth}); // Update constructor
+  final FlutterAadOauth? oauth; // Optional oauth object (for backward compatibility)
+  const LobbyScreen({super.key, this.oauth}); // Update constructor
 
   @override
   LobbyScreenState createState() => LobbyScreenState();
@@ -313,7 +313,7 @@ class LobbyScreenState extends State<LobbyScreen> {
                     onPressed: () {
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(
-                          builder: (context) => AuthScreen(oauth: widget.oauth),
+                          builder: (context) => const AuthScreen(),
                         ),
                         (Route<dynamic> route) => false,
                       );
