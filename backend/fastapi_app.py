@@ -5,6 +5,7 @@ from brotli_asgi import BrotliMiddleware  # pyright: ignore[reportMissingImports
 from firebase_admin import credentials, firestore, initialize_app
 from dotenv import load_dotenv
 import os
+import logging
 from datetime import datetime
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
@@ -14,6 +15,34 @@ from typing import Optional
 from token_utils import generate_and_encrypt_token
 
 load_dotenv()
+
+# Configure logging
+DEBUG_MODE = os.environ.get('DEBUG', 'True').lower() == 'true'
+LOG_LEVEL = logging.DEBUG if DEBUG_MODE else logging.INFO
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
+# Helper function for debug logging
+def debug_log(message: str):
+    """Log debug messages only if DEBUG mode is enabled"""
+    if DEBUG_MODE:
+        logger.debug(message)
+        print(f"[DEBUG] {message}")
+
+def error_log(message: str):
+    """Log error messages (always shown)"""
+    logger.error(message)
+    print(f"[ERROR] {message}")
+
+def info_log(message: str):
+    """Log info messages (always shown)"""
+    logger.info(message)
+    print(f"[INFO] {message}")
 
 # Configuration
 FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH') or 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json'
@@ -132,6 +161,26 @@ app.add_middleware(
 )
 app.add_middleware(BrotliMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request, call_next):
+    """Log all incoming requests"""
+    start_time = datetime.utcnow()
+    
+    # Log request
+    info_log(f"→ {request.method} {request.url.path} from {request.client.host if request.client else 'unknown'}")
+    if DEBUG_MODE and request.query_params:
+        debug_log(f"  Query params: {dict(request.query_params)}")
+    
+    # Process request
+    response = await call_next(request)
+    
+    # Log response
+    process_time = (datetime.utcnow() - start_time).total_seconds()
+    info_log(f"← {request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)")
+    
+    return response
 
 @app.post("/api/pdh/sync-user")
 async def pdh_sync_user(data: dict):
@@ -317,6 +366,7 @@ async def skills_heatmap_update_user(uid: str, data: dict):
 
 @app.get("/")
 async def home():
+    info_log("Health check endpoint accessed")
     return {"message": "Khonology Backend API (FastAPI)", "status": "running"}
 
 @app.post("/api/auth/register")
@@ -750,7 +800,7 @@ async def create_initial_roles():
 @app.post("/api/auth/login")
 async def login_user(user_login: UserLogin):
     try:
-        print(f"[DEBUG] Login attempt for email: {user_login.email}")
+        info_log(f"Login attempt for email: {user_login.email}")
 
         users_ref = db.collection('users')
         query = users_ref.where('email', '==', user_login.email).limit(1)
@@ -891,7 +941,7 @@ async def get_user_token(email: str = Query(..., description="User email address
     for appending to module links.
     """
     try:
-        print(f"[DEBUG] Token fetch request for email: {email}")
+        info_log(f"Token fetch request for email: {email}")
         
         # Find user by email
         users_ref = db.collection('users')
