@@ -2,13 +2,14 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ApiConfig {
   // Automatically detect environment and use appropriate backend URL
-  // For production web (deployed on Netlify): use Render backend
+  // For production web (deployed on Netlify or Render): use Render backend
   // For local development: use localhost
   static String get baseUrl {
     if (kIsWeb) {
-      // Check if running on production domain (Netlify)
+      // Check if running on production domain (Netlify or Render)
       final uri = Uri.base;
       if (uri.host.contains('netlify.app') ||
+          uri.host.contains('onrender.com') ||
           uri.host.contains('khonobuzz-web')) {
         return 'https://khonobuzz-backend-i24f.onrender.com';
       }

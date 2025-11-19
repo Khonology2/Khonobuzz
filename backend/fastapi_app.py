@@ -122,8 +122,11 @@ app = FastAPI(
 # For production: specify exact origins in a list with allow_credentials=True
 cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
 
-# Default production frontend URL
-PRODUCTION_FRONTEND_URL = 'https://khonobuzz-web.netlify.app'
+# Default production frontend URLs
+PRODUCTION_FRONTEND_URLS = [
+    'https://khonobuzz-web.netlify.app',  # Netlify deployment
+    'https://khonobuzz-web-app.onrender.com',  # Render deployment
+]
 
 # Check if running in production
 # Render sets RENDER=true, or check for production-like hostnames
@@ -137,18 +140,19 @@ is_production = (
 if cors_origins_env == '*':
     if is_production:
         # In production, use specific origins instead of wildcard
-        cors_origins = [PRODUCTION_FRONTEND_URL, 'http://localhost:5000', 'http://localhost:3000']
+        cors_origins = PRODUCTION_FRONTEND_URLS + ['http://localhost:5000', 'http://localhost:3000']
         cors_allow_credentials = True
     else:
         # In development, allow all origins
         cors_origins = ["*"]
         cors_allow_credentials = False
 else:
-    # Split comma-separated origins and ensure production URL is included
+    # Split comma-separated origins and ensure production URLs are included
     cors_origins = [origin.strip() for origin in cors_origins_env.split(',')]
-    # Add production frontend URL if not already present
-    if PRODUCTION_FRONTEND_URL not in cors_origins:
-        cors_origins.append(PRODUCTION_FRONTEND_URL)
+    # Add production frontend URLs if not already present
+    for prod_url in PRODUCTION_FRONTEND_URLS:
+        if prod_url not in cors_origins:
+            cors_origins.append(prod_url)
     cors_allow_credentials = os.environ.get('CORS_ALLOW_CREDENTIALS', 'True' if is_production else 'False').lower() == 'true'
 
 app.add_middleware(
