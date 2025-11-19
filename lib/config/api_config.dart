@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 
 class ApiConfig {
   // Automatically detect environment and use appropriate backend URL
@@ -8,16 +8,40 @@ class ApiConfig {
     if (kIsWeb) {
       // Check if running on production domain (Netlify or Render)
       final uri = Uri.base;
-      if (uri.host.contains('netlify.app') ||
-          uri.host.contains('onrender.com') ||
-          uri.host.contains('khonobuzz-web')) {
-        return 'https://khonobuzz-backend-i24f.onrender.com';
+      final host = uri.host;
+
+      // Debug logging to help identify connection issues
+      if (kDebugMode) {
+        print('[ApiConfig] Current host: $host');
+        print('[ApiConfig] Full URI: ${uri.toString()}');
+      }
+
+      if (host.contains('netlify.app') ||
+          host.contains('onrender.com') ||
+          host.contains('khonobuzz-web')) {
+        final backendUrl = 'https://khonobuzz-backend-i24f.onrender.com';
+        if (kDebugMode) {
+          print(
+            '[ApiConfig] Detected production environment, using backend: $backendUrl',
+          );
+        }
+        return backendUrl;
       }
       // For local web development
+      if (kDebugMode) {
+        print(
+          '[ApiConfig] Detected local development, using: http://localhost:5000',
+        );
+      }
       return 'http://localhost:5000';
     }
     // For mobile/desktop platforms
     // Android emulator uses 10.0.2.2, iOS simulator uses localhost
+    if (kDebugMode) {
+      print(
+        '[ApiConfig] Mobile/Desktop platform, using: http://localhost:5000',
+      );
+    }
     return 'http://localhost:5000';
   }
 

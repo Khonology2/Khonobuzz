@@ -62,6 +62,11 @@ class AuthProvider extends ChangeNotifier {
     final url = Uri.parse(
       ApiConfig.authRegisterEndpoint,
     ); // Your backend registration endpoint
+    
+    // Debug logging
+    debugPrint('[AuthProvider] Attempting to register/login with URL: $url');
+    debugPrint('[AuthProvider] Backend base URL: ${ApiConfig.baseUrl}');
+    
     try {
       final response = await http.post(
         url,
@@ -78,6 +83,9 @@ class AuthProvider extends ChangeNotifier {
           'designation': designation,
         }),
       );
+      
+      debugPrint('[AuthProvider] Response status: ${response.statusCode}');
+      debugPrint('[AuthProvider] Response body: ${response.body}');
 
       if (response.statusCode == 201) {
         // User registered successfully
@@ -196,6 +204,12 @@ class AuthProvider extends ChangeNotifier {
         return false; // Indicate failure
       }
     } catch (e) {
+      // Enhanced error logging
+      debugPrint('[AuthProvider] ERROR during registration/login: $e');
+      debugPrint('[AuthProvider] Error type: ${e.runtimeType}');
+      if (e is Exception) {
+        debugPrint('[AuthProvider] Exception details: ${e.toString()}');
+      }
       _isAuthenticated = false;
       _userAlreadyOnboarded = false; // Reset onboarding status on error
       notifyListeners();
@@ -207,6 +221,11 @@ class AuthProvider extends ChangeNotifier {
     // Removed password parameter
 
     final url = Uri.parse(ApiConfig.authLoginEndpoint);
+    
+    // Debug logging
+    debugPrint('[AuthProvider] Attempting manual login with URL: $url');
+    debugPrint('[AuthProvider] Backend base URL: ${ApiConfig.baseUrl}');
+    
     try {
       final response = await http
           .post(
@@ -217,11 +236,15 @@ class AuthProvider extends ChangeNotifier {
           .timeout(
             const Duration(seconds: 30),
             onTimeout: () {
+              debugPrint('[AuthProvider] Login request timed out');
               throw TimeoutException(
                 'Login request timed out. Please check your internet connection and try again.',
               );
             },
           );
+      
+      debugPrint('[AuthProvider] Login response status: ${response.statusCode}');
+      debugPrint('[AuthProvider] Login response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
