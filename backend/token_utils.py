@@ -122,7 +122,7 @@ def verify_token(token: str) -> dict:
     Returns payload with expanded field names for backward compatibility.
     
     Args:
-        token: The JWT token string (can be encrypted or plain)
+        token: The JWT token string (plain JWT, no encryption)
     
     Returns:
         The decoded token payload as a dictionary with expanded field names
@@ -132,7 +132,7 @@ def verify_token(token: str) -> dict:
         jwt.InvalidTokenError: If the token is invalid
     """
     try:
-        # Try to decrypt first (in case it's encrypted)
+        # Try to decrypt first (for backward compatibility with old encrypted tokens)
         try:
             token = decrypt_token(token)
         except:
@@ -160,7 +160,8 @@ def verify_token(token: str) -> dict:
 
 def generate_and_encrypt_token(user_id: str, email: str, module_role: str = "", expiration_hours: int = None) -> str:
     """
-    Convenience function to generate a JWT token and encrypt it in one step.
+    Generate a plain JWT token (no encryption).
+    This function is kept for backward compatibility but now returns plain JWT.
     
     Args:
         user_id: The user's unique identifier
@@ -169,9 +170,8 @@ def generate_and_encrypt_token(user_id: str, email: str, module_role: str = "", 
         expiration_hours: Token expiration time in hours
     
     Returns:
-        An encrypted JWT token string ready for storage
+        A plain JWT token string ready for storage
     """
-    token = generate_jwt_token(user_id, email, module_role, expiration_hours)
-    encrypted_token = encrypt_token(token)
-    return encrypted_token
+    # Return plain JWT token without encryption for PDH compatibility
+    return generate_jwt_token(user_id, email, module_role, expiration_hours)
 

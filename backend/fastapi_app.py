@@ -206,6 +206,10 @@ async def pdh_sync_user(data: dict):
         module_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
         user_email = user_data.get('email', '') or onboarding_data.get('email', '')
         
+        # Ensure email is always populated in onboarding_data (required for PDH)
+        if user_email and not onboarding_data.get('email'):
+            onboarding_data['email'] = user_email
+        
         # Use existing token from onboarding_data if present, otherwise generate new one
         if 'token' not in onboarding_data or not onboarding_data.get('token'):
             if module_role and user_email:
@@ -256,6 +260,10 @@ async def pdh_update_user(uid: str, data: dict):
             if not user_email:
                 user_email = onboarding_fields.get('email', '')
             
+            # Ensure email is always populated in onboarding_fields (required for PDH)
+            if user_email and not onboarding_fields.get('email'):
+                onboarding_fields['email'] = user_email
+            
             # Regenerate token if moduleAccessRole changed
             if should_regenerate_token and user_email:
                 try:
@@ -296,6 +304,10 @@ async def skills_heatmap_sync_user(data: dict):
         # Generate token if moduleAccessRole is present or if token is already in onboarding_data
         module_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
         user_email = user_data.get('email', '') or onboarding_data.get('email', '')
+        
+        # Ensure email is always populated in onboarding_data (required for PDH)
+        if user_email and not onboarding_data.get('email'):
+            onboarding_data['email'] = user_email
         
         # Use existing token from onboarding_data if present, otherwise generate new one
         if 'token' not in onboarding_data or not onboarding_data.get('token'):
@@ -346,6 +358,10 @@ async def skills_heatmap_update_user(uid: str, data: dict):
             # Get email if not already found
             if not user_email:
                 user_email = onboarding_fields.get('email', '')
+            
+            # Ensure email is always populated in onboarding_fields (required for PDH)
+            if user_email and not onboarding_fields.get('email'):
+                onboarding_fields['email'] = user_email
             
             # Regenerate token if moduleAccessRole changed
             if should_regenerate_token and user_email:
@@ -667,11 +683,16 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
                             module_role=new_module_role,
                         )
                         
-                        # Update onboarding document with new token
-                        onboarding_doc.reference.update({
+                        # Update onboarding document with new token and ensure email is set
+                        update_data = {
                             'token': encrypted_token,
                             'token_updated_at': datetime.utcnow(),
-                        })
+                        }
+                        # Ensure email is always populated (required for PDH)
+                        if user_email and not onboarding_data.get('email'):
+                            update_data['email'] = user_email
+                        
+                        onboarding_doc.reference.update(update_data)
                         print(f"[DEBUG] Token regenerated and stored for user_id={user_id} with moduleAccessRole={new_module_role}")
                     except Exception as token_error:
                         print(f"[ERROR] Failed to regenerate token during user update: {token_error}")
@@ -889,15 +910,16 @@ async def login_user(user_login: UserLogin):
                 db.collection('onboarding').add(onboarding_data)
                 print(f"[DEBUG] Created onboarding document with token for user_id: {user_id}")
             
-            # Always sync token to PDH onboarding collection
+            # Always sync token and email to PDH onboarding collection
             try:
                 pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
                 pdh_onboarding_ref.set({
+                    'email': user_data['email'],  # Ensure email is always populated
                     'token': encrypted_token,
                     'token_updated_at': datetime.utcnow(),
                     'updated_at': datetime.utcnow(),
                 }, merge=True)
-                print(f"[DEBUG] Token synced to PDH onboarding collection for user_id: {user_id}")
+                print(f"[DEBUG] Token and email synced to PDH onboarding collection for user_id: {user_id}")
             except Exception as pdh_sync_error:
                 print(f"[ERROR] Failed to sync token to PDH: {pdh_sync_error}")
             

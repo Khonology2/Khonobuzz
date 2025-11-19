@@ -30,7 +30,7 @@ python app.py
 
 The API will be available at:
 - **Local Development**: `http://localhost:5000`
-- **Production**: `https://khonobuzz-backend.onrender.com`
+- **Production**: `https://khonobuzz-backend-i24f.onrender.com`
 
 ### 5. Testing the API
 Once the server is running, you can test it by visiting:

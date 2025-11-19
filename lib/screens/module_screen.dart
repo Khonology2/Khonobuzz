@@ -291,26 +291,38 @@ class _ModuleScreenState extends State<ModuleScreen> {
           secureUrl.contains('pdhproject.netlify.app') ||
           secureUrl.contains('pdh');
 
-      // Get user token from AuthProvider only if it's a PDH URL
+      // Get user token and email from AuthProvider only if it's a PDH URL
       String? token;
+      String? email;
       if (isPDHUrl) {
         final authProvider = context.read<AuthProvider>();
         token = authProvider.userToken;
+        email = authProvider.userEmail;
 
         // If token is not available, try to fetch it
-        if (token == null && authProvider.userEmail != null) {
+        if (token == null && email != null) {
           await authProvider.fetchUserToken();
           token = authProvider.userToken;
         }
       }
 
-      // Append token as query parameter only for PDH URLs
+      // Append token and email as query parameters only for PDH URLs
       Uri uri = Uri.parse(secureUrl);
-      if (isPDHUrl && token != null && token.isNotEmpty) {
+      if (isPDHUrl) {
+        final Map<String, String> queryParams = {...uri.queryParameters};
+
+        // Append JWT token if available
+        if (token != null && token.isNotEmpty) {
+          queryParams['token'] = token;
+        }
+
+        // Append email if available (required for PDH)
+        if (email != null && email.isNotEmpty) {
+          queryParams['email'] = email;
+        }
+
         // Uri.replace() automatically URL-encodes query parameters
-        uri = uri.replace(
-          queryParameters: {...uri.queryParameters, 'token': token},
-        );
+        uri = uri.replace(queryParameters: queryParams);
       }
 
       final bool launched = await launchUrl(
