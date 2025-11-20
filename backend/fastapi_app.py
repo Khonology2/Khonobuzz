@@ -464,18 +464,22 @@ async def register_user(user: UserRegister):
 
         email = user.email
         password = user.password
-        full_name = user.name
-        first_name = user.firstName
-        last_name = user.lastName
+        first_name = user.firstName.strip() if user.firstName else ''
+        last_name = user.lastName.strip() if user.lastName else ''
+        # Construct full_name from firstName and lastName (combining them)
+        full_name = f"{first_name} {last_name}".strip()
+        # Fallback to user.name if full_name is empty (for backward compatibility)
+        if not full_name:
+            full_name = user.name.strip() if user.name else ''
         role = user.role
         department = user.department
         designation = user.designation
 
         print(f"[DEBUG] Extracted email (FastAPI): {email}")
         print(f"[DEBUG] Extracted password (FastAPI): {password}")
-        print(f"[DEBUG] Extracted full_name (from Pydantic): {full_name}")
         print(f"[DEBUG] Parsed first_name (from Pydantic): {first_name}")
         print(f"[DEBUG] Parsed last_name (from Pydantic): {last_name}")
+        print(f"[DEBUG] Constructed full_name (firstName + lastName): {full_name}")
         print(f"[DEBUG] Role (from Pydantic): {role}")
         print(f"[DEBUG] Department (from Pydantic): {department}")
         print(f"[DEBUG] Designation (from Pydantic): {designation}")
