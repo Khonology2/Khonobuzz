@@ -111,7 +111,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                           cardWidth: calculatedCardWidth,
                           title: 'Personal Development Hub',
                           buttonText: 'Launch',
-                          url: 'https://pdh-web-app.onrender.com/',
+                          url: 'https://pdh-web-app.onrender.com',
                         ),
                       );
                     }
