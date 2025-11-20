@@ -111,8 +111,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                           cardWidth: calculatedCardWidth,
                           title: 'Personal Development Hub',
                           buttonText: 'Launch',
-                          url:
-                              'https://pdh-web-app.onrender.com/',
+                          url: 'https://pdh-web-app.onrender.com/',
                         ),
                       );
                     }
@@ -288,6 +287,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
       // Check if this is a PDH URL (only PDH should get the token)
       final bool isPDHUrl =
+          secureUrl.contains('pdh-web-app.onrender.com') ||
           secureUrl.contains('pdhproject.netlify.app') ||
           secureUrl.contains('personal-development-hub-pdh.netlify.app') ||
           secureUrl.contains('pdh');
