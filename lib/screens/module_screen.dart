@@ -112,7 +112,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                           title: 'Personal Development Hub',
                           buttonText: 'Launch',
                           url:
-                              'https://personal-development-hub-pdh.netlify.app/',
+                              'https://pdh-web-app.onrender.com/',
                         ),
                       );
                     }
