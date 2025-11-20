@@ -42,35 +42,39 @@ else:
         print(f"[WARNING] Generated new encryption key: {ENCRYPTION_KEY}")
 
 
-def generate_jwt_token(user_id: str, email: str, module_role: str = "", expiration_hours: int = None) -> str:
+def generate_jwt_token(user_id: str, email: str, full_name: str = "", roles: list = None, expiration_hours: int = None) -> str:
     """
-    Generate a compact JWT token containing user information.
-    Uses shortened field names to reduce token size.
+    Generate a JWT token containing user information for PDH auto-login.
     
     Args:
         user_id: The user's unique identifier
         email: The user's email address
-        module_role: The user's module access role (e.g., "PDH - Employee", "PDH - Manager")
+        full_name: The user's full name (first + last)
+        roles: List of user roles (e.g., ["PDH - Employee", "PDH - Manager"])
         expiration_hours: Token expiration time in hours (defaults to JWT_EXPIRATION_HOURS)
     
     Returns:
-        A compact JWT token string
+        A JWT token string
     """
     if expiration_hours is None:
         expiration_hours = JWT_EXPIRATION_HOURS
     
-    # Use Unix timestamp (integer) instead of datetime object for smaller size
+    if roles is None:
+        roles = []
+    
+    # Use Unix timestamp (integer) for iat and exp
     now = int(datetime.utcnow().timestamp())
+    iat = now
     exp = now + (expiration_hours * 3600)  # Convert hours to seconds
     
-    # Use shortened field names to reduce payload size
-    # 'uid' instead of 'user_id', 'e' instead of 'email', 'r' instead of 'module_role'
+    # JWT payload structure for PDH compatibility
     payload = {
-        'uid': user_id,      # Shortened from 'user_id'
-        'e': email,          # Shortened from 'email'
-        'r': module_role,    # Shortened from 'module_role'
-        'exp': exp,          # Unix timestamp (integer)
-        # Removed 'iat' to save space (exp is sufficient for validation)
+        'user_id': user_id,
+        'email': email,
+        'full_name': full_name,
+        'roles': roles,  # Array of roles
+        'iat': iat,      # Issued at timestamp
+        'exp': exp,      # Expiration timestamp
     }
     
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
@@ -119,13 +123,14 @@ def decrypt_token(encrypted_token: str) -> str:
 def verify_token(token: str) -> dict:
     """
     Verify and decode a JWT token.
-    Returns payload with expanded field names for backward compatibility.
+    Returns payload with standard field names.
+    Supports both old and new token formats for backward compatibility.
     
     Args:
         token: The JWT token string (plain JWT, no encryption)
     
     Returns:
-        The decoded token payload as a dictionary with expanded field names
+        The decoded token payload as a dictionary
     
     Raises:
         jwt.ExpiredSignatureError: If the token has expired
@@ -141,15 +146,29 @@ def verify_token(token: str) -> dict:
         
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         
-        # Expand shortened field names for backward compatibility
-        # This allows existing code to use 'user_id', 'email', 'module_role'
-        expanded_payload = {
-            'user_id': payload.get('uid', payload.get('user_id', '')),  # Support both formats
-            'email': payload.get('e', payload.get('email', '')),
-            'module_role': payload.get('r', payload.get('module_role', '')),
-            'exp': payload.get('exp'),
-            'iat': payload.get('iat', payload.get('exp', 0) - 86400),  # Default iat if missing
-        }
+        # Support both old (shortened) and new (full) formats
+        # Old format: uid, e, r
+        # New format: user_id, email, full_name, roles, iat, exp
+        if 'user_id' in payload or 'uid' in payload:
+            # New format or old format - normalize to new format
+            expanded_payload = {
+                'user_id': payload.get('user_id') or payload.get('uid', ''),
+                'email': payload.get('email') or payload.get('e', ''),
+                'full_name': payload.get('full_name', ''),
+                'roles': payload.get('roles', []),
+                'exp': payload.get('exp'),
+                'iat': payload.get('iat', payload.get('exp', 0) - 86400),
+            }
+            
+            # If old format with module_role, convert to roles array
+            if 'r' in payload or 'module_role' in payload:
+                module_role = payload.get('r') or payload.get('module_role', '')
+                if module_role and not expanded_payload['roles']:
+                    # Parse comma-separated roles into array
+                    expanded_payload['roles'] = [r.strip() for r in module_role.split(',') if r.strip()]
+        else:
+            # Fallback for any other format
+            expanded_payload = payload
         
         return expanded_payload
     except jwt.ExpiredSignatureError:
@@ -158,7 +177,25 @@ def verify_token(token: str) -> dict:
         raise jwt.InvalidTokenError(f"Invalid token: {e}")
 
 
-def generate_and_encrypt_token(user_id: str, email: str, module_role: str = "", expiration_hours: int = None) -> str:
+def parse_module_access_role_to_roles(module_access_role: str) -> list:
+    """
+    Parse moduleAccessRole string into a list of roles.
+    
+    Args:
+        module_access_role: Comma-separated string like "PDH - Employee, Skills Heatmap - Manager"
+    
+    Returns:
+        List of role strings, e.g., ["PDH - Employee", "Skills Heatmap - Manager"]
+    """
+    if not module_access_role or not isinstance(module_access_role, str):
+        return []
+    
+    # Split by comma and clean up each role
+    roles = [role.strip() for role in module_access_role.split(',') if role.strip()]
+    return roles
+
+
+def generate_and_encrypt_token(user_id: str, email: str, full_name: str = "", roles: list = None, expiration_hours: int = None) -> str:
     """
     Generate a plain JWT token (no encryption).
     This function is kept for backward compatibility but now returns plain JWT.
@@ -166,12 +203,13 @@ def generate_and_encrypt_token(user_id: str, email: str, module_role: str = "", 
     Args:
         user_id: The user's unique identifier
         email: The user's email address
-        module_role: The user's module access role
+        full_name: The user's full name (first + last)
+        roles: List of user roles (e.g., ["PDH - Employee", "PDH - Manager"])
         expiration_hours: Token expiration time in hours
     
     Returns:
         A plain JWT token string ready for storage
     """
     # Return plain JWT token without encryption for PDH compatibility
-    return generate_jwt_token(user_id, email, module_role, expiration_hours)
+    return generate_jwt_token(user_id, email, full_name, roles, expiration_hours)
 

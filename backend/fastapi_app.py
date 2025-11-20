@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from fastapi import status # Import status for HTTP status codes
 from fastapi import HTTPException # Import HTTPException for authentication errors
 from typing import Optional
-from token_utils import generate_and_encrypt_token, verify_token
+from token_utils import generate_and_encrypt_token, verify_token, parse_module_access_role_to_roles
 
 load_dotenv()
 
@@ -203,25 +203,38 @@ async def pdh_sync_user(data: dict):
                 onboarding_data[key] = datetime.fromisoformat(onboarding_data[key].replace('Z', '+00:00'))
         
         # Generate token if moduleAccessRole is present or if token is already in onboarding_data
-        module_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
+        module_access_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
         user_email = user_data.get('email', '') or onboarding_data.get('email', '')
         
         # Ensure email is always populated in onboarding_data (required for PDH)
         if user_email and not onboarding_data.get('email'):
             onboarding_data['email'] = user_email
         
+        # Parse moduleAccessRole into roles array
+        roles = parse_module_access_role_to_roles(module_access_role)
+        
+        # Get user's full name
+        first_name = onboarding_data.get('firstName') or onboarding_data.get('name') or user_data.get('firstName') or ''
+        last_name = onboarding_data.get('lastName') or onboarding_data.get('surname') or user_data.get('lastName') or ''
+        full_name = f"{first_name} {last_name}".strip()
+        
+        # Fallback to 'name' field if full_name is empty
+        if not full_name:
+            full_name = user_data.get('name', '')
+        
         # Use existing token from onboarding_data if present, otherwise generate new one
         if 'token' not in onboarding_data or not onboarding_data.get('token'):
-            if module_role and user_email:
+            if module_access_role and user_email:
                 try:
                     encrypted_token = generate_and_encrypt_token(
                         user_id=uid,
                         email=user_email,
-                        module_role=module_role,
+                        full_name=full_name,
+                        roles=roles,
                     )
                     onboarding_data['token'] = encrypted_token
                     onboarding_data['token_updated_at'] = datetime.utcnow()
-                    print(f"[DEBUG] Token generated during PDH sync for user_id: {uid}")
+                    print(f"[DEBUG] Token generated during PDH sync for user_id: {uid} with roles: {roles}")
                 except Exception as token_error:
                     print(f"[ERROR] Failed to generate token during PDH sync: {token_error}")
         
@@ -241,15 +254,17 @@ async def pdh_update_user(uid: str, data: dict):
 
         # Check if moduleAccessRole is being updated - regenerate token if so
         should_regenerate_token = False
-        new_module_role = ''
+        new_module_access_role = ''
         user_email = ''
+        user_fields_dict = user_fields or {}
+        onboarding_fields_dict = onboarding_fields or {}
         
         if onboarding_fields and 'moduleAccessRole' in onboarding_fields:
             should_regenerate_token = True
-            new_module_role = onboarding_fields.get('moduleAccessRole', '')
+            new_module_access_role = onboarding_fields.get('moduleAccessRole', '')
         elif user_fields and 'moduleAccessRole' in user_fields:
             should_regenerate_token = True
-            new_module_role = user_fields.get('moduleAccessRole', '')
+            new_module_access_role = user_fields.get('moduleAccessRole', '')
         
         if user_fields:
             pdh_db.collection('users').document(uid).set(user_fields, merge=True)
@@ -264,17 +279,30 @@ async def pdh_update_user(uid: str, data: dict):
             if user_email and not onboarding_fields.get('email'):
                 onboarding_fields['email'] = user_email
             
+            # Parse moduleAccessRole into roles array
+            roles = parse_module_access_role_to_roles(new_module_access_role)
+            
+            # Get user's full name
+            first_name = onboarding_fields.get('firstName') or onboarding_fields.get('name') or user_fields_dict.get('firstName') or ''
+            last_name = onboarding_fields.get('lastName') or onboarding_fields.get('surname') or user_fields_dict.get('lastName') or ''
+            full_name = f"{first_name} {last_name}".strip()
+            
+            # Fallback to 'name' field if full_name is empty
+            if not full_name:
+                full_name = user_fields_dict.get('name', '')
+            
             # Regenerate token if moduleAccessRole changed
             if should_regenerate_token and user_email:
                 try:
                     encrypted_token = generate_and_encrypt_token(
                         user_id=uid,
                         email=user_email,
-                        module_role=new_module_role,
+                        full_name=full_name,
+                        roles=roles,
                     )
                     onboarding_fields['token'] = encrypted_token
                     onboarding_fields['token_updated_at'] = datetime.utcnow()
-                    print(f"[DEBUG] Token regenerated during PDH update for user_id: {uid}")
+                    print(f"[DEBUG] Token regenerated during PDH update for user_id: {uid} with roles: {roles}")
                 except Exception as token_error:
                     print(f"[ERROR] Failed to regenerate token during PDH update: {token_error}")
             
@@ -302,25 +330,38 @@ async def skills_heatmap_sync_user(data: dict):
                 onboarding_data[key] = datetime.fromisoformat(onboarding_data[key].replace('Z', '+00:00'))
         
         # Generate token if moduleAccessRole is present or if token is already in onboarding_data
-        module_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
+        module_access_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
         user_email = user_data.get('email', '') or onboarding_data.get('email', '')
         
         # Ensure email is always populated in onboarding_data (required for PDH)
         if user_email and not onboarding_data.get('email'):
             onboarding_data['email'] = user_email
         
+        # Parse moduleAccessRole into roles array
+        roles = parse_module_access_role_to_roles(module_access_role)
+        
+        # Get user's full name
+        first_name = onboarding_data.get('firstName') or onboarding_data.get('name') or user_data.get('firstName') or ''
+        last_name = onboarding_data.get('lastName') or onboarding_data.get('surname') or user_data.get('lastName') or ''
+        full_name = f"{first_name} {last_name}".strip()
+        
+        # Fallback to 'name' field if full_name is empty
+        if not full_name:
+            full_name = user_data.get('name', '')
+        
         # Use existing token from onboarding_data if present, otherwise generate new one
         if 'token' not in onboarding_data or not onboarding_data.get('token'):
-            if module_role and user_email:
+            if module_access_role and user_email:
                 try:
                     encrypted_token = generate_and_encrypt_token(
                         user_id=uid,
                         email=user_email,
-                        module_role=module_role,
+                        full_name=full_name,
+                        roles=roles,
                     )
                     onboarding_data['token'] = encrypted_token
                     onboarding_data['token_updated_at'] = datetime.utcnow()
-                    print(f"[DEBUG] Token generated during Skills Heatmap sync for user_id: {uid}")
+                    print(f"[DEBUG] Token generated during Skills Heatmap sync for user_id: {uid} with roles: {roles}")
                 except Exception as token_error:
                     print(f"[ERROR] Failed to generate token during Skills Heatmap sync: {token_error}")
         
@@ -340,15 +381,17 @@ async def skills_heatmap_update_user(uid: str, data: dict):
 
         # Check if moduleAccessRole is being updated - regenerate token if so
         should_regenerate_token = False
-        new_module_role = ''
+        new_module_access_role = ''
         user_email = ''
+        user_fields_dict = user_fields or {}
+        onboarding_fields_dict = onboarding_fields or {}
         
         if onboarding_fields and 'moduleAccessRole' in onboarding_fields:
             should_regenerate_token = True
-            new_module_role = onboarding_fields.get('moduleAccessRole', '')
+            new_module_access_role = onboarding_fields.get('moduleAccessRole', '')
         elif user_fields and 'moduleAccessRole' in user_fields:
             should_regenerate_token = True
-            new_module_role = user_fields.get('moduleAccessRole', '')
+            new_module_access_role = user_fields.get('moduleAccessRole', '')
         
         if user_fields:
             skills_heatmap_db.collection('users').document(uid).set(user_fields, merge=True)
@@ -363,17 +406,30 @@ async def skills_heatmap_update_user(uid: str, data: dict):
             if user_email and not onboarding_fields.get('email'):
                 onboarding_fields['email'] = user_email
             
+            # Parse moduleAccessRole into roles array
+            roles = parse_module_access_role_to_roles(new_module_access_role)
+            
+            # Get user's full name
+            first_name = onboarding_fields.get('firstName') or onboarding_fields.get('name') or user_fields_dict.get('firstName') or ''
+            last_name = onboarding_fields.get('lastName') or onboarding_fields.get('surname') or user_fields_dict.get('lastName') or ''
+            full_name = f"{first_name} {last_name}".strip()
+            
+            # Fallback to 'name' field if full_name is empty
+            if not full_name:
+                full_name = user_fields_dict.get('name', '')
+            
             # Regenerate token if moduleAccessRole changed
             if should_regenerate_token and user_email:
                 try:
                     encrypted_token = generate_and_encrypt_token(
                         user_id=uid,
                         email=user_email,
-                        module_role=new_module_role,
+                        full_name=full_name,
+                        roles=roles,
                     )
                     onboarding_fields['token'] = encrypted_token
                     onboarding_fields['token_updated_at'] = datetime.utcnow()
-                    print(f"[DEBUG] Token regenerated during Skills Heatmap update for user_id: {uid}")
+                    print(f"[DEBUG] Token regenerated during Skills Heatmap update for user_id: {uid} with roles: {roles}")
                 except Exception as token_error:
                     print(f"[ERROR] Failed to regenerate token during Skills Heatmap update: {token_error}")
             
@@ -451,15 +507,19 @@ async def register_user(user: UserRegister):
         # Get module role (will be empty for new users, but included for consistency)
         module_role = ''
         
+        # Parse moduleAccessRole into roles array (empty for new users)
+        roles = parse_module_access_role_to_roles(module_role)
+        
         # Generate and encrypt token
         encrypted_token = None
         try:
             encrypted_token = generate_and_encrypt_token(
                 user_id=user_id,
                 email=email,
-                module_role=module_role,
+                full_name=full_name,
+                roles=roles,
             )
-            print(f"[DEBUG] Token generated for new user: {user_id}")
+            print(f"[DEBUG] Token generated for new user: {user_id} with roles: {roles}")
         except Exception as token_error:
             print(f"[ERROR] Failed to generate token during registration: {token_error}")
             # Continue with registration even if token generation fails
@@ -668,19 +728,32 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
                     try:
                         # Get user email for token generation
                         user_email = updated_data.get('email', '')
+                        onboarding_data = onboarding_doc.to_dict() or {}
                         if not user_email:
                             # Try to get from onboarding
-                            onboarding_data = onboarding_doc.to_dict() or {}
                             user_email = onboarding_data.get('email', '')
                         
-                        # Get the new module role
-                        new_module_role = user_update.moduleAccessRole or ''
+                        # Get the new module access role
+                        new_module_access_role = user_update.moduleAccessRole or ''
+                        
+                        # Parse moduleAccessRole into roles array
+                        roles = parse_module_access_role_to_roles(new_module_access_role)
+                        
+                        # Get user's full name
+                        first_name = onboarding_data.get('firstName') or onboarding_data.get('name') or updated_data.get('firstName') or ''
+                        last_name = onboarding_data.get('lastName') or onboarding_data.get('surname') or updated_data.get('lastName') or ''
+                        full_name = f"{first_name} {last_name}".strip()
+                        
+                        # Fallback to 'name' field if full_name is empty
+                        if not full_name:
+                            full_name = updated_data.get('name', '') or onboarding_data.get('name', '')
                         
                         # Generate new encrypted token
                         encrypted_token = generate_and_encrypt_token(
                             user_id=user_id,
                             email=user_email,
-                            module_role=new_module_role,
+                            full_name=full_name,
+                            roles=roles,
                         )
                         
                         # Update onboarding document with new token and ensure email is set
@@ -693,7 +766,7 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
                             update_data['email'] = user_email
                         
                         onboarding_doc.reference.update(update_data)
-                        print(f"[DEBUG] Token regenerated and stored for user_id={user_id} with moduleAccessRole={new_module_role}")
+                        print(f"[DEBUG] Token regenerated and stored for user_id={user_id} with moduleAccessRole={new_module_access_role} and roles: {roles}")
                     except Exception as token_error:
                         print(f"[ERROR] Failed to regenerate token during user update: {token_error}")
                         # Continue with update even if token regeneration fails
@@ -856,19 +929,31 @@ async def login_user(user_login: UserLogin):
                 }
             )
 
-        # Get module role from onboarding collection
+        # Get module role and user name from onboarding collection
         onboarding_query = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
         onboarding_data = {}
-        module_role = ""
+        module_access_role = ""
         
         for onboarding_doc in onboarding_query:
             onboarding_data = onboarding_doc.to_dict() or {}
-            module_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
+            module_access_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
             break
         
         # If not found in onboarding, try users collection
-        if not module_role:
-            module_role = user_data.get('moduleAccessRole', '')
+        if not module_access_role:
+            module_access_role = user_data.get('moduleAccessRole', '')
+        
+        # Parse moduleAccessRole into roles array
+        roles = parse_module_access_role_to_roles(module_access_role)
+        
+        # Get user's full name
+        first_name = onboarding_data.get('firstName') or onboarding_data.get('name') or user_data.get('firstName') or ''
+        last_name = onboarding_data.get('lastName') or onboarding_data.get('surname') or user_data.get('lastName') or ''
+        full_name = f"{first_name} {last_name}".strip()
+        
+        # Fallback to 'name' field if full_name is empty
+        if not full_name:
+            full_name = user_data.get('name', '')
 
         # Always generate a new token on each login for security and freshness
         encrypted_token = None
@@ -876,9 +961,10 @@ async def login_user(user_login: UserLogin):
             encrypted_token = generate_and_encrypt_token(
                 user_id=user_id,
                 email=user_data['email'],
-                module_role=module_role,
+                full_name=full_name,
+                roles=roles,
             )
-            print(f"[DEBUG] Generated new token for user_id: {user_id} on login")
+            print(f"[DEBUG] Generated new token for user_id: {user_id} on login with roles: {roles}")
         except Exception as token_error:
             print(f"[ERROR] Failed to generate token during login: {token_error}")
             # Continue with login even if token generation fails
@@ -944,7 +1030,7 @@ async def login_user(user_login: UserLogin):
                 "name": user_data.get('name', ''),
                 "role": user_data.get('role', 'user'),
                 "status": user_status,
-                "moduleAccessRole": module_role,
+                "moduleAccessRole": module_access_role,
             }
         }
         
@@ -993,13 +1079,26 @@ async def get_user_token(email: str = Query(..., description="User email address
         # Get token from onboarding collection
         onboarding_query = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
         encrypted_token = None
-        module_role = ""
+        module_access_role = ""
+        onboarding_data = {}
         
         for onboarding_doc in onboarding_query:
             onboarding_data = onboarding_doc.to_dict() or {}
             encrypted_token = onboarding_data.get('token')
-            module_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
+            module_access_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
             break
+        
+        # Parse moduleAccessRole into roles array
+        roles = parse_module_access_role_to_roles(module_access_role)
+        
+        # Get user's full name
+        first_name = onboarding_data.get('firstName') or onboarding_data.get('name') or user_data.get('firstName') or ''
+        last_name = onboarding_data.get('lastName') or onboarding_data.get('surname') or user_data.get('lastName') or ''
+        full_name = f"{first_name} {last_name}".strip()
+        
+        # Fallback to 'name' field if full_name is empty
+        if not full_name:
+            full_name = user_data.get('name', '')
         
         # If no token found, generate a new one
         if not encrypted_token:
@@ -1008,7 +1107,8 @@ async def get_user_token(email: str = Query(..., description="User email address
                 encrypted_token = generate_and_encrypt_token(
                     user_id=user_id,
                     email=user_data['email'],
-                    module_role=module_role,
+                    full_name=full_name,
+                    roles=roles,
                 )
                 
                 # Store the new token
@@ -1044,7 +1144,7 @@ async def get_user_token(email: str = Query(..., description="User email address
             content={
                 "token": encrypted_token,
                 "email": user_data['email'],
-                "moduleAccessRole": module_role,
+                "moduleAccessRole": module_access_role,
             }
         )
         

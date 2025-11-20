@@ -289,40 +289,27 @@ class _ModuleScreenState extends State<ModuleScreen> {
       // Check if this is a PDH URL (only PDH should get the token)
       final bool isPDHUrl =
           secureUrl.contains('pdhproject.netlify.app') ||
+          secureUrl.contains('personal-development-hub-pdh.netlify.app') ||
           secureUrl.contains('pdh');
 
-      // Get user token and email from AuthProvider only if it's a PDH URL
+      // Get user token from AuthProvider only if it's a PDH URL
       String? token;
-      String? email;
       if (isPDHUrl) {
         final authProvider = context.read<AuthProvider>();
         token = authProvider.userToken;
-        email = authProvider.userEmail;
 
         // If token is not available, try to fetch it
-        if (token == null && email != null) {
+        if (token == null && authProvider.userEmail != null) {
           await authProvider.fetchUserToken();
           token = authProvider.userToken;
         }
       }
 
-      // Append token and email as query parameters only for PDH URLs
+      // Build redirect URL with token for PDH URLs
       Uri uri = Uri.parse(secureUrl);
-      if (isPDHUrl) {
-        final Map<String, String> queryParams = {...uri.queryParameters};
-
-        // Append JWT token if available
-        if (token != null && token.isNotEmpty) {
-          queryParams['token'] = token;
-        }
-
-        // Append email if available (required for PDH)
-        if (email != null && email.isNotEmpty) {
-          queryParams['email'] = email;
-        }
-
-        // Uri.replace() automatically URL-encodes query parameters
-        uri = uri.replace(queryParameters: queryParams);
+      if (isPDHUrl && token != null && token.isNotEmpty) {
+        // Format: https://pdh-app-url/?token=<jwt>
+        uri = uri.replace(queryParameters: {'token': token});
       }
 
       final bool launched = await launchUrl(
