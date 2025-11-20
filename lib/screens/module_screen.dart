@@ -288,8 +288,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
       // Check if this is a PDH URL (only PDH should get the token)
       final bool isPDHUrl =
           secureUrl.contains('pdh-web-app.onrender.com') ||
-          secureUrl.contains('pdhproject.netlify.app') ||
-          secureUrl.contains('personal-development-hub-pdh.netlify.app') ||
           secureUrl.contains('pdh');
 
       // Get user token from AuthProvider only if it's a PDH URL
