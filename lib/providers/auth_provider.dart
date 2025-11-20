@@ -62,11 +62,11 @@ class AuthProvider extends ChangeNotifier {
     final url = Uri.parse(
       ApiConfig.authRegisterEndpoint,
     ); // Your backend registration endpoint
-    
+
     // Debug logging
     debugPrint('[AuthProvider] Attempting to register/login with URL: $url');
     debugPrint('[AuthProvider] Backend base URL: ${ApiConfig.baseUrl}');
-    
+
     try {
       final response = await http.post(
         url,
@@ -83,7 +83,7 @@ class AuthProvider extends ChangeNotifier {
           'designation': designation,
         }),
       );
-      
+
       debugPrint('[AuthProvider] Response status: ${response.statusCode}');
       debugPrint('[AuthProvider] Response body: ${response.body}');
 
@@ -116,6 +116,7 @@ class AuthProvider extends ChangeNotifier {
             'email': email,
             'name': firstName,
             'surname': lastName,
+            'fullName': '$firstName $lastName'.trim(),
             'department': department ?? '',
             'designation': designation,
             'status': 'Pending',
@@ -221,11 +222,11 @@ class AuthProvider extends ChangeNotifier {
     // Removed password parameter
 
     final url = Uri.parse(ApiConfig.authLoginEndpoint);
-    
+
     // Debug logging
     debugPrint('[AuthProvider] Attempting manual login with URL: $url');
     debugPrint('[AuthProvider] Backend base URL: ${ApiConfig.baseUrl}');
-    
+
     try {
       final response = await http
           .post(
@@ -242,8 +243,10 @@ class AuthProvider extends ChangeNotifier {
               );
             },
           );
-      
-      debugPrint('[AuthProvider] Login response status: ${response.statusCode}');
+
+      debugPrint(
+        '[AuthProvider] Login response status: ${response.statusCode}',
+      );
       debugPrint('[AuthProvider] Login response body: ${response.body}');
 
       if (response.statusCode == 200) {
@@ -284,15 +287,15 @@ class AuthProvider extends ChangeNotifier {
       } else if (response.statusCode == 403) {
         // User account is not active (Pending status)
         final responseData = json.decode(response.body);
-        final errorMessage = responseData['error'] as String? ?? 
+        final errorMessage =
+            responseData['error'] as String? ??
             'Your account is pending approval. Please wait for admin activation.';
         debugPrint('Login rejected: $errorMessage');
         _isAuthenticated = false;
         notifyListeners();
         // Store error message for display (you can access this via a getter if needed)
         throw Exception(errorMessage);
-      } else if (response.statusCode == 404 ||
-          response.statusCode == 401) {
+      } else if (response.statusCode == 404 || response.statusCode == 401) {
         // User not found or unauthorized - but still allow login if email exists in our system
         // Check if user exists by attempting to fetch user data
         final success = await _attemptFallbackLogin(email);
@@ -367,7 +370,7 @@ class AuthProvider extends ChangeNotifier {
             notifyListeners();
             return false;
           }
-          
+
           final prefs = await SharedPreferences.getInstance();
           _isAuthenticated = true;
           _userEmail = foundUser['email'] ?? email;

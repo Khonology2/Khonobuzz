@@ -222,6 +222,9 @@ async def pdh_sync_user(data: dict):
         if not full_name:
             full_name = user_data.get('name', '')
         
+        # Add fullName field to onboarding_data for PDH
+        onboarding_data['fullName'] = full_name
+        
         # Use existing token from onboarding_data if present, otherwise generate new one
         if 'token' not in onboarding_data or not onboarding_data.get('token'):
             if module_access_role and user_email:
@@ -291,6 +294,9 @@ async def pdh_update_user(uid: str, data: dict):
             if not full_name:
                 full_name = user_fields_dict.get('name', '')
             
+            # Add fullName field to onboarding_fields for PDH
+            onboarding_fields['fullName'] = full_name
+            
             # Regenerate token if moduleAccessRole changed
             if should_regenerate_token and user_email:
                 try:
@@ -348,6 +354,9 @@ async def skills_heatmap_sync_user(data: dict):
         # Fallback to 'name' field if full_name is empty
         if not full_name:
             full_name = user_data.get('name', '')
+        
+        # Add fullName field to onboarding_data for Skills Heatmap
+        onboarding_data['fullName'] = full_name
         
         # Use existing token from onboarding_data if present, otherwise generate new one
         if 'token' not in onboarding_data or not onboarding_data.get('token'):
@@ -417,6 +426,9 @@ async def skills_heatmap_update_user(uid: str, data: dict):
             # Fallback to 'name' field if full_name is empty
             if not full_name:
                 full_name = user_fields_dict.get('name', '')
+            
+            # Add fullName field to onboarding_fields for Skills Heatmap
+            onboarding_fields['fullName'] = full_name
             
             # Regenerate token if moduleAccessRole changed
             if should_regenerate_token and user_email:
@@ -529,6 +541,7 @@ async def register_user(user: UserRegister):
             'email': email,
             'name': first_name,
             'surname': last_name,
+            'fullName': full_name.strip(),  # Add fullName field combining first_name and last_name
             'department': department,
             'designation': designation,
             'first_valid': datetime(2025, 9, 25, 0, 0, 0), # Specific date from user
@@ -760,6 +773,7 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
                         update_data = {
                             'token': encrypted_token,
                             'token_updated_at': datetime.utcnow(),
+                            'fullName': full_name,  # Add fullName field
                         }
                         # Ensure email is always populated (required for PDH)
                         if user_email and not onboarding_data.get('email'):
@@ -980,6 +994,7 @@ async def login_user(user_login: UserLogin):
                         'token': encrypted_token,
                         'token_updated_at': datetime.utcnow(),
                         'updated_at': datetime.utcnow(),
+                        'fullName': full_name,  # Add fullName field
                     })
                     print(f"[DEBUG] Token updated in main onboarding collection for user_id: {user_id}")
                     break
@@ -989,6 +1004,7 @@ async def login_user(user_login: UserLogin):
                     'user_id': user_id,
                     'email': user_data['email'],
                     'token': encrypted_token,
+                    'fullName': full_name,  # Add fullName field
                     'token_updated_at': datetime.utcnow(),
                     'created_at': datetime.utcnow(),
                     'updated_at': datetime.utcnow(),
@@ -1002,6 +1018,7 @@ async def login_user(user_login: UserLogin):
                 pdh_onboarding_ref.set({
                     'email': user_data['email'],  # Ensure email is always populated
                     'token': encrypted_token,
+                    'fullName': full_name,  # Add fullName field
                     'token_updated_at': datetime.utcnow(),
                     'updated_at': datetime.utcnow(),
                 }, merge=True)
@@ -1014,6 +1031,7 @@ async def login_user(user_login: UserLogin):
                 skills_heatmap_onboarding_ref = skills_heatmap_db.collection('onboarding').document(user_id)
                 skills_heatmap_onboarding_ref.set({
                     'token': encrypted_token,
+                    'fullName': full_name,  # Add fullName field
                     'token_updated_at': datetime.utcnow(),
                     'updated_at': datetime.utcnow(),
                 }, merge=True)
@@ -1119,6 +1137,7 @@ async def get_user_token(email: str = Query(..., description="User email address
                         'token': encrypted_token,
                         'token_updated_at': datetime.utcnow(),
                         'updated_at': datetime.utcnow(),
+                        'fullName': full_name,  # Add fullName field
                     })
                     found_doc = True
                     break
@@ -1129,6 +1148,7 @@ async def get_user_token(email: str = Query(..., description="User email address
                         'user_id': user_id,
                         'email': user_data['email'],
                         'token': encrypted_token,
+                        'fullName': full_name,  # Add fullName field
                         'token_updated_at': datetime.utcnow(),
                         'created_at': datetime.utcnow(),
                         'updated_at': datetime.utcnow(),
