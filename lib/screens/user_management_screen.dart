@@ -73,8 +73,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   final List<String> userRoles = ['Staff', 'Manager', 'Admin'];
 
-  static const double _badgeAreaWidth = 200.0;
-
   final TextEditingController _searchController = TextEditingController();
 
   List<ManagedUser> get _filteredUsers {
@@ -599,6 +597,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Row(
           children: [
+            // First section: Icon + Name/Email (aligned with "All Statuses" filter)
             const Icon(Icons.person, size: 40.0, color: Colors.white54),
             const SizedBox(width: 16.0),
             Expanded(
@@ -624,10 +623,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 24.0),
-            // Middle-right area (red rectangle area) - Designation and Department
-            SizedBox(
-              width: 220.0, // Fixed width for middle column
+            const SizedBox(width: 8.0), // Match filter spacing
+            // Second section: Designation/Department (aligned with "All Departments" filter - red vertical line)
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -652,10 +650,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 24.0),
-            // Right area - Badges
-            SizedBox(
-              width: _badgeAreaWidth,
+            const SizedBox(width: 8.0), // Match filter spacing
+            // Third section: Badges (aligned with "All Designations" filter)
+            Expanded(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
