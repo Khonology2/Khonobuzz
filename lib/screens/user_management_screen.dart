@@ -73,7 +73,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   final List<String> userRoles = ['Staff', 'Manager', 'Admin'];
 
-  static const double _designationColumnWidth = 240.0;
   static const double _badgeAreaWidth = 200.0;
 
   final TextEditingController _searchController = TextEditingController();
@@ -622,25 +621,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       fontFamily: 'Poppins',
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16.0),
-            SizedBox(
-              width:
-                  _designationColumnWidth, // Fixed width for consistent alignment
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                  const SizedBox(height: 8.0),
                   Text(
-                    user.designation, // Displaying designation as requested for the second line
+                    user.designation, // Moved to middle area inside the square
                     style: const TextStyle(
                       fontWeight: FontWeight.w500,
+                      fontSize: 14.0,
                       fontFamily: 'Poppins',
                     ),
                   ),
                   Text(
-                    user.department, // Displaying department as requested for the second line
+                    user.department, // Moved to middle area inside the square
                     style: const TextStyle(
                       color: Colors.white60,
                       fontSize: 12.0,
@@ -650,6 +641,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ],
               ),
             ),
+            const SizedBox(width: 16.0),
             SizedBox(
               width: _badgeAreaWidth,
               child: Row(
