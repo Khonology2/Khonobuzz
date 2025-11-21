@@ -109,7 +109,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         _buildModuleCard(
                           context: context,
                           cardWidth: calculatedCardWidth,
-                          title: 'Personal Development Hub',
+                          titleLines: ['Personal', 'Development', 'Hub'],
                           buttonText: 'Launch',
                           url: 'https://pdh-web-app.onrender.com',
                         ),
@@ -127,7 +127,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         _buildModuleCard(
                           context: context,
                           cardWidth: calculatedCardWidth,
-                          title: 'Resource Capacity & Skills Heatmap',
+                          titleLines: ['Resource Capacity', '&', 'Heatmap'],
                           buttonText: 'Launch',
                           url: 'https://resource-capacity.netlify.app/',
                         ),
@@ -145,7 +145,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         _buildModuleCard(
                           context: context,
                           cardWidth: calculatedCardWidth,
-                          title: 'Automated Recruitment Workflow',
+                          titleLines: ['Automated', 'Recruitment', 'Workflow'],
                           buttonText: 'Launch',
                           url: 'https://chimerical-quokka-d580e5.netlify.app/',
                         ),
@@ -183,7 +183,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   Widget _buildModuleCard({
     required BuildContext context,
     required double cardWidth,
-    required String title,
+    required List<String> titleLines,
     String? subtitle,
     required String buttonText,
     required String url,
@@ -198,7 +198,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
             width: cardWidth,
             padding: const EdgeInsets.all(32.0),
             decoration: BoxDecoration(
-              color: primaryDark.withValues(alpha: 0.80),
+              color: primaryDark.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(16.0),
               border: Border.all(color: Colors.white24),
               boxShadow: const [
@@ -214,23 +214,27 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Flexible(
-                    child: Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: cardWidth > 300
-                            ? 26.0
-                            : cardWidth > 200
-                            ? 22.0
-                            : 18.0,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        height: 1.3,
-                      ),
-                      maxLines: 5,
-                      overflow: TextOverflow.visible,
-                    ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: titleLines.map((line) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4.0),
+                        child: Text(
+                          line,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: cardWidth > 300
+                                ? 26.0
+                                : cardWidth > 200
+                                ? 22.0
+                                : 18.0,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            height: 1.3,
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   ),
                   if (subtitle != null && subtitle.isNotEmpty) ...[
                     const SizedBox(height: 12.0),
@@ -265,7 +269,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 16.0),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12.0),
+          borderRadius: BorderRadius.circular(50.0),
         ),
         textStyle: const TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
         elevation: 10,
