@@ -93,16 +93,19 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     if (showRecruitment) cardCount++;
 
                     // Calculate available width and card width based on number of cards
+                    // Reduced by 10% to match 90% zoom level
                     final double availableWidth =
                         constraints.maxWidth - 32.0; // Account for padding
-                    final double calculatedCardWidth = isMobile
-                        ? (constraints.maxWidth > 500
-                              ? 500
-                              : constraints.maxWidth * 0.9)
-                        : cardCount > 0
-                        ? (availableWidth - (20.0 * (cardCount - 1))) /
-                              cardCount
-                        : 300.0; // Default fallback width
+                    final double calculatedCardWidth =
+                        (isMobile
+                            ? (constraints.maxWidth > 500
+                                  ? 500
+                                  : constraints.maxWidth * 0.9)
+                            : cardCount > 0
+                            ? (availableWidth - (18.0 * (cardCount - 1))) /
+                                  cardCount // 20.0 * 0.9 = 18.0
+                            : 300.0) *
+                        0.9; // Apply 90% scale factor
 
                     if (showPDH) {
                       cards.add(
@@ -118,9 +121,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
                     if (showSkillsHeatmap) {
                       if (cards.isNotEmpty && isMobile) {
-                        cards.add(const SizedBox(height: 20.0));
+                        cards.add(const SizedBox(height: 18.0)); // 20.0 * 0.9
                       } else if (cards.isNotEmpty && !isMobile) {
-                        cards.add(const SizedBox(width: 20.0));
+                        cards.add(const SizedBox(width: 18.0)); // 20.0 * 0.9
                       }
 
                       cards.add(
@@ -136,9 +139,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
                     if (showRecruitment) {
                       if (cards.isNotEmpty && isMobile) {
-                        cards.add(const SizedBox(height: 20.0));
+                        cards.add(const SizedBox(height: 18.0)); // 20.0 * 0.9
                       } else if (cards.isNotEmpty && !isMobile) {
-                        cards.add(const SizedBox(width: 20.0));
+                        cards.add(const SizedBox(width: 18.0)); // 20.0 * 0.9
                       }
 
                       cards.add(
@@ -234,10 +237,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
       vsync: this,
     );
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeInOut,
-      ),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
   }
 
@@ -269,11 +269,9 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 width: widget.cardWidth,
-                padding: const EdgeInsets.all(32.0),
+                padding: const EdgeInsets.all(28.8), // 32.0 * 0.9
                 decoration: BoxDecoration(
-                  color: primaryDark.withValues(
-                    alpha: _isHovered ? 0.7 : 0.5,
-                  ),
+                  color: primaryDark.withValues(alpha: _isHovered ? 0.7 : 0.5),
                   borderRadius: BorderRadius.circular(16.0),
                   border: Border.all(
                     color: _isHovered ? Colors.white38 : Colors.white24,
@@ -299,16 +297,18 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                         mainAxisSize: MainAxisSize.min,
                         children: widget.titleLines.map((line) {
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 4.0),
+                            padding: const EdgeInsets.only(
+                              bottom: 3.6,
+                            ), // 4.0 * 0.9
                             child: Text(
                               line,
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: widget.cardWidth > 300
-                                    ? 26.0
+                                    ? 23.4 // 26.0 * 0.9
                                     : widget.cardWidth > 200
-                                    ? 22.0
-                                    : 18.0,
+                                    ? 19.8 // 22.0 * 0.9
+                                    : 16.2, // 18.0 * 0.9
                                 fontWeight: FontWeight.w900,
                                 color: Colors.white,
                                 height: 1.3,
@@ -319,12 +319,12 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                       ),
                       if (widget.subtitle != null &&
                           widget.subtitle!.isNotEmpty) ...[
-                        const SizedBox(height: 12.0),
+                        const SizedBox(height: 10.8), // 12.0 * 0.9
                         Text(
                           widget.subtitle!,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            fontSize: 20.0,
+                            fontSize: 18.0, // 20.0 * 0.9
                             fontWeight: FontWeight.w600,
                             color: primaryAccent,
                           ),
@@ -332,24 +332,24 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
-                      const SizedBox(height: 32.0),
+                      const SizedBox(height: 28.8), // 32.0 * 0.9
                       ElevatedButton(
-                        onPressed: () => _launchUrlFromContext(
-                          widget.context,
-                          widget.url,
-                        ),
+                        onPressed: () =>
+                            _launchUrlFromContext(widget.context, widget.url),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryAccent,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 40.0,
-                            vertical: 16.0,
+                            horizontal: 36.0, // 40.0 * 0.9
+                            vertical: 14.4, // 16.0 * 0.9
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(50.0),
+                            borderRadius: BorderRadius.circular(
+                              45.0,
+                            ), // 50.0 * 0.9
                           ),
                           textStyle: const TextStyle(
-                            fontSize: 18.0,
+                            fontSize: 16.2, // 18.0 * 0.9
                             fontWeight: FontWeight.bold,
                           ),
                           elevation: 10,
@@ -397,10 +397,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
 }
 
 // Standalone function to launch URLs - can be called from anywhere
-Future<void> _launchUrlFromContext(
-  BuildContext context,
-  String url,
-) async {
+Future<void> _launchUrlFromContext(BuildContext context, String url) async {
   try {
     // Ensure URL uses HTTPS for secure transmission
     String secureUrl = url;
