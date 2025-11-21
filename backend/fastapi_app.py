@@ -702,6 +702,11 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
         update_payload['updated_at'] = datetime.utcnow()
 
         user_ref = db.collection('users').document(user_id)
+        
+        # Get current user data BEFORE updating (needed for token generation)
+        current_user_doc = user_ref.get()
+        current_user_data = current_user_doc.to_dict() or {}
+        
         user_ref.update(update_payload)
         print(f"[DEBUG] Firestore users/{user_id} updated with: {update_payload}")
 
@@ -743,8 +748,8 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
                 # Regenerate token if moduleAccessRole changed
                 if should_regenerate_token:
                     try:
-                        # Get user email for token generation
-                        user_email = updated_data.get('email', '')
+                        # Get user email for token generation (use current_user_data instead of updated_data)
+                        user_email = current_user_data.get('email', '')
                         onboarding_data = onboarding_doc.to_dict() or {}
                         if not user_email:
                             # Try to get from onboarding
@@ -756,14 +761,14 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
                         # Parse moduleAccessRole into roles array
                         roles = parse_module_access_role_to_roles(new_module_access_role)
                         
-                        # Get user's full name
-                        first_name = onboarding_data.get('firstName') or onboarding_data.get('name') or updated_data.get('firstName') or ''
-                        last_name = onboarding_data.get('lastName') or onboarding_data.get('surname') or updated_data.get('lastName') or ''
+                        # Get user's full name (use current_user_data instead of updated_data)
+                        first_name = onboarding_data.get('firstName') or onboarding_data.get('name') or current_user_data.get('firstName') or ''
+                        last_name = onboarding_data.get('lastName') or onboarding_data.get('surname') or current_user_data.get('lastName') or ''
                         full_name = f"{first_name} {last_name}".strip()
                         
                         # Fallback to 'name' field if full_name is empty
                         if not full_name:
-                            full_name = updated_data.get('name', '') or onboarding_data.get('name', '')
+                            full_name = current_user_data.get('name', '') or onboarding_data.get('name', '')
                         
                         # Generate new encrypted token
                         encrypted_token = generate_and_encrypt_token(
@@ -916,18 +921,35 @@ async def create_initial_roles():
 @app.post("/api/auth/login")
 async def login_user(user_login: UserLogin):
     try:
-        info_log(f"Login attempt for email: {user_login.email}")
+        # Normalize email (lowercase and strip whitespace)
+        normalized_email = user_login.email.lower().strip()
+        info_log(f"Login attempt for email: {normalized_email}")
 
         users_ref = db.collection('users')
-        query = users_ref.where('email', '==', user_login.email).limit(1)
-        users = query.get()
+        query = users_ref.where('email', '==', normalized_email).limit(1)
+        
+        try:
+            users = query.get()
+        except Exception as query_error:
+            error_log(f"Firestore query error during login: {query_error}")
+            return JSONResponse(
+                status_code=500,
+                content={"error": f"Database query failed: {str(query_error)}"}
+            )
 
-        if not users:
-            print(f"[DEBUG] User not found: {user_login.email}")
+        # Check if query returned any results
+        if not users or len(users) == 0:
+            print(f"[DEBUG] User not found: {normalized_email}")
             return JSONResponse(status_code=404, content={"error": "User not found"})
 
         user_data = users[0].to_dict()
         user_id = users[0].id
+        
+        # Verify email matches (case-insensitive check)
+        stored_email = user_data.get('email', '').lower().strip() if user_data.get('email') else ''
+        if stored_email != normalized_email:
+            print(f"[DEBUG] Email mismatch: stored={stored_email}, requested={normalized_email}")
+            return JSONResponse(status_code=404, content={"error": "User not found"})
         # Authenticate user (e.g., check password) - REMOVED PASSWORD CHECK
         # if user_data['password'] != user_login.password:
         #     raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -948,14 +970,18 @@ async def login_user(user_login: UserLogin):
             )
 
         # Get module role and user name from onboarding collection
-        onboarding_query = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
         onboarding_data = {}
         module_access_role = ""
         
-        for onboarding_doc in onboarding_query:
-            onboarding_data = onboarding_doc.to_dict() or {}
-            module_access_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
-            break
+        try:
+            onboarding_query = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
+            for onboarding_doc in onboarding_query:
+                onboarding_data = onboarding_doc.to_dict() or {}
+                module_access_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
+                break
+        except Exception as onboarding_query_error:
+            error_log(f"Failed to query onboarding collection: {onboarding_query_error}")
+            # Continue with login even if onboarding query fails
         
         # If not found in onboarding, try users collection
         if not module_access_role:
@@ -992,29 +1018,49 @@ async def login_user(user_login: UserLogin):
             # Update or create onboarding document in main collection
             if onboarding_data:
                 # Update existing onboarding document
-                onboarding_doc_ref = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
-                for doc in onboarding_doc_ref:
-                    doc.reference.update({
-                        'token': encrypted_token,
-                        'token_updated_at': datetime.utcnow(),
-                        'updated_at': datetime.utcnow(),
-                        'fullName': full_name,  # Add fullName field
-                    })
-                    print(f"[DEBUG] Token updated in main onboarding collection for user_id: {user_id}")
-                    break
+                try:
+                    onboarding_doc_ref = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
+                    doc_found = False
+                    for doc in onboarding_doc_ref:
+                        doc.reference.update({
+                            'token': encrypted_token,
+                            'token_updated_at': datetime.utcnow(),
+                            'updated_at': datetime.utcnow(),
+                            'fullName': full_name,  # Add fullName field
+                            'email': user_data['email'],  # Ensure email is always present
+                        })
+                        print(f"[DEBUG] Token updated in main onboarding collection for user_id: {user_id}")
+                        doc_found = True
+                        break
+                    
+                    # If document not found in iteration, create it
+                    if not doc_found:
+                        onboarding_data['token'] = encrypted_token
+                        onboarding_data['token_updated_at'] = datetime.utcnow()
+                        onboarding_data['email'] = user_data['email']
+                        onboarding_data['fullName'] = full_name
+                        db.collection('onboarding').add(onboarding_data)
+                        print(f"[DEBUG] Created onboarding document with token for user_id: {user_id}")
+                except Exception as onboarding_update_error:
+                    error_log(f"Failed to update onboarding document: {onboarding_update_error}")
+                    # Continue with token sync even if update fails
             else:
                 # Create onboarding document if it doesn't exist
-                onboarding_data = {
-                    'user_id': user_id,
-                    'email': user_data['email'],
-                    'token': encrypted_token,
-                    'fullName': full_name,  # Add fullName field
-                    'token_updated_at': datetime.utcnow(),
-                    'created_at': datetime.utcnow(),
-                    'updated_at': datetime.utcnow(),
-                }
-                db.collection('onboarding').add(onboarding_data)
-                print(f"[DEBUG] Created onboarding document with token for user_id: {user_id}")
+                try:
+                    onboarding_data = {
+                        'user_id': user_id,
+                        'email': user_data['email'],
+                        'token': encrypted_token,
+                        'fullName': full_name,  # Add fullName field
+                        'token_updated_at': datetime.utcnow(),
+                        'created_at': datetime.utcnow(),
+                        'updated_at': datetime.utcnow(),
+                    }
+                    db.collection('onboarding').add(onboarding_data)
+                    print(f"[DEBUG] Created onboarding document with token for user_id: {user_id}")
+                except Exception as onboarding_create_error:
+                    error_log(f"Failed to create onboarding document: {onboarding_create_error}")
+                    # Continue with token sync even if creation fails
             
             # Always sync token and email to PDH onboarding collection
             try:
@@ -1069,11 +1115,16 @@ async def login_user(user_login: UserLogin):
         )
 
     except HTTPException as e:
-        print(f"[DEBUG] Login failed due to HTTPException: {e}")
+        error_log(f"Login failed due to HTTPException: {e}")
         return JSONResponse(status_code=e.status_code, content={"error": e.detail})
     except Exception as e:
-        print(f"[ERROR] During FastAPI login: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        import traceback
+        error_log(f"During FastAPI login: {e}")
+        error_log(f"Traceback: {traceback.format_exc()}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Login failed: {str(e)}"}
+        )
 
 
 @app.get("/api/auth/token")

@@ -368,6 +368,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
     );
   }
 
+  // ignore: unused_element
   Widget _buildLaunchButton({
     required BuildContext context,
     required String text,
