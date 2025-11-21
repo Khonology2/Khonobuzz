@@ -188,71 +188,178 @@ class _ModuleScreenState extends State<ModuleScreen> {
     required String buttonText,
     required String url,
   }) {
-    return SizedBox(
-      width: cardWidth,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16.0),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
-          child: Container(
-            width: cardWidth,
-            padding: const EdgeInsets.all(32.0),
-            decoration: BoxDecoration(
-              color: primaryDark.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(16.0),
-              border: Border.all(color: Colors.white24),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black54,
-                  blurRadius: 25,
-                  offset: Offset(0, 10),
-                ),
-              ],
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: titleLines.map((line) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 4.0),
-                        child: Text(
-                          line,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: cardWidth > 300
-                                ? 26.0
-                                : cardWidth > 200
-                                ? 22.0
-                                : 18.0,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            height: 1.3,
-                          ),
-                        ),
-                      );
-                    }).toList(),
+    return _HoverableModuleCard(
+      context: context,
+      cardWidth: cardWidth,
+      titleLines: titleLines,
+      subtitle: subtitle,
+      buttonText: buttonText,
+      url: url,
+    );
+  }
+}
+
+class _HoverableModuleCard extends StatefulWidget {
+  final BuildContext context;
+  final double cardWidth;
+  final List<String> titleLines;
+  final String? subtitle;
+  final String buttonText;
+  final String url;
+
+  const _HoverableModuleCard({
+    required this.context,
+    required this.cardWidth,
+    required this.titleLines,
+    this.subtitle,
+    required this.buttonText,
+    required this.url,
+  });
+
+  @override
+  State<_HoverableModuleCard> createState() => _HoverableModuleCardState();
+}
+
+class _HoverableModuleCardState extends State<_HoverableModuleCard>
+    with SingleTickerProviderStateMixin {
+  bool _isHovered = false;
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) {
+        setState(() => _isHovered = true);
+        _animationController.forward();
+      },
+      onExit: (_) {
+        setState(() => _isHovered = false);
+        _animationController.reverse();
+      },
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: SizedBox(
+          width: widget.cardWidth,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16.0),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: widget.cardWidth,
+                padding: const EdgeInsets.all(32.0),
+                decoration: BoxDecoration(
+                  color: primaryDark.withValues(
+                    alpha: _isHovered ? 0.7 : 0.5,
                   ),
-                  if (subtitle != null && subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 12.0),
-                    Text(
-                      subtitle,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 20.0,
-                        fontWeight: FontWeight.w600,
-                        color: primaryAccent,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                  borderRadius: BorderRadius.circular(16.0),
+                  border: Border.all(
+                    color: _isHovered ? Colors.white38 : Colors.white24,
+                    width: _isHovered ? 1.5 : 1.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _isHovered
+                          ? Colors.black.withValues(alpha: 0.7)
+                          : Colors.black54,
+                      blurRadius: _isHovered ? 35 : 25,
+                      offset: Offset(0, _isHovered ? 15 : 10),
+                      spreadRadius: _isHovered ? 2 : 0,
                     ),
                   ],
-                  const SizedBox(height: 32.0),
-                  _buildLaunchButton(text: buttonText, url: url),
-                ],
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: widget.titleLines.map((line) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 4.0),
+                            child: Text(
+                              line,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: widget.cardWidth > 300
+                                    ? 26.0
+                                    : widget.cardWidth > 200
+                                    ? 22.0
+                                    : 18.0,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                height: 1.3,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      if (widget.subtitle != null &&
+                          widget.subtitle!.isNotEmpty) ...[
+                        const SizedBox(height: 12.0),
+                        Text(
+                          widget.subtitle!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 20.0,
+                            fontWeight: FontWeight.w600,
+                            color: primaryAccent,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: 32.0),
+                      ElevatedButton(
+                        onPressed: () => _launchUrlFromContext(
+                          widget.context,
+                          widget.url,
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 40.0,
+                            vertical: 16.0,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(50.0),
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 18.0,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          elevation: 10,
+                          shadowColor: primaryAccent.withValues(alpha: 0.5),
+                        ),
+                        child: Text(widget.buttonText),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -261,9 +368,13 @@ class _ModuleScreenState extends State<ModuleScreen> {
     );
   }
 
-  Widget _buildLaunchButton({required String text, required String url}) {
+  Widget _buildLaunchButton({
+    required BuildContext context,
+    required String text,
+    required String url,
+  }) {
     return ElevatedButton(
-      onPressed: () => _launchUrl(url),
+      onPressed: () => _launchUrl(context, url),
       style: ElevatedButton.styleFrom(
         backgroundColor: primaryAccent,
         foregroundColor: Colors.white,
@@ -279,67 +390,75 @@ class _ModuleScreenState extends State<ModuleScreen> {
     );
   }
 
-  Future<void> _launchUrl(String url) async {
-    try {
-      // Ensure URL uses HTTPS for secure transmission
-      String secureUrl = url;
-      if (secureUrl.startsWith('http://')) {
-        secureUrl = secureUrl.replaceFirst('http://', 'https://');
-      } else if (!secureUrl.startsWith('https://')) {
-        secureUrl = 'https://$secureUrl';
-      }
+  Future<void> _launchUrl(BuildContext context, String url) async {
+    await _launchUrlFromContext(context, url);
+  }
+}
 
-      // Check if this is a PDH URL (only PDH should get the token)
-      final bool isPDHUrl =
-          secureUrl.contains('pdh-web-app.onrender.com') ||
-          secureUrl.contains('pdh');
+// Standalone function to launch URLs - can be called from anywhere
+Future<void> _launchUrlFromContext(
+  BuildContext context,
+  String url,
+) async {
+  try {
+    // Ensure URL uses HTTPS for secure transmission
+    String secureUrl = url;
+    if (secureUrl.startsWith('http://')) {
+      secureUrl = secureUrl.replaceFirst('http://', 'https://');
+    } else if (!secureUrl.startsWith('https://')) {
+      secureUrl = 'https://$secureUrl';
+    }
 
-      // Get user token from AuthProvider only if it's a PDH URL
-      String? token;
-      if (isPDHUrl) {
-        final authProvider = context.read<AuthProvider>();
+    // Check if this is a PDH URL (only PDH should get the token)
+    final bool isPDHUrl =
+        secureUrl.contains('pdh-web-app.onrender.com') ||
+        secureUrl.contains('pdh');
+
+    // Get user token from AuthProvider only if it's a PDH URL
+    String? token;
+    if (isPDHUrl) {
+      final authProvider = context.read<AuthProvider>();
+      token = authProvider.userToken;
+
+      // If token is not available, try to fetch it
+      if (token == null && authProvider.userEmail != null) {
+        await authProvider.fetchUserToken();
         token = authProvider.userToken;
-
-        // If token is not available, try to fetch it
-        if (token == null && authProvider.userEmail != null) {
-          await authProvider.fetchUserToken();
-          token = authProvider.userToken;
-        }
       }
+    }
 
-      // Build redirect URL with token for PDH URLs
-      Uri uri = Uri.parse(secureUrl);
-      if (isPDHUrl && token != null && token.isNotEmpty) {
-        // Format: https://pdh-app-url/?token=<jwt>
-        uri = uri.replace(queryParameters: {'token': token});
-      }
+    // Build redirect URL with token for PDH URLs
+    Uri uri = Uri.parse(secureUrl);
+    if (isPDHUrl && token != null && token.isNotEmpty) {
+      // Format: https://pdh-app-url/?token=<jwt>
+      uri = uri.replace(queryParameters: {'token': token});
+    }
 
-      final bool launched = await launchUrl(
-        uri,
-        mode: LaunchMode.platformDefault,
-        webOnlyWindowName: '_blank',
-      );
-      if (!mounted) return;
-      if (!launched) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not open link',
-              style: TextStyle(fontFamily: 'Poppins'),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
+    final bool launched = await launchUrl(
+      uri,
+      mode: LaunchMode.platformDefault,
+      webOnlyWindowName: '_blank',
+    );
+    if (!context.mounted) return;
+    if (!launched) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
-            'Error opening link: ${e.toString()}',
-            style: const TextStyle(fontFamily: 'Poppins'),
+            'Could not open link',
+            style: TextStyle(fontFamily: 'Poppins'),
           ),
         ),
       );
     }
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Error opening link: ${e.toString()}',
+          style: const TextStyle(fontFamily: 'Poppins'),
+        ),
+      ),
+    );
   }
 }
