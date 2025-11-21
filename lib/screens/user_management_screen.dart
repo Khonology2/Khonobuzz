@@ -621,17 +621,28 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       fontFamily: 'Poppins',
                     ),
                   ),
-                  const SizedBox(height: 8.0),
+                ],
+              ),
+            ),
+            const SizedBox(width: 24.0),
+            // Middle-right area (red rectangle area) - Designation and Department
+            SizedBox(
+              width: 220.0, // Fixed width for middle column
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
                   Text(
-                    user.designation, // Moved to middle area inside the square
+                    user.designation,
                     style: const TextStyle(
                       fontWeight: FontWeight.w500,
                       fontSize: 14.0,
                       fontFamily: 'Poppins',
                     ),
                   ),
+                  const SizedBox(height: 4.0),
                   Text(
-                    user.department, // Moved to middle area inside the square
+                    user.department,
                     style: const TextStyle(
                       color: Colors.white60,
                       fontSize: 12.0,
@@ -641,7 +652,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 16.0),
+            const SizedBox(width: 24.0),
+            // Right area - Badges
             SizedBox(
               width: _badgeAreaWidth,
               child: Row(
