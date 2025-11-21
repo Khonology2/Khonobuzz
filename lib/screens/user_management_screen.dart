@@ -595,84 +595,124 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           borderRadius: BorderRadius.circular(16.0),
         ),
         padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            // First section: Icon + Name/Email (aligned with "All Statuses" filter)
-            const Icon(Icons.person, size: 40.0, color: Colors.white54),
-            const SizedBox(width: 16.0),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16.0,
-                      fontFamily: 'Poppins',
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Calculate column widths to match filter layout exactly
+            // Filters use: three Expanded widgets with 8.0 spacing between them
+            // LayoutBuilder constraints are already inside the card padding
+            final availableWidth = constraints.maxWidth;
+            final spacingWidth = 8.0 * 2; // Two spacings between three columns
+            final columnWidth = (availableWidth - spacingWidth) / 3;
+            final leftPadding = columnWidth * 0.12;
+
+            // Adjust second column width to account for padding to prevent overflow
+            final secondColumnWidth = columnWidth - leftPadding;
+
+            return Row(
+              children: [
+                // First column: Avatar + Name + Email (aligned with "All Statuses" filter)
+                SizedBox(
+                  width: columnWidth,
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.person,
+                        size: 40.0,
+                        color: Colors.white54,
+                      ),
+                      const SizedBox(width: 12.0),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              user.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16.0,
+                                fontFamily: 'Poppins',
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                            Text(
+                              user.email,
+                              style: const TextStyle(
+                                color: Colors.white60,
+                                fontSize: 12.0,
+                                fontFamily: 'Poppins',
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8.0), // Match filter spacing exactly
+                // Second column: Designation + Department (aligned with "All Departments" filter - red vertical line)
+                Padding(
+                  padding: EdgeInsets.only(left: leftPadding),
+                  child: SizedBox(
+                    width: secondColumnWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          user.designation,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14.0,
+                            fontFamily: 'Poppins',
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                        const SizedBox(height: 4.0),
+                        Text(
+                          user.department,
+                          style: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 12.0,
+                            fontFamily: 'Poppins',
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ],
                     ),
                   ),
-                  Text(
-                    user.email,
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 12.0,
-                      fontFamily: 'Poppins',
-                    ),
+                ),
+                const SizedBox(width: 8.0), // Match filter spacing exactly
+                // Third column: Badges + Dropdown (aligned with "All Designations" filter)
+                SizedBox(
+                  width: columnWidth,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (user.role.toLowerCase() != 'user') ...[
+                        Flexible(child: _buildRoleBadge(user.role)),
+                        const SizedBox(width: 8.0),
+                      ],
+                      Flexible(child: _buildStatusBadge(user.status)),
+                      const SizedBox(width: 8.0),
+                      Transform.rotate(
+                        angle: isExpanded ? 3.14 : 0,
+                        child: const Icon(
+                          Icons.keyboard_arrow_down,
+                          color: Colors.white54,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8.0), // Match filter spacing
-            // Second section: Designation/Department (aligned with "All Departments" filter - red vertical line)
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    user.designation,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 14.0,
-                      fontFamily: 'Poppins',
-                    ),
-                  ),
-                  const SizedBox(height: 4.0),
-                  Text(
-                    user.department,
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 12.0,
-                      fontFamily: 'Poppins',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8.0), // Match filter spacing
-            // Third section: Badges (aligned with "All Designations" filter)
-            Expanded(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  if (user.role.toLowerCase() != 'user') ...[
-                    _buildRoleBadge(user.role),
-                    const SizedBox(width: 8.0),
-                  ],
-                  _buildStatusBadge(user.status),
-                  const SizedBox(width: 8.0),
-                  Transform.rotate(
-                    angle: isExpanded ? 3.14 : 0,
-                    child: const Icon(
-                      Icons.keyboard_arrow_down,
-                      color: Colors.white54,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

@@ -208,17 +208,6 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ],
       ),
-      floatingActionButton: GestureDetector(
-        onTap: () {
-          // Chatbot navigation disabled for now
-        },
-        child: Image.asset(
-          'assets/images/Chatbot_Red.png',
-          width: 60, // Adjust width as needed
-          height: 60, // Adjust height as needed
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }

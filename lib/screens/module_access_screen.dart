@@ -23,8 +23,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   final TextEditingController _searchController = TextEditingController();
   final List<String> _moduleRoleOptionsPDH = ['Employee', 'Manager'];
   final List<String> _moduleRoleOptionsRecruitment = ['Admin', 'Hiring Manager', 'Candidate'];
-  static const double _designationColumnWidth = 240.0;
-  static const double _badgeAreaWidth = 220.0;
   static const String _notAssignedValue = 'Not Assigned';
 
   String? expandedUserId;
@@ -537,88 +535,123 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           borderRadius: BorderRadius.circular(16.0),
         ),
         padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            const Icon(Icons.person, size: 40.0, color: Colors.white54),
-            const SizedBox(width: 16.0),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16.0,
-                      fontFamily: 'Poppins',
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    user.email,
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 12.0,
-                      fontFamily: 'Poppins',
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16.0),
-            SizedBox(
-              width: _designationColumnWidth,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user.designation,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w500,
-                      fontFamily: 'Poppins',
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    user.department,
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 12.0,
-                      fontFamily: 'Poppins',
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16.0),
-            SizedBox(
-              width: _badgeAreaWidth,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Flexible(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: moduleAccessChips,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Calculate column widths to match filter layout exactly
+            final availableWidth = constraints.maxWidth;
+            final spacingWidth = 8.0 * 2; // Two spacings between three columns
+            final columnWidth = (availableWidth - spacingWidth) / 3;
+            final leftPadding = columnWidth * 0.12;
+            
+            // Adjust second column width to account for padding to prevent overflow
+            final secondColumnWidth = columnWidth - leftPadding;
+
+            return Row(
+              children: [
+                // First column: Avatar + Name + Email (aligned with "All Statuses" filter)
+                SizedBox(
+                  width: columnWidth,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.person, size: 40.0, color: Colors.white54),
+                      const SizedBox(width: 12.0),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              user.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16.0,
+                                fontFamily: 'Poppins',
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                            Text(
+                              user.email,
+                              style: const TextStyle(
+                                color: Colors.white60,
+                                fontSize: 12.0,
+                                fontFamily: 'Poppins',
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ],
+                        ),
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8.0), // Match filter spacing exactly
+                // Second column: Designation + Department (aligned with "All Departments" filter - red vertical line)
+                Padding(
+                  padding: EdgeInsets.only(left: leftPadding),
+                  child: SizedBox(
+                    width: secondColumnWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          user.designation,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14.0,
+                            fontFamily: 'Poppins',
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                        const SizedBox(height: 4.0),
+                        Text(
+                          user.department,
+                          style: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 12.0,
+                            fontFamily: 'Poppins',
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8.0),
-                  Transform.rotate(
-                    angle: isExpanded ? 3.14 : 0,
-                    child: const Icon(
-                      Icons.keyboard_arrow_down,
-                      color: Colors.white54,
-                    ),
+                ),
+                const SizedBox(width: 8.0), // Match filter spacing exactly
+                // Third column: Module Access Chips + Dropdown (aligned with "All Designations" filter)
+                SizedBox(
+                  width: columnWidth,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Flexible(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          reverse: true,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: moduleAccessChips,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8.0),
+                      Transform.rotate(
+                        angle: isExpanded ? 3.14 : 0,
+                        child: const Icon(
+                          Icons.keyboard_arrow_down,
+                          color: Colors.white54,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ],
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
