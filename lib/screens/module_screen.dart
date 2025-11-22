@@ -416,19 +416,33 @@ Future<void> _launchUrlFromContext(BuildContext context, String url) async {
     String? token;
     if (isPDHUrl) {
       final authProvider = context.read<AuthProvider>();
-      token = authProvider.userToken;
 
-      // If token is not available, try to fetch it
-      if (token == null && authProvider.userEmail != null) {
+      // ALWAYS generate a fresh token when launching PDH
+      // This ensures the token is never expired
+      if (authProvider.userEmail != null) {
+        // Generate fresh token before launching
         await authProvider.fetchUserToken();
         token = authProvider.userToken;
+
+        if (token == null || token.isEmpty) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Failed to generate authentication token. Please try again.',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+            ),
+          );
+          return;
+        }
       }
     }
 
     // Build redirect URL with token for PDH URLs
     Uri uri = Uri.parse(secureUrl);
     if (isPDHUrl && token != null && token.isNotEmpty) {
-      // Format: https://pdh-app-url/?token=<jwt>
+      // Format: https://pdh-app-url/?token=<fresh-jwt>
       uri = uri.replace(queryParameters: {'token': token});
     }
 

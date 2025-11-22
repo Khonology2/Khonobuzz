@@ -491,6 +491,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // Fetch user token from backend
+  // This method now ALWAYS generates a fresh token (the backend endpoint has been updated)
   Future<void> fetchUserToken() async {
     if (_userEmail == null) {
       _userToken = null;
@@ -499,6 +500,7 @@ class AuthProvider extends ChangeNotifier {
     }
 
     try {
+      // Call the backend endpoint which now always generates a fresh token
       final response = await http
           .get(Uri.parse(ApiConfig.authTokenEndpoint(_userEmail!)))
           .timeout(
@@ -512,20 +514,22 @@ class AuthProvider extends ChangeNotifier {
         final responseData = json.decode(response.body);
         _userToken = responseData['token'] as String?;
 
-        // Store token in SharedPreferences
+        // Store fresh token in SharedPreferences
         if (_userToken != null) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('userToken', _userToken!);
+          debugPrint('[AuthProvider] Fresh token generated and stored');
         }
 
         notifyListeners();
       } else {
-        debugPrint('Error fetching user token: ${response.statusCode}');
+        debugPrint('Error generating user token: ${response.statusCode}');
+        debugPrint('Response body: ${response.body}');
         _userToken = null;
         notifyListeners();
       }
     } catch (e) {
-      debugPrint('Error fetching user token: $e');
+      debugPrint('Error generating user token: $e');
       _userToken = null;
       notifyListeners();
     }
