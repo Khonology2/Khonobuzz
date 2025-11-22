@@ -132,8 +132,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     bool recruitmentSelected,
   ) {
     List<String> accessList = [];
-    if (pdhSelected) accessList.add('PDH');
-    if (skillsHeatmapSelected) accessList.add('Skills Heatmap');
+    if (pdhSelected) accessList.add('Personal Development Hub');
+    if (skillsHeatmapSelected) accessList.add('Resource & Capacity Skills Heatmap');
     if (recruitmentSelected) accessList.add('Automated Recruitment Workflow');
 
     user.moduleAccess = accessList.isEmpty ? null : accessList.join(',');
@@ -153,8 +153,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     });
     // Build moduleAccess string from checkboxes
     List<String> accessList = [];
-    if (pdhSelected) accessList.add('PDH');
-    if (skillsHeatmapSelected) accessList.add('Skills Heatmap');
+    if (pdhSelected) accessList.add('Personal Development Hub');
+    if (skillsHeatmapSelected) accessList.add('Resource & Capacity Skills Heatmap');
     if (recruitmentSelected) accessList.add('Automated Recruitment Workflow');
 
     final sanitizedModuleAccess = accessList.isEmpty
@@ -755,11 +755,12 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           .toList();
     }
 
-    // Track checkbox states
-    bool pdhSelected = selectedModuleAccessList.contains('PDH');
+    // Track checkbox states (support both old and new module names for backward compatibility)
+    bool pdhSelected = selectedModuleAccessList.contains('Personal Development Hub') ||
+        selectedModuleAccessList.contains('PDH');
     bool skillsHeatmapSelected = selectedModuleAccessList.contains(
-      'Skills Heatmap',
-    );
+      'Resource & Capacity Skills Heatmap',
+    ) || selectedModuleAccessList.contains('Skills Heatmap');
     bool recruitmentSelected = selectedModuleAccessList.contains(
       'Automated Recruitment Workflow',
     );
@@ -831,7 +832,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   ),
                   child: CheckboxListTile(
                     title: const Text(
-                      'PDH',
+                      'Personal Development Hub',
                       style: TextStyle(
                         color: Colors.white,
                         fontFamily: 'Poppins',
@@ -952,7 +953,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   ),
                   child: CheckboxListTile(
                     title: const Text(
-                      'Skills Heatmap',
+                      'Resource & Capacity Skills Heatmap',
                       style: TextStyle(
                         color: Colors.white,
                         fontFamily: 'Poppins',
