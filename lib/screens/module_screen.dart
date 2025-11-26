@@ -19,12 +19,14 @@ class _ModuleScreenState extends State<ModuleScreen> {
   @override
   void initState() {
     super.initState();
-    // Fetch user module access and token when screen loads
+    // Only fetch if data is missing - avoid unnecessary API calls
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final authProvider = context.read<AuthProvider>();
-        authProvider.fetchCurrentUserModuleAccess();
-        // Fetch token if not already loaded
+        // Only fetch if data is actually missing
+        if (authProvider.userModuleAccess == null) {
+          authProvider.fetchCurrentUserModuleAccess();
+        }
         if (authProvider.userToken == null) {
           authProvider.fetchUserToken();
         }

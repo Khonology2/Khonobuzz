@@ -57,7 +57,7 @@ class UserProvider extends ChangeNotifier {
       final response = await http
           .get(Uri.parse(ApiConfig.usersEndpoint))
           .timeout(
-            const Duration(seconds: 30),
+            const Duration(seconds: 20),
             onTimeout: () {
               throw Exception('Request timeout. Please check your connection.');
             },
@@ -130,7 +130,7 @@ class UserProvider extends ChangeNotifier {
     try {
       final response = await http
           .get(Uri.parse(ApiConfig.usersEndpoint))
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>;

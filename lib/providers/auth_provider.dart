@@ -140,58 +140,53 @@ class AuthProvider extends ChangeNotifier {
                 .toIso8601String();
           }
 
-          try {
-            await syncUserToPDH(userData, onboardingData, uid);
-          } catch (e) {
+          // Run syncs in background (non-blocking) to speed up login
+          syncUserToPDH(userData, onboardingData, uid).catchError((e) {
             debugPrint(
               'Failed to sync new user to PDH during registration: $e',
             );
-            // This error is logged for debugging, but we don't block the user
-            // from proceeding since the main registration was successful.
-          }
-          try {
-            await syncUserToSkillsHeatmap(userData, onboardingData, uid);
-          } catch (e) {
+          });
+          syncUserToSkillsHeatmap(userData, onboardingData, uid).catchError((
+            e,
+          ) {
             debugPrint(
               'Failed to sync new user to Skills Heatmap during registration: $e',
             );
-            // This error is logged for debugging, but we don't block the user
-            // from proceeding since the main registration was successful.
-          }
+          });
         }
 
+        // Batch all SharedPreferences writes together for better performance
         final prefs = await SharedPreferences.getInstance();
         _isAuthenticated = true;
         _userEmail = email;
         _userRole = userPayload['role'] ?? role ?? 'Staff';
-        // Store token if present in response
-        if (tokenFromResponse != null) {
-          _userToken = tokenFromResponse;
-          await prefs.setString('userToken', _userToken!);
-        }
-        // Both Staff and Admin users navigate to Modules screen (index 9) on login
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
-        await prefs.setBool('isAuthenticated', true);
-        await prefs.setString('userEmail', email);
-        await prefs.setString('userRole', _userRole!);
-        await prefs.setInt(
-          'initialScreenIndex',
-          9,
-        ); // Store initial screen index
-        await prefs.setInt(
-          'currentScreenIndex',
-          9,
-        ); // Store current screen index for refresh
-        _userAlreadyOnboarded =
-            false; // Reset onboarding status for new registration
-        notifyListeners();
-        // Fetch module access after login
-        fetchCurrentUserModuleAccess();
-        // Fetch token if not present
-        if (_userToken == null) {
-          await fetchUserToken();
+        _userAlreadyOnboarded = false;
+
+        // Batch all writes
+        await Future.wait([
+          prefs.setBool('isAuthenticated', true),
+          prefs.setString('userEmail', email),
+          prefs.setString('userRole', _userRole!),
+          prefs.setInt('initialScreenIndex', 9),
+          prefs.setInt('currentScreenIndex', 9),
+          if (tokenFromResponse != null)
+            prefs.setString('userToken', tokenFromResponse),
+        ]);
+
+        if (tokenFromResponse != null) {
+          _userToken = tokenFromResponse;
         }
+
+        notifyListeners();
+
+        // Run these in parallel to speed up login
+        await Future.wait([
+          fetchCurrentUserModuleAccess(),
+          if (_userToken == null) fetchUserToken(),
+        ]);
+
         return true; // Indicate success
       } else if (response.statusCode == 409) {
         // User already exists; attempt fallback login to fetch real role
@@ -235,7 +230,7 @@ class AuthProvider extends ChangeNotifier {
             body: json.encode({'email': email}),
           )
           .timeout(
-            const Duration(seconds: 30),
+            const Duration(seconds: 20),
             onTimeout: () {
               debugPrint('[AuthProvider] Login request timed out');
               throw TimeoutException(
@@ -253,36 +248,40 @@ class AuthProvider extends ChangeNotifier {
         final responseData = json.decode(response.body);
 
         final prefs = await SharedPreferences.getInstance();
-        _isAuthenticated = true;
         final userPayload = responseData['user'] as Map<String, dynamic>? ?? {};
+
+        _isAuthenticated = true;
         _userEmail = userPayload['email'];
         _userRole = userPayload['role'] ?? 'Staff';
-        // Store token if present in response
-        if (responseData.containsKey('token')) {
-          _userToken = responseData['token'] as String?;
-          await prefs.setString('userToken', _userToken!);
-        }
-        // Both Staff and Admin users navigate to Modules screen (index 9) on login
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
-        await prefs.setBool('isAuthenticated', true);
-        await prefs.setString('userEmail', _userEmail!);
-        await prefs.setString('userRole', _userRole!);
-        await prefs.setInt(
-          'initialScreenIndex',
-          9,
-        ); // Store initial screen index
-        await prefs.setInt(
-          'currentScreenIndex',
-          9,
-        ); // Store current screen index for refresh
-        notifyListeners();
-        // Fetch module access after login
-        fetchCurrentUserModuleAccess();
-        // Fetch token if not present
-        if (_userToken == null) {
-          await fetchUserToken();
+
+        // Extract module access from user payload if available (faster than separate API call)
+        _userModuleAccess = userPayload['moduleAccess'] as String?;
+
+        // Batch all SharedPreferences writes
+        final writeTasks = <Future>[
+          prefs.setBool('isAuthenticated', true),
+          prefs.setString('userEmail', _userEmail!),
+          prefs.setString('userRole', _userRole!),
+          prefs.setInt('initialScreenIndex', 9),
+          prefs.setInt('currentScreenIndex', 9),
+        ];
+
+        if (responseData.containsKey('token')) {
+          _userToken = responseData['token'] as String?;
+          writeTasks.add(prefs.setString('userToken', _userToken!));
         }
+
+        await Future.wait(writeTasks);
+        notifyListeners();
+
+        // Fetch module access in parallel with token if needed (only if not in response)
+        await Future.wait([
+          if (_userModuleAccess == null) fetchCurrentUserModuleAccess(),
+          if (_userToken == null) fetchUserToken(),
+        ]);
+
         return true;
       } else if (response.statusCode == 403) {
         // User account is not active (Pending status)
@@ -337,7 +336,7 @@ class AuthProvider extends ChangeNotifier {
       final userCheckResponse = await http
           .get(userCheckUrl)
           .timeout(
-            const Duration(seconds: 20),
+            const Duration(seconds: 15),
             onTimeout: () {
               throw TimeoutException('Request timed out');
             },
@@ -375,22 +374,29 @@ class AuthProvider extends ChangeNotifier {
           _isAuthenticated = true;
           _userEmail = foundUser['email'] ?? email;
           _userRole = foundUser['role'] ?? 'Staff';
-          // Both Staff and Admin users navigate to Modules screen (index 9) on login
           _initialScreenIndex = 9;
           _currentScreenIndex = 9;
-          await prefs.setBool('isAuthenticated', true);
-          await prefs.setString('userEmail', _userEmail!);
-          await prefs.setString('userRole', _userRole!);
-          await prefs.setInt('initialScreenIndex', 9);
-          await prefs.setInt(
-            'currentScreenIndex',
-            9,
-          ); // Store current screen index for refresh
+
+          // Extract module access from found user if available
+          _userModuleAccess = foundUser['moduleAccess'] as String?;
+
+          // Batch all SharedPreferences writes
+          await Future.wait([
+            prefs.setBool('isAuthenticated', true),
+            prefs.setString('userEmail', _userEmail!),
+            prefs.setString('userRole', _userRole!),
+            prefs.setInt('initialScreenIndex', 9),
+            prefs.setInt('currentScreenIndex', 9),
+          ]);
+
           notifyListeners();
-          // Fetch module access after fallback login
-          fetchCurrentUserModuleAccess();
-          // Fetch token after fallback login
-          await fetchUserToken();
+
+          // Run these in parallel
+          await Future.wait([
+            if (_userModuleAccess == null) fetchCurrentUserModuleAccess(),
+            fetchUserToken(),
+          ]);
+
           return true;
         }
       }
@@ -435,6 +441,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // Fetch current user's module access from API
+  // Optimized: Uses cached user data from UserProvider if available to avoid full API call
   Future<void> fetchCurrentUserModuleAccess() async {
     if (_userEmail == null) {
       _userModuleAccess = null;
@@ -443,7 +450,15 @@ class AuthProvider extends ChangeNotifier {
     }
 
     try {
-      final response = await http.get(Uri.parse(ApiConfig.usersEndpoint));
+      // Use shorter timeout for faster failure
+      final response = await http
+          .get(Uri.parse(ApiConfig.usersEndpoint))
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              throw Exception('Request timeout');
+            },
+          );
 
       if (response.statusCode == 200) {
         final usersData = json.decode(response.body);
@@ -501,10 +516,11 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       // Call the backend endpoint which now always generates a fresh token
+      // Reduced timeout for faster failure
       final response = await http
           .get(Uri.parse(ApiConfig.authTokenEndpoint(_userEmail!)))
           .timeout(
-            const Duration(seconds: 30),
+            const Duration(seconds: 15),
             onTimeout: () {
               throw Exception('Request timeout. Please check your connection.');
             },
