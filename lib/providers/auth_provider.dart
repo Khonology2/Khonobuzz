@@ -440,12 +440,28 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Set module access directly (useful when loading from cache)
+  void setModuleAccess(String? moduleAccess) {
+    _userModuleAccess = moduleAccess;
+    notifyListeners();
+  }
+
   // Fetch current user's module access from API
-  // Optimized: Uses cached user data from UserProvider if available to avoid full API call
-  Future<void> fetchCurrentUserModuleAccess() async {
+  // Optimized: Can accept pre-fetched moduleAccess to avoid API call
+  Future<void> fetchCurrentUserModuleAccess({
+    String? preFetchedModuleAccess,
+  }) async {
     if (_userEmail == null) {
       _userModuleAccess = null;
       notifyListeners();
+      return;
+    }
+
+    // If module access was pre-fetched (e.g., from UserProvider cache), use it
+    if (preFetchedModuleAccess != null && preFetchedModuleAccess.isNotEmpty) {
+      _userModuleAccess = preFetchedModuleAccess;
+      notifyListeners();
+      debugPrint('[AuthProvider] Module access loaded from cache');
       return;
     }
 
@@ -454,7 +470,7 @@ class AuthProvider extends ChangeNotifier {
       final response = await http
           .get(Uri.parse(ApiConfig.usersEndpoint))
           .timeout(
-            const Duration(seconds: 15),
+            const Duration(seconds: 10),
             onTimeout: () {
               throw Exception('Request timeout');
             },
@@ -477,6 +493,7 @@ class AuthProvider extends ChangeNotifier {
 
           _userModuleAccess = foundUser?['moduleAccess'] as String?;
           notifyListeners();
+          debugPrint('[AuthProvider] Module access loaded from API');
         } catch (_) {
           _userModuleAccess = null;
           notifyListeners();

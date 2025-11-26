@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/user_provider.dart';
 
 // Define the custom colors used in the HTML design
 const Color primaryDark = Color(0xFF1F2937);
@@ -16,22 +17,71 @@ class ModuleScreen extends StatefulWidget {
 }
 
 class _ModuleScreenState extends State<ModuleScreen> {
+  bool _isLoadingModuleAccess = false;
+
   @override
   void initState() {
     super.initState();
-    // Only fetch if data is missing - avoid unnecessary API calls
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        final authProvider = context.read<AuthProvider>();
-        // Only fetch if data is actually missing
-        if (authProvider.userModuleAccess == null) {
-          authProvider.fetchCurrentUserModuleAccess();
+    // Fetch immediately when screen loads - don't wait for postFrameCallback
+    _loadModuleAccess();
+  }
+
+  Future<void> _loadModuleAccess() async {
+    if (!mounted) return;
+
+    final authProvider = context.read<AuthProvider>();
+    final userProvider = context.read<UserProvider>();
+
+    // If module access is already loaded, we're done
+    if (authProvider.userModuleAccess != null &&
+        authProvider.userModuleAccess!.isNotEmpty) {
+      return;
+    }
+
+    // Set loading state
+    if (mounted) {
+      setState(() {
+        _isLoadingModuleAccess = true;
+      });
+    }
+
+    // First, try to get from UserProvider cache (much faster than API call)
+    String? cachedModuleAccess;
+    if (userProvider.users.isNotEmpty && authProvider.userEmail != null) {
+      try {
+        final currentUser = userProvider.users.firstWhere(
+          (u) => u.email.toLowerCase() == authProvider.userEmail!.toLowerCase(),
+        );
+        cachedModuleAccess = currentUser.moduleAccess;
+        if (cachedModuleAccess != null && cachedModuleAccess.isNotEmpty) {
+          // Set it directly in AuthProvider
+          authProvider.setModuleAccess(cachedModuleAccess);
+          debugPrint(
+            '[ModuleScreen] Module access loaded from UserProvider cache',
+          );
         }
-        if (authProvider.userToken == null) {
-          authProvider.fetchUserToken();
-        }
+      } catch (_) {
+        // User not found in cache, will fetch from API
       }
-    });
+    }
+
+    // If not found in cache, fetch from API
+    if (cachedModuleAccess == null || cachedModuleAccess.isEmpty) {
+      await authProvider.fetchCurrentUserModuleAccess(
+        preFetchedModuleAccess: cachedModuleAccess,
+      );
+    }
+
+    // Also fetch token if needed (non-blocking)
+    if (authProvider.userToken == null) {
+      authProvider.fetchUserToken();
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoadingModuleAccess = false;
+      });
+    }
   }
 
   @override
@@ -55,6 +105,18 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 builder: (context, constraints) {
                   return Consumer<AuthProvider>(
                     builder: (context, authProvider, child) {
+                      // Show loading indicator while fetching module access
+                      if (_isLoadingModuleAccess &&
+                          authProvider.userModuleAccess == null) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              primaryAccent,
+                            ),
+                          ),
+                        );
+                      }
+
                       final isAdmin =
                           authProvider.userRole?.toLowerCase() == 'admin';
                       final hasPDHAccess = authProvider.hasModuleAccess('PDH');
