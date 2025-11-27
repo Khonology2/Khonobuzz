@@ -149,28 +149,13 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         );
                       }
 
-                      final bool isMobile = constraints.maxWidth < 768;
                       final List<Widget> cards = [];
 
-                      // Count how many cards will be shown
-                      int cardCount = 0;
-                      if (showPDH) cardCount++;
-                      if (showSkillsHeatmap) cardCount++;
-                      if (showRecruitment) cardCount++;
-
-                      // Calculate available width and card width based on number of cards
-                      // Reduced by 20% to match 80% zoom level
-                      final double availableWidth =
-                          constraints.maxWidth - 32.0; // Account for padding
+                      // Calculate card width - use a fixed max width or responsive width
                       final double calculatedCardWidth =
-                          (isMobile
-                              ? (constraints.maxWidth > 500
-                                    ? 500
-                                    : constraints.maxWidth * 0.9)
-                              : cardCount > 0
-                              ? (availableWidth - (18.0 * (cardCount - 1))) /
-                                    cardCount // 20.0 * 0.9 = 18.0
-                              : 300.0) *
+                          (constraints.maxWidth > 500
+                              ? 500
+                              : constraints.maxWidth * 0.9) *
                           0.9; // Apply 90% scale factor
 
                       if (showPDH) {
@@ -186,10 +171,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
                       }
 
                       if (showSkillsHeatmap) {
-                        if (cards.isNotEmpty && isMobile) {
+                        if (cards.isNotEmpty) {
                           cards.add(const SizedBox(height: 18.0)); // 20.0 * 0.9
-                        } else if (cards.isNotEmpty && !isMobile) {
-                          cards.add(const SizedBox(width: 18.0)); // 20.0 * 0.9
                         }
 
                         cards.add(
@@ -208,10 +191,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
                       }
 
                       if (showRecruitment) {
-                        if (cards.isNotEmpty && isMobile) {
+                        if (cards.isNotEmpty) {
                           cards.add(const SizedBox(height: 18.0)); // 20.0 * 0.9
-                        } else if (cards.isNotEmpty && !isMobile) {
-                          cards.add(const SizedBox(width: 18.0)); // 20.0 * 0.9
                         }
 
                         cards.add(
@@ -230,24 +211,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         );
                       }
 
-                      if (isMobile) {
-                        // Stack vertically on mobile
-                        return Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: cards,
-                        );
-                      } else {
-                        // Side by side on larger screens
-                        return IntrinsicHeight(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: cards
-                                .map((card) => Flexible(child: card))
-                                .toList(),
-                          ),
-                        );
-                      }
+                      // Always stack vertically from top to bottom
+                      return Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: cards,
+                      );
                     },
                   );
                 },
