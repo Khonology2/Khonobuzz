@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:ui' show ImageFilter;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 
@@ -166,6 +168,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                             titleLines: ['Personal', 'Development', 'Hub'],
                             buttonText: 'Launch',
                             url: 'https://pdh-web-app.onrender.com',
+                            moduleKey: 'pdh',
                           ),
                         );
                       }
@@ -186,6 +189,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                             ],
                             buttonText: 'Launch',
                             url: 'https://resource-capacity.netlify.app/',
+                            moduleKey: 'skills_heatmap',
                           ),
                         );
                       }
@@ -207,6 +211,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                             buttonText: 'Launch',
                             url:
                                 'https://chimerical-quokka-d580e5.netlify.app/',
+                            moduleKey: 'recruitment',
                           ),
                         );
                       }
@@ -234,6 +239,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
     String? subtitle,
     required String buttonText,
     required String url,
+    required String moduleKey,
   }) {
     return _HoverableModuleCard(
       context: context,
@@ -242,6 +248,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
       subtitle: subtitle,
       buttonText: buttonText,
       url: url,
+      moduleKey: moduleKey,
     );
   }
 }
@@ -253,6 +260,7 @@ class _HoverableModuleCard extends StatefulWidget {
   final String? subtitle;
   final String buttonText;
   final String url;
+  final String moduleKey;
 
   const _HoverableModuleCard({
     required this.context,
@@ -261,6 +269,7 @@ class _HoverableModuleCard extends StatefulWidget {
     this.subtitle,
     required this.buttonText,
     required this.url,
+    required this.moduleKey,
   });
 
   @override
@@ -271,6 +280,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
     with SingleTickerProviderStateMixin {
   bool _isHovered = false;
   bool _isLoading = false;
+  String? _lastAccessedText;
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
 
@@ -284,6 +294,16 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
+    _loadLastAccessed();
+  }
+
+  Future<void> _loadLastAccessed() async {
+    final lastAccessed = await _getLastAccessedTime(widget.moduleKey);
+    if (mounted) {
+      setState(() {
+        _lastAccessedText = lastAccessed;
+      });
+    }
   }
 
   @override
@@ -381,6 +401,19 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
+                          if (_lastAccessedText != null) ...[
+                            const SizedBox(height: 10.8), // 12.0 * 0.9
+                            Text(
+                              _lastAccessedText!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12.6, // 14.0 * 0.9
+                                fontWeight: FontWeight.w400,
+                                color: Colors.white70,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 28.8), // 32.0 * 0.9
                           ElevatedButton(
                             onPressed: _isLoading
@@ -391,7 +424,10 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                       await _launchUrlFromContext(
                                         widget.context,
                                         widget.url,
+                                        widget.moduleKey,
                                       );
+                                      // Reload last accessed time after launch
+                                      await _loadLastAccessed();
                                     } finally {
                                       if (mounted) {
                                         setState(() => _isLoading = false);
@@ -478,7 +514,9 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
   }
 
   Future<void> _launchUrl(BuildContext context, String url) async {
-    await _launchUrlFromContext(context, url);
+    // This method is unused but kept for potential future use
+    // If used, moduleKey should be provided
+    await _launchUrlFromContext(context, url, 'unknown');
   }
 }
 
@@ -529,8 +567,58 @@ class _BouncingRedSpinnerState extends State<_BouncingRedSpinner>
   }
 }
 
+// Helper functions for last accessed timestamp
+Future<void> _saveLastAccessedTime(String moduleKey) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await prefs.setInt('last_accessed_$moduleKey', now);
+  } catch (e) {
+    debugPrint('Error saving last accessed time: $e');
+  }
+}
+
+Future<String?> _getLastAccessedTime(String moduleKey) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final timestamp = prefs.getInt('last_accessed_$moduleKey');
+    if (timestamp == null) return null;
+
+    final lastAccessed = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    final now = DateTime.now();
+    final difference = now.difference(lastAccessed);
+
+    if (difference.inDays > 7) {
+      // Show date if older than 7 days
+      return 'Last accessed: ${DateFormat('MMM d, yyyy').format(lastAccessed)}';
+    } else if (difference.inDays > 0) {
+      // Show days ago
+      final days = difference.inDays;
+      return 'Last accessed: $days ${days == 1 ? 'day' : 'days'} ago';
+    } else if (difference.inHours > 0) {
+      // Show hours ago
+      final hours = difference.inHours;
+      return 'Last accessed: $hours ${hours == 1 ? 'hour' : 'hours'} ago';
+    } else if (difference.inMinutes > 0) {
+      // Show minutes ago
+      final minutes = difference.inMinutes;
+      return 'Last accessed: $minutes ${minutes == 1 ? 'minute' : 'minutes'} ago';
+    } else {
+      // Show just now
+      return 'Last accessed: Just now';
+    }
+  } catch (e) {
+    debugPrint('Error getting last accessed time: $e');
+    return null;
+  }
+}
+
 // Standalone function to launch URLs - can be called from anywhere
-Future<void> _launchUrlFromContext(BuildContext context, String url) async {
+Future<void> _launchUrlFromContext(
+  BuildContext context,
+  String url,
+  String moduleKey,
+) async {
   try {
     // Ensure URL uses HTTPS for secure transmission
     String secureUrl = url;
@@ -602,7 +690,10 @@ Future<void> _launchUrlFromContext(BuildContext context, String url) async {
       webOnlyWindowName: '_blank',
     );
     if (!context.mounted) return;
-    if (!launched) {
+    if (launched) {
+      // Save last accessed time when successfully launched
+      await _saveLastAccessedTime(moduleKey);
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(

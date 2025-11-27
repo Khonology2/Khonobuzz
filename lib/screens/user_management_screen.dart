@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../utils/pdh_firebase.dart'
-    show updatePDHUserPartial, updateSkillsHeatmapUserPartial;
+    show updatePDHUserPartial, updateSkillsHeatmapUserPartial, syncUserToPDH, syncUserToSkillsHeatmap;
 import '../models/managed_user.dart';
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
@@ -33,6 +33,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   // ];
 
   String? expandedUserId;
+  bool _isSelectionMode = false;
+  final Set<String> _selectedUserIds = <String>{};
 
   String? _selectedStatus;
   String? _selectedDepartment;
@@ -302,6 +304,76 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: _isSelectionMode
+          ? null
+          : FloatingActionButton(
+              onPressed: () => _showAddUserDialog(context),
+              backgroundColor: const Color(0xFFC10D00),
+              shape: const CircleBorder(),
+              child: const Icon(Icons.add, color: Colors.white),
+            ),
+      bottomNavigationBar: _isSelectionMode && _selectedUserIds.isNotEmpty
+          ? Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C3E50),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${_selectedUserIds.length} user(s) selected',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                        fontSize: 16.0,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _isSelectionMode = false;
+                              _selectedUserIds.clear();
+                            });
+                          },
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8.0),
+                        ElevatedButton(
+                          onPressed: () => _showDeleteConfirmation(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text(
+                            'Delete',
+                            style: TextStyle(fontFamily: 'Poppins'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
       body: Stack(
         children: [
           // Background Image
@@ -583,16 +655,45 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
-    return InkWell(
+    final isSelected = _selectedUserIds.contains(user.id);
+    
+    return GestureDetector(
+      onLongPress: () {
+        if (!_isSelectionMode) {
+          setState(() {
+            _isSelectionMode = true;
+            _selectedUserIds.add(user.id);
+            expandedUserId = null; // Close any expanded user
+          });
+        }
+      },
       onTap: () {
-        setState(() {
-          expandedUserId = isExpanded ? null : user.id;
-        });
+        if (_isSelectionMode) {
+          setState(() {
+            if (isSelected) {
+              _selectedUserIds.remove(user.id);
+              if (_selectedUserIds.isEmpty) {
+                _isSelectionMode = false;
+              }
+            } else {
+              _selectedUserIds.add(user.id);
+            }
+          });
+        } else {
+          setState(() {
+            expandedUserId = isExpanded ? null : user.id;
+          });
+        }
       },
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0x801F2840),
+          color: isSelected
+              ? const Color(0x80C10D00)
+              : const Color(0x801F2840),
           borderRadius: BorderRadius.circular(16.0),
+          border: isSelected
+              ? Border.all(color: const Color(0xFFC10D00), width: 2.0)
+              : null,
         ),
         padding: const EdgeInsets.all(16.0),
         child: LayoutBuilder(
@@ -601,8 +702,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             // Filters use: three Expanded widgets with 8.0 spacing between them
             // LayoutBuilder constraints are already inside the card padding
             final availableWidth = constraints.maxWidth;
+            final checkboxWidth = _isSelectionMode ? 48.0 : 0.0;
             final spacingWidth = 8.0 * 2; // Two spacings between three columns
-            final columnWidth = (availableWidth - spacingWidth) / 3;
+            final columnWidth = ((availableWidth - checkboxWidth) - spacingWidth) / 3;
             final leftPadding = columnWidth * 0.12;
 
             // Adjust second column width to account for padding to prevent overflow
@@ -610,6 +712,27 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
             return Row(
               children: [
+                // Checkbox in selection mode
+                if (_isSelectionMode) ...[
+                  Checkbox(
+                    value: isSelected,
+                    onChanged: (value) {
+                      setState(() {
+                        if (value == true) {
+                          _selectedUserIds.add(user.id);
+                        } else {
+                          _selectedUserIds.remove(user.id);
+                          if (_selectedUserIds.isEmpty) {
+                            _isSelectionMode = false;
+                          }
+                        }
+                      });
+                    },
+                    activeColor: const Color(0xFFC10D00),
+                    checkColor: Colors.white,
+                  ),
+                  const SizedBox(width: 8.0),
+                ],
                 // First column: Avatar + Name + Email (aligned with "All Statuses" filter)
                 SizedBox(
                   width: columnWidth,
@@ -699,14 +822,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         const SizedBox(width: 8.0),
                       ],
                       Flexible(child: _buildStatusBadge(user.status)),
-                      const SizedBox(width: 8.0),
-                      Transform.rotate(
-                        angle: isExpanded ? 3.14 : 0,
-                        child: const Icon(
-                          Icons.keyboard_arrow_down,
-                          color: Colors.white54,
+                      if (!_isSelectionMode) ...[
+                        const SizedBox(width: 8.0),
+                        Transform.rotate(
+                          angle: isExpanded ? 3.14 : 0,
+                          child: const Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Colors.white54,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -916,5 +1041,954 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         ],
       ),
     );
+  }
+
+  void _showAddUserDialog(BuildContext context) {
+    final TextEditingController emailsController = TextEditingController();
+    bool isCreating = false;
+    String? progressMessage;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF2C3E50),
+              title: const Text(
+                'Add New Users',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Paste emails (one per line or with "email:" prefix)',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontFamily: 'Poppins',
+                        fontSize: 12.0,
+                      ),
+                    ),
+                    const SizedBox(height: 8.0),
+                    const Text(
+                      'Example:\nemail: nathi.radebez@khonology.com\nemail: john.doe@khonology.com',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontFamily: 'Poppins',
+                        fontSize: 11.0,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    const SizedBox(height: 16.0),
+                    TextField(
+                      controller: emailsController,
+                      maxLines: 10,
+                      minLines: 5,
+                      style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+                      decoration: InputDecoration(
+                        labelText: 'Emails',
+                        labelStyle: const TextStyle(color: Colors.white70, fontFamily: 'Poppins'),
+                        hintText: 'email: user.name@khonology.com\nemail: another.user@khonology.com',
+                        hintStyle: const TextStyle(color: Colors.white54, fontFamily: 'Poppins'),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                          borderSide: const BorderSide(color: Colors.white54),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                          borderSide: const BorderSide(color: Color(0xFFC10D00)),
+                        ),
+                      ),
+                    ),
+                    if (progressMessage != null) ...[
+                      const SizedBox(height: 16.0),
+                      Text(
+                        progressMessage!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                          fontSize: 12.0,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isCreating
+                      ? null
+                      : () {
+                          Navigator.of(dialogContext).pop();
+                        },
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: isCreating
+                      ? null
+                      : () async {
+                          final emailsText = emailsController.text.trim();
+
+                          if (emailsText.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Please paste at least one email',
+                                  style: TextStyle(fontFamily: 'Poppins'),
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                            return;
+                          }
+
+                          // Parse emails from the text
+                          final emails = _parseEmails(emailsText);
+                          
+                          if (emails.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'No valid emails found. Please check the format.',
+                                  style: TextStyle(fontFamily: 'Poppins'),
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() {
+                            isCreating = true;
+                            progressMessage = 'Creating ${emails.length} user(s)...';
+                          });
+
+                          try {
+                            final result = await _createMultipleUsers(emails, (message) {
+                              if (dialogContext.mounted) {
+                                setDialogState(() {
+                                  progressMessage = message;
+                                });
+                              }
+                            });
+                            
+                            if (dialogContext.mounted) {
+                              Navigator.of(dialogContext).pop();
+                              _showCreationSummary(context, result);
+                            }
+                          } catch (e) {
+                            if (dialogContext.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Error creating users: ${e.toString()}',
+                                    style: const TextStyle(fontFamily: 'Poppins'),
+                                  ),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          } finally {
+                            if (dialogContext.mounted) {
+                              setDialogState(() {
+                                isCreating = false;
+                                progressMessage = null;
+                              });
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC10D00),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: isCreating
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'Create Users',
+                          style: TextStyle(fontFamily: 'Poppins'),
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  List<String> _parseEmails(String text) {
+    final List<String> emails = [];
+    final lines = text.split('\n');
+    
+    for (var line in lines) {
+      line = line.trim();
+      if (line.isEmpty) continue;
+      
+      // Handle "email: user@domain.com" format
+      if (line.toLowerCase().startsWith('email:')) {
+        final email = line.substring(6).trim();
+        if (email.isNotEmpty && email.contains('@')) {
+          emails.add(email);
+        }
+      } else if (line.contains('@')) {
+        // Handle plain email format
+        emails.add(line);
+      }
+    }
+    
+    return emails;
+  }
+
+  String _extractNameFromEmail(String email) {
+    // Extract the part before @
+    final emailParts = email.split('@');
+    if (emailParts.isEmpty) return email;
+    
+    final localPart = emailParts[0];
+    // Split by dots and capitalize each part
+    final nameParts = localPart.split('.');
+    final capitalizedParts = nameParts.map((part) {
+      if (part.isEmpty) return part;
+      return part[0].toUpperCase() + part.substring(1).toLowerCase();
+    }).toList();
+    
+    return capitalizedParts.join(' ');
+  }
+
+  bool _userExists(String email) {
+    // ignore: use_build_context_synchronously
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    return userProvider.users.any(
+      (user) => user.email.toLowerCase() == email.toLowerCase(),
+    );
+  }
+
+  Future<Map<String, dynamic>> _createMultipleUsers(
+    List<String> emails,
+    Function(String) onProgress,
+  ) async {
+    int successCount = 0;
+    int failureCount = 0;
+    int skippedCount = 0;
+    final List<String> successEmails = [];
+    final List<String> failureEmails = [];
+    final List<String> skippedEmails = [];
+    final List<String> errorMessages = [];
+
+    // Ensure user list is loaded before checking for duplicates
+    // ignore: use_build_context_synchronously
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    if (userProvider.users.isEmpty) {
+      onProgress('Loading existing users...');
+      await userProvider.fetchUsers();
+    }
+
+    // Filter out invalid emails and check for duplicates
+    final validEmails = <String>[];
+    for (final email in emails) {
+      final trimmedEmail = email.trim();
+      if (trimmedEmail.isEmpty || !trimmedEmail.contains('@')) {
+        failureCount++;
+        failureEmails.add(trimmedEmail.isEmpty ? email : trimmedEmail);
+        errorMessages.add('Invalid email format');
+      } else if (_userExists(trimmedEmail)) {
+        skippedCount++;
+        skippedEmails.add(trimmedEmail);
+      } else {
+        validEmails.add(trimmedEmail);
+      }
+    }
+
+    if (validEmails.isEmpty) {
+      return {
+        'successCount': 0,
+        'failureCount': failureCount,
+        'skippedCount': skippedCount,
+        'successEmails': [],
+        'failureEmails': failureEmails,
+        'skippedEmails': skippedEmails,
+        'errorMessages': errorMessages,
+      };
+    }
+
+    // Process in batches to avoid overwhelming the API
+    // Batch size of 10 allows parallel processing while maintaining API stability
+    const int batchSize = 10;
+    int processedCount = 0;
+    final totalEmails = validEmails.length;
+
+    for (int i = 0; i < validEmails.length; i += batchSize) {
+      final batch = validEmails.skip(i).take(batchSize).toList();
+      final batchNumber = (i ~/ batchSize) + 1;
+      final totalBatches = (validEmails.length / batchSize).ceil();
+
+      onProgress(
+        'Processing batch $batchNumber of $totalBatches (${processedCount + batch.length}/$totalEmails users)...',
+      );
+
+      // Process batch in parallel
+      final results = await Future.wait(
+        batch.map((email) async {
+          try {
+            final fullName = _extractNameFromEmail(email);
+            await _createNewUser(fullName, email, skipRefresh: true);
+            return {'success': true, 'email': email, 'error': null};
+          } catch (e) {
+            debugPrint('Failed to create user $email: $e');
+            return {
+              'success': false,
+              'email': email,
+              'error': e.toString(),
+            };
+          }
+        }),
+        eagerError: false, // Don't stop on first error
+      );
+
+      // Process results
+      for (final result in results) {
+        if (result['success'] as bool) {
+          successCount++;
+          successEmails.add(result['email'] as String);
+        } else {
+          failureCount++;
+          failureEmails.add(result['email'] as String);
+          errorMessages.add(result['error'] as String? ?? 'Unknown error');
+        }
+        processedCount++;
+      }
+
+      // Update progress
+      onProgress(
+        'Progress: $processedCount/$totalEmails users processed ($successCount created, $failureCount failed, $skippedCount skipped)',
+      );
+
+      // Small delay between batches to avoid rate limiting
+      if (i + batchSize < validEmails.length) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+    }
+
+    // Final refresh of user list after all users are created
+    if (successCount > 0) {
+      onProgress('Refreshing user list...');
+      // ignore: use_build_context_synchronously
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      await userProvider.fetchUsers();
+    }
+
+    return {
+      'successCount': successCount,
+      'failureCount': failureCount,
+      'skippedCount': skippedCount,
+      'successEmails': successEmails,
+      'failureEmails': failureEmails,
+      'skippedEmails': skippedEmails,
+      'errorMessages': errorMessages,
+    };
+  }
+
+  void _showCreationSummary(BuildContext context, Map<String, dynamic> result) {
+    final successCount = result['successCount'] as int;
+    final failureCount = result['failureCount'] as int;
+    final skippedCount = result['skippedCount'] as int;
+    final successEmails = result['successEmails'] as List<String>;
+    final failureEmails = result['failureEmails'] as List<String>;
+    final skippedEmails = result['skippedEmails'] as List<String>;
+    final errorMessages = result['errorMessages'] as List<String>;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2C3E50),
+          title: Text(
+            'Creation Summary',
+            style: const TextStyle(
+              color: Colors.white,
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Successfully created: $successCount user(s)',
+                  style: const TextStyle(
+                    color: Colors.green,
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (skippedCount > 0) ...[
+                  const SizedBox(height: 8.0),
+                  Text(
+                    'Skipped (already exists): $skippedCount user(s)',
+                    style: const TextStyle(
+                      color: Colors.orange,
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+                if (failureCount > 0) ...[
+                  const SizedBox(height: 8.0),
+                  Text(
+                    'Failed: $failureCount user(s)',
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+                if (successEmails.isNotEmpty) ...[
+                  const SizedBox(height: 16.0),
+                  const Text(
+                    'Successfully created:',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'Poppins',
+                      fontSize: 12.0,
+                    ),
+                  ),
+                  ...successEmails.take(10).map((email) => Padding(
+                        padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                        child: Text(
+                          '• $email',
+                          style: const TextStyle(
+                            color: Colors.green,
+                            fontFamily: 'Poppins',
+                            fontSize: 11.0,
+                          ),
+                        ),
+                      )),
+                  if (successEmails.length > 10)
+                    Text(
+                      '... and ${successEmails.length - 10} more',
+                      style: const TextStyle(
+                        color: Colors.green,
+                        fontFamily: 'Poppins',
+                        fontSize: 11.0,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                ],
+                if (failureEmails.isNotEmpty) ...[
+                  const SizedBox(height: 16.0),
+                  const Text(
+                    'Failed:',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'Poppins',
+                      fontSize: 12.0,
+                    ),
+                  ),
+                  ...failureEmails.asMap().entries.take(10).map((entry) {
+                    final index = entry.key;
+                    final email = entry.value;
+                    final errorMsg = index < errorMessages.length 
+                        ? errorMessages[index] 
+                        : 'Unknown error';
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '• $email',
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontFamily: 'Poppins',
+                              fontSize: 11.0,
+                            ),
+                          ),
+                          if (errorMsg.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8.0, top: 2.0),
+                              child: Text(
+                                errorMsg.length > 50 
+                                    ? '${errorMsg.substring(0, 50)}...' 
+                                    : errorMsg,
+                                style: const TextStyle(
+                                  color: Colors.redAccent,
+                                  fontFamily: 'Poppins',
+                                  fontSize: 10.0,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }),
+                  if (failureEmails.length > 10)
+                    Text(
+                      '... and ${failureEmails.length - 10} more',
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontFamily: 'Poppins',
+                        fontSize: 11.0,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                ],
+                if (skippedEmails.isNotEmpty) ...[
+                  const SizedBox(height: 16.0),
+                  const Text(
+                    'Skipped (already exists):',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'Poppins',
+                      fontSize: 12.0,
+                    ),
+                  ),
+                  ...skippedEmails.take(10).map((email) {
+                    final name = _extractNameFromEmail(email);
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '• $email',
+                            style: const TextStyle(
+                              color: Colors.orange,
+                              fontFamily: 'Poppins',
+                              fontSize: 11.0,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8.0, top: 2.0),
+                            child: Text(
+                              '($name)',
+                              style: const TextStyle(
+                                color: Colors.orangeAccent,
+                                fontFamily: 'Poppins',
+                                fontSize: 10.0,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  if (skippedEmails.length > 10)
+                    Text(
+                      '... and ${skippedEmails.length - 10} more',
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontFamily: 'Poppins',
+                        fontSize: 11.0,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFC10D00),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'OK',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _createNewUser(
+    String fullName,
+    String email, {
+    bool skipRefresh = false,
+  }) async {
+    // Split name into first and last name
+    final nameParts = fullName.trim().split(' ');
+    final firstName = nameParts.isNotEmpty ? nameParts[0] : '';
+    final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+
+    final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
+
+    try {
+      // Step 1: Register the user via auth endpoint
+      final registerResponse = await http.post(
+        Uri.parse(ApiConfig.authRegisterEndpoint),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'password': 'password', // Default password
+          'name': fullName,
+          'firstName': firstName,
+          'lastName': lastName,
+          'role': 'Staff',
+          'department': '',
+          'designation': '',
+        }),
+      );
+
+      if (registerResponse.statusCode != 201) {
+        final errorBody = registerResponse.body;
+        throw Exception('Failed to create user: ${registerResponse.statusCode} - $errorBody');
+      }
+
+      final responseData = json.decode(registerResponse.body);
+      final userPayload = responseData['user'] as Map<String, dynamic>? ?? {};
+      final String uid = userPayload['id'] ?? '';
+
+      if (uid.isEmpty) {
+        throw Exception('User created but no ID returned');
+      }
+
+      // Step 2: Prepare user data and onboarding data
+      final Map<String, dynamic> userData = {
+        'email': email,
+        'password': 'password',
+        'name': fullName,
+        'role': 'Staff',
+        'status': 'Pending',
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+        'entity': '',
+        'department': '',
+        'designation': '',
+        if (adminEmail.isNotEmpty) 'admin': {'approved': adminEmail},
+      };
+
+      final Map<String, dynamic> onboardingData = {
+        'user_id': uid,
+        'email': email,
+        'name': firstName,
+        'surname': lastName,
+        'fullName': fullName.trim(),
+        'department': '',
+        'designation': '',
+        'status': 'Pending',
+        'role': 'Staff',
+        'first_valid': DateTime.utc(2025, 9, 25).toIso8601String(),
+        'inserted_by': adminEmail.isNotEmpty ? adminEmail : email,
+        'last_valid': DateTime.utc(2039, 12, 31).toIso8601String(),
+        'onboarding_id': uid,
+        'status_id': '',
+        if (adminEmail.isNotEmpty) 'admin': {'approved': adminEmail},
+      };
+
+      // Step 3: Sync to PDH
+      try {
+        await syncUserToPDH(userData, onboardingData, uid);
+      } catch (e) {
+        debugPrint('PDH sync failed for new user: $e');
+        // Continue even if PDH sync fails
+      }
+
+      // Step 4: Sync to Skills Heatmap
+      try {
+        await syncUserToSkillsHeatmap(userData, onboardingData, uid);
+      } catch (e) {
+        debugPrint('Skills Heatmap sync failed for new user: $e');
+        // Continue even if Skills Heatmap sync fails
+      }
+
+      // Step 5: Refresh user list (skip during batch processing)
+      if (!skipRefresh) {
+        // ignore: use_build_context_synchronously
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+        await userProvider.fetchUsers();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'User $fullName created successfully!',
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                ),
+              ),
+              backgroundColor: const Color(0xFFC10D00),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error creating new user: $e');
+      rethrow;
+    }
+  }
+
+  void _showDeleteConfirmation(BuildContext context) {
+    final selectedCount = _selectedUserIds.length;
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final selectedUsers = userProvider.users
+        .where((user) => _selectedUserIds.contains(user.id))
+        .toList();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2C3E50),
+          title: const Text(
+            'Delete Users',
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Are you sure you want to delete $selectedCount user(s)?',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                const SizedBox(height: 16.0),
+                const Text(
+                  'This will permanently delete users from:',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontFamily: 'Poppins',
+                    fontSize: 12.0,
+                  ),
+                ),
+                const SizedBox(height: 8.0),
+                const Text(
+                  '• Users collection',
+                  style: TextStyle(
+                    color: Colors.white60,
+                    fontFamily: 'Poppins',
+                    fontSize: 11.0,
+                  ),
+                ),
+                const Text(
+                  '• Onboarding collection',
+                  style: TextStyle(
+                    color: Colors.white60,
+                    fontFamily: 'Poppins',
+                    fontSize: 11.0,
+                  ),
+                ),
+                if (selectedUsers.length <= 10) ...[
+                  const SizedBox(height: 16.0),
+                  const Text(
+                    'Users to be deleted:',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'Poppins',
+                      fontSize: 12.0,
+                    ),
+                  ),
+                  ...selectedUsers.map((user) => Padding(
+                        padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                        child: Text(
+                          '• ${user.name} (${user.email})',
+                          style: const TextStyle(
+                            color: Colors.redAccent,
+                            fontFamily: 'Poppins',
+                            fontSize: 11.0,
+                          ),
+                        ),
+                      )),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _deleteUsers(_selectedUserIds.toList());
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'Delete',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteUsers(List<String> userIds) async {
+    if (userIds.isEmpty) return;
+
+    setState(() {
+      _isSelectionMode = false;
+    });
+
+    // Show loading indicator
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Deleting ${userIds.length} user(s)...',
+            style: const TextStyle(fontFamily: 'Poppins'),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    int successCount = 0;
+    int failureCount = 0;
+    final List<String> failedUserIds = [];
+    final List<String> errorMessages = [];
+
+    // Delete users in batches
+    const int batchSize = 10;
+    for (int i = 0; i < userIds.length; i += batchSize) {
+      final batch = userIds.skip(i).take(batchSize).toList();
+
+      final results = await Future.wait(
+        batch.map((userId) async {
+          try {
+            await _deleteUser(userId);
+            return {'success': true, 'userId': userId, 'error': null};
+          } catch (e) {
+            debugPrint('Failed to delete user $userId: $e');
+            return {
+              'success': false,
+              'userId': userId,
+              'error': e.toString(),
+            };
+          }
+        }),
+        eagerError: false,
+      );
+
+      for (final result in results) {
+        if (result['success'] as bool) {
+          successCount++;
+        } else {
+          failureCount++;
+          failedUserIds.add(result['userId'] as String);
+          errorMessages.add(result['error'] as String? ?? 'Unknown error');
+        }
+      }
+
+      // Small delay between batches
+      if (i + batchSize < userIds.length) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+    }
+
+    // Refresh user list
+    // ignore: use_build_context_synchronously
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    await userProvider.fetchUsers(forceRefresh: true);
+
+    // Clear selection
+    setState(() {
+      _selectedUserIds.clear();
+    });
+
+    // Show result
+    if (mounted) {
+      if (failureCount == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Successfully deleted $successCount user(s)',
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+              ),
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Deleted $successCount user(s), $failureCount failed',
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+              ),
+            ),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteUser(String userId) async {
+    try {
+      // Delete from users collection
+      final response = await http.delete(
+        Uri.parse(ApiConfig.deleteUserEndpoint(userId)),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        final errorBody = response.body;
+        throw Exception(
+          'Failed to delete user: ${response.statusCode} - $errorBody',
+        );
+      }
+
+      // The backend should handle deletion from both users and onboarding collections
+      debugPrint('Successfully deleted user $userId');
+    } catch (e) {
+      debugPrint('Error deleting user $userId: $e');
+      rethrow;
+    }
   }
 }

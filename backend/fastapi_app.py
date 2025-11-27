@@ -837,6 +837,114 @@ async def update_user(user_id: str, user_update: UserUpdate = Body(...)):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.delete("/api/users/{user_id}")
+async def delete_user(user_id: str):
+    try:
+        print(f"[DEBUG] delete_user called for user_id={user_id}")
+        
+        # Delete from main users collection
+        user_ref = db.collection('users').document(user_id)
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={'error': f'User {user_id} not found in users collection'},
+            )
+        user_ref.delete()
+        print(f"[DEBUG] Deleted user {user_id} from users collection")
+        
+        # Delete from main onboarding collection
+        onboarding_query = (
+            db.collection('onboarding')
+            .where('user_id', '==', user_id)
+            .limit(1)
+            .stream()
+        )
+        for onboarding_doc in onboarding_query:
+            onboarding_doc.reference.delete()
+            print(f"[DEBUG] Deleted user {user_id} from onboarding collection")
+            break
+        
+        # Also delete from onboarding collection using document ID (if exists)
+        onboarding_doc_ref = db.collection('onboarding').document(user_id)
+        onboarding_doc = onboarding_doc_ref.get()
+        if onboarding_doc.exists:
+            onboarding_doc_ref.delete()
+            print(f"[DEBUG] Deleted user {user_id} from onboarding collection (by document ID)")
+        
+        # Delete from PDH users collection
+        try:
+            pdh_user_ref = pdh_db.collection('users').document(user_id)
+            pdh_user_doc = pdh_user_ref.get()
+            if pdh_user_doc.exists:
+                pdh_user_ref.delete()
+                print(f"[DEBUG] Deleted user {user_id} from PDH users collection")
+        except Exception as pdh_error:
+            print(f"[WARNING] Failed to delete from PDH users collection: {pdh_error}")
+        
+        # Delete from PDH onboarding collection
+        try:
+            pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
+            pdh_onboarding_doc = pdh_onboarding_ref.get()
+            if pdh_onboarding_doc.exists:
+                pdh_onboarding_ref.delete()
+                print(f"[DEBUG] Deleted user {user_id} from PDH onboarding collection")
+            
+            # Also try query-based deletion for PDH onboarding
+            pdh_onboarding_query = (
+                pdh_db.collection('onboarding')
+                .where('user_id', '==', user_id)
+                .limit(1)
+                .stream()
+            )
+            for pdh_onboarding_doc in pdh_onboarding_query:
+                pdh_onboarding_doc.reference.delete()
+                print(f"[DEBUG] Deleted user {user_id} from PDH onboarding collection (by query)")
+                break
+        except Exception as pdh_error:
+            print(f"[WARNING] Failed to delete from PDH onboarding collection: {pdh_error}")
+        
+        # Delete from Skills Heatmap users collection
+        try:
+            skills_heatmap_user_ref = skills_heatmap_db.collection('users').document(user_id)
+            skills_heatmap_user_doc = skills_heatmap_user_ref.get()
+            if skills_heatmap_user_doc.exists:
+                skills_heatmap_user_ref.delete()
+                print(f"[DEBUG] Deleted user {user_id} from Skills Heatmap users collection")
+        except Exception as sh_error:
+            print(f"[WARNING] Failed to delete from Skills Heatmap users collection: {sh_error}")
+        
+        # Delete from Skills Heatmap onboarding collection
+        try:
+            skills_heatmap_onboarding_ref = skills_heatmap_db.collection('onboarding').document(user_id)
+            skills_heatmap_onboarding_doc = skills_heatmap_onboarding_ref.get()
+            if skills_heatmap_onboarding_doc.exists:
+                skills_heatmap_onboarding_ref.delete()
+                print(f"[DEBUG] Deleted user {user_id} from Skills Heatmap onboarding collection")
+            
+            # Also try query-based deletion for Skills Heatmap onboarding
+            skills_heatmap_onboarding_query = (
+                skills_heatmap_db.collection('onboarding')
+                .where('user_id', '==', user_id)
+                .limit(1)
+                .stream()
+            )
+            for sh_onboarding_doc in skills_heatmap_onboarding_query:
+                sh_onboarding_doc.reference.delete()
+                print(f"[DEBUG] Deleted user {user_id} from Skills Heatmap onboarding collection (by query)")
+                break
+        except Exception as sh_error:
+            print(f"[WARNING] Failed to delete from Skills Heatmap onboarding collection: {sh_error}")
+        
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={'message': f'User {user_id} deleted successfully from all collections'},
+        )
+    except Exception as e:
+        print(f"[ERROR] During user deletion: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @app.post("/api/roles")
 async def create_role(role: Role):
     try:
