@@ -210,7 +210,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                             ],
                             buttonText: 'Launch',
                             url:
-                                'https://chimerical-quokka-d580e5.netlify.app/',
+                                'https://willowy-scone-c14f7c.netlify.app/',
                             moduleKey: 'recruitment',
                           ),
                         );
