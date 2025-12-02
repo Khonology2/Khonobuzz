@@ -209,8 +209,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                               'Workflow',
                             ],
                             buttonText: 'Launch',
-                            url:
-                                'https://willowy-scone-c14f7c.netlify.app/',
+                            url: 'https://willowy-scone-c14f7c.netlify.app/',
                             moduleKey: 'recruitment',
                           ),
                         );
@@ -620,8 +619,8 @@ Future<void> _launchUrlFromContext(
   String moduleKey,
 ) async {
   try {
-    // Ensure URL uses HTTPS for secure transmission
-    String secureUrl = url;
+    // Trim and ensure URL uses HTTPS for secure transmission
+    String secureUrl = url.trim();
     if (secureUrl.startsWith('http://')) {
       secureUrl = secureUrl.replaceFirst('http://', 'https://');
     } else if (!secureUrl.startsWith('https://')) {
@@ -683,6 +682,9 @@ Future<void> _launchUrlFromContext(
       // Format: https://pdh-app-url/?token=<fresh-jwt>
       uri = uri.replace(queryParameters: {'token': token});
     }
+
+    // Debug: Print the URL being launched (remove in production if not needed)
+    debugPrint('[ModuleLaunch] Launching URL for $moduleKey: $uri');
 
     final bool launched = await launchUrl(
       uri,
