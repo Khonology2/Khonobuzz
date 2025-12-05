@@ -1200,6 +1200,13 @@ async def create_initial_roles():
 @app.post("/api/auth/login")
 async def login_user(user_login: UserLogin):
     try:
+        # Validate email input
+        if not user_login.email or not user_login.email.strip():
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "Email is required"}
+            )
+        
         # Normalize email (lowercase and strip whitespace)
         normalized_email = user_login.email.lower().strip()
         info_log(f"Login attempt for email: {normalized_email}")
@@ -1289,8 +1296,11 @@ async def login_user(user_login: UserLogin):
             )
             print(f"[DEBUG] Generated new token for user_id: {user_id} on login with roles: {roles}")
         except Exception as token_error:
-            print(f"[ERROR] Failed to generate token during login: {token_error}")
-            # Continue with login even if token generation fails
+            error_log(f"Failed to generate token during login: {token_error}")
+            # Continue with login even if token generation fails - user can still login
+            # Token can be generated later via /api/auth/token endpoint
+            # Continue with login even if token generation fails - user can still login
+            # Token can be generated later via /api/auth/token endpoint
         
         # Store/update token in onboarding collection (khonobuzz) and sync to all collections
         if encrypted_token:
@@ -1386,12 +1396,13 @@ async def login_user(user_login: UserLogin):
             }
         }
         
-        # Include token in response (optional - you may want to remove this for security)
-        # For now, we'll include it so the client can use it
-        try:
+        # Include token in response if generated successfully
+        # If token generation failed, login still succeeds - token can be fetched later
+        if encrypted_token:
             response_content["token"] = encrypted_token
-        except:
-            pass  # Token generation may have failed
+        else:
+            # Add warning that token will need to be fetched separately
+            response_content["token_warning"] = "Token generation failed. Please fetch token via /api/auth/token endpoint."
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,

@@ -250,8 +250,16 @@ class AuthProvider extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         final userPayload = responseData['user'] as Map<String, dynamic>? ?? {};
 
+        // Validate that we have essential user data
+        if (userPayload['email'] == null) {
+          debugPrint('[AuthProvider] Login response missing email');
+          _isAuthenticated = false;
+          notifyListeners();
+          return false;
+        }
+
         _isAuthenticated = true;
-        _userEmail = userPayload['email'];
+        _userEmail = userPayload['email'] as String;
         _userRole = userPayload['role'] ?? 'Staff';
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
@@ -270,18 +278,21 @@ class AuthProvider extends ChangeNotifier {
           prefs.setInt('currentScreenIndex', 9),
         ];
 
-        if (responseData.containsKey('token')) {
+        // Get token from response if available
+        if (responseData.containsKey('token') && responseData['token'] != null) {
           _userToken = responseData['token'] as String?;
-          writeTasks.add(prefs.setString('userToken', _userToken!));
+          if (_userToken != null && _userToken!.isNotEmpty) {
+            writeTasks.add(prefs.setString('userToken', _userToken!));
+          }
         }
 
         await Future.wait(writeTasks);
         notifyListeners();
 
-        // Fetch module access in parallel with token if needed (only if not in response)
+        // Fetch module access and token in parallel if needed (only if not in response)
         await Future.wait([
           if (_userModuleAccess == null) fetchCurrentUserModuleAccess(),
-          if (_userToken == null) fetchUserToken(),
+          if (_userToken == null || _userToken!.isEmpty) fetchUserToken(),
         ]);
 
         return true;
@@ -322,10 +333,21 @@ class AuthProvider extends ChangeNotifier {
       return false;
     } catch (e) {
       debugPrint('Manual login error: $e');
-      final success = await _attemptFallbackLogin(email);
-      if (success) {
-        return true;
+      debugPrint('Manual login error type: ${e.runtimeType}');
+      debugPrint('Manual login error details: ${e.toString()}');
+      
+      // If it's a network error, try fallback
+      if (e.toString().contains('SocketException') || 
+          e.toString().contains('Failed host lookup') ||
+          e.toString().contains('Connection refused') ||
+          e.toString().contains('timeout')) {
+        debugPrint('Network error detected, attempting fallback login');
+        final success = await _attemptFallbackLogin(email);
+        if (success) {
+          return true;
+        }
       }
+      
       _isAuthenticated = false;
       notifyListeners();
       return false;

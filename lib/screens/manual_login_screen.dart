@@ -318,7 +318,19 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                       } catch (e) {
                         // Handle 403 error (Pending status) or other exceptions
                         if (!mounted) return;
-                        final errorMessage = e.toString().replaceFirst('Exception: ', '');
+                        String errorMessage = e.toString().replaceFirst('Exception: ', '');
+                        
+                        // Clean up error message for better user experience
+                        if (errorMessage.contains('SocketException') || 
+                            errorMessage.contains('Failed host lookup')) {
+                          errorMessage = 'Cannot connect to server. Please check your internet connection.';
+                        } else if (errorMessage.contains('timeout') || 
+                                   errorMessage.contains('TimeoutException')) {
+                          errorMessage = 'Request timed out. Please check your internet connection and try again.';
+                        } else if (errorMessage.contains('Connection refused')) {
+                          errorMessage = 'Cannot connect to server. Please ensure the backend is running.';
+                        }
+                        
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
