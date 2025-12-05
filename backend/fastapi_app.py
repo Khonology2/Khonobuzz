@@ -44,6 +44,34 @@ def info_log(message: str):
     logger.info(message)
     print(f"[INFO] {message}")
 
+def derive_module_access_from_role(module_access: Optional[str], module_access_role: Optional[str]) -> Optional[str]:
+    """Derives moduleAccess from moduleAccessRole if moduleAccess is empty or incomplete"""
+    # If moduleAccess already has values, use it
+    if module_access and module_access.strip():
+        return module_access
+    
+    # If moduleAccessRole is empty, return None
+    if not module_access_role or not module_access_role.strip():
+        return None
+    
+    # Extract module names from moduleAccessRole
+    parts = module_access_role.split(',')
+    module_names = []
+    
+    for part in parts:
+        trimmed = part.strip()
+        if trimmed.startswith('PDH'):
+            if 'Personal Development Hub' not in module_names:
+                module_names.append('Personal Development Hub')
+        elif trimmed.startswith('Skills Heatmap'):
+            if 'Resource & Capacity Skills Heatmap' not in module_names:
+                module_names.append('Resource & Capacity Skills Heatmap')
+        elif trimmed.startswith('Automated Recruitment Workflow'):
+            if 'Automated Recruitment Workflow' not in module_names:
+                module_names.append('Automated Recruitment Workflow')
+    
+    return ','.join(module_names) if module_names else None
+
 # Configuration
 FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH') or 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json'
 PDH_FIREBASE_CREDENTIALS_PATH = os.environ.get('PDH_FIREBASE_CREDENTIALS_PATH') or 'pdh-fe6eb-firebase-adminsdk-fbsvc-6fbc402974.json'
@@ -644,6 +672,13 @@ async def list_users():
             created_at_str = created_at_dt.isoformat() + 'Z' if created_at_dt else None
             updated_at_str = updated_at_dt.isoformat() + 'Z' if updated_at_dt else None
 
+            # Get moduleAccess and moduleAccessRole
+            module_access_raw = user_info.get('moduleAccess') or onboarding_info.get('moduleAccess', '')
+            module_access_role_raw = user_info.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', '')
+            
+            # Derive moduleAccess from moduleAccessRole if moduleAccess is empty
+            final_module_access = derive_module_access_from_role(module_access_raw, module_access_role_raw)
+
             user_payload = {
                 'id': user_doc.id,
                 'email': user_info.get('email', ''),
@@ -654,9 +689,9 @@ async def list_users():
                 'department': onboarding_info.get('department', ''),
                 'designation': onboarding_info.get('designation', ''),
                 'entity': user_info.get('entity') or onboarding_info.get('entity', ''),
-                'moduleAccess': user_info.get('moduleAccess') or onboarding_info.get('moduleAccess', ''),
+                'moduleAccess': final_module_access or '',
                 'moduleRole': user_info.get('moduleRole') or onboarding_info.get('moduleRole', ''),
-                'moduleAccessRole': user_info.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', ''),
+                'moduleAccessRole': module_access_role_raw or '',
                 'createdAt': created_at_str,
                 'updatedAt': updated_at_str,
             }
@@ -1197,6 +1232,10 @@ async def login_user(user_login: UserLogin):
             except Exception as skills_sync_error:
                 print(f"[ERROR] Failed to sync token to Skills Heatmap: {skills_sync_error}")
 
+        # Get moduleAccess and derive from moduleAccessRole if needed
+        module_access_raw = user_data.get('moduleAccess') or onboarding_data.get('moduleAccess', '')
+        final_module_access = derive_module_access_from_role(module_access_raw, module_access_role)
+        
         # Successful login, return user data with token
         response_content = {
             "message": "Login successful",
@@ -1206,6 +1245,7 @@ async def login_user(user_login: UserLogin):
                 "name": user_data.get('name', ''),
                 "role": user_data.get('role', 'user'),
                 "status": user_status,
+                "moduleAccess": final_module_access or '',
                 "moduleAccessRole": module_access_role,
             }
         }

@@ -257,7 +257,9 @@ class AuthProvider extends ChangeNotifier {
         _currentScreenIndex = 9;
 
         // Extract module access from user payload if available (faster than separate API call)
-        _userModuleAccess = userPayload['moduleAccess'] as String?;
+        final moduleAccessRaw = userPayload['moduleAccess'] as String?;
+        final moduleAccessRoleRaw = userPayload['moduleAccessRole'] as String?;
+        _userModuleAccess = _deriveModuleAccessFromRole(moduleAccessRaw, moduleAccessRoleRaw);
 
         // Batch all SharedPreferences writes
         final writeTasks = <Future>[
@@ -378,7 +380,9 @@ class AuthProvider extends ChangeNotifier {
           _currentScreenIndex = 9;
 
           // Extract module access from found user if available
-          _userModuleAccess = foundUser['moduleAccess'] as String?;
+          final moduleAccessRaw = foundUser['moduleAccess'] as String?;
+          final moduleAccessRoleRaw = foundUser['moduleAccessRole'] as String?;
+          _userModuleAccess = _deriveModuleAccessFromRole(moduleAccessRaw, moduleAccessRoleRaw);
 
           // Batch all SharedPreferences writes
           await Future.wait([
@@ -440,6 +444,42 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Derives moduleAccess from moduleAccessRole if moduleAccess is empty or incomplete
+  static String? _deriveModuleAccessFromRole(String? moduleAccess, String? moduleAccessRole) {
+    // If moduleAccess already has values, use it
+    if (moduleAccess != null && moduleAccess.trim().isNotEmpty) {
+      return moduleAccess;
+    }
+    
+    // If moduleAccessRole is empty, return null
+    if (moduleAccessRole == null || moduleAccessRole.trim().isEmpty) {
+      return null;
+    }
+    
+    // Extract module names from moduleAccessRole
+    final parts = moduleAccessRole.split(',');
+    final List<String> moduleNames = [];
+    
+    for (var part in parts) {
+      final trimmed = part.trim();
+      if (trimmed.startsWith('PDH')) {
+        if (!moduleNames.contains('Personal Development Hub')) {
+          moduleNames.add('Personal Development Hub');
+        }
+      } else if (trimmed.startsWith('Skills Heatmap')) {
+        if (!moduleNames.contains('Resource & Capacity Skills Heatmap')) {
+          moduleNames.add('Resource & Capacity Skills Heatmap');
+        }
+      } else if (trimmed.startsWith('Automated Recruitment Workflow')) {
+        if (!moduleNames.contains('Automated Recruitment Workflow')) {
+          moduleNames.add('Automated Recruitment Workflow');
+        }
+      }
+    }
+    
+    return moduleNames.isEmpty ? null : moduleNames.join(',');
+  }
+
   // Set module access directly (useful when loading from cache)
   void setModuleAccess(String? moduleAccess) {
     _userModuleAccess = moduleAccess;
@@ -491,7 +531,11 @@ class AuthProvider extends ChangeNotifier {
                   )
                   as Map<String, dynamic>?;
 
-          _userModuleAccess = foundUser?['moduleAccess'] as String?;
+          final moduleAccessRaw = foundUser?['moduleAccess'] as String?;
+          final moduleAccessRoleRaw = foundUser?['moduleAccessRole'] as String?;
+          
+          // Derive moduleAccess from moduleAccessRole if moduleAccess is empty
+          _userModuleAccess = _deriveModuleAccessFromRole(moduleAccessRaw, moduleAccessRoleRaw);
           notifyListeners();
           debugPrint('[AuthProvider] Module access loaded from API');
         } catch (_) {
@@ -510,6 +554,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // Check if user has specific module access
+  // Supports both short names (PDH, Skills Heatmap) and full names (Personal Development Hub, Resource & Capacity Skills Heatmap)
   bool hasModuleAccess(String moduleName) {
     if (_userModuleAccess == null || _userModuleAccess!.isEmpty) {
       return false;
@@ -519,7 +564,35 @@ class AuthProvider extends ChangeNotifier {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
-    return accessList.contains(moduleName);
+    
+    // Direct match
+    if (accessList.contains(moduleName)) {
+      return true;
+    }
+    
+    // Check for partial matches (e.g., "PDH" matches "Personal Development Hub")
+    final moduleNameLower = moduleName.toLowerCase();
+    for (var access in accessList) {
+      final accessLower = access.toLowerCase();
+      // Check if moduleName is contained in access or vice versa
+      if (accessLower.contains(moduleNameLower) || moduleNameLower.contains(accessLower)) {
+        // Additional validation for specific module mappings
+        if (moduleNameLower == 'pdh' && 
+            (accessLower.contains('personal development hub') || accessLower == 'pdh')) {
+          return true;
+        }
+        if (moduleNameLower.contains('skills heatmap') && 
+            (accessLower.contains('skills heatmap') || accessLower.contains('resource & capacity'))) {
+          return true;
+        }
+        if (moduleNameLower.contains('recruitment') && 
+            accessLower.contains('recruitment')) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
   }
 
   // Fetch user token from backend

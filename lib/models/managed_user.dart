@@ -16,6 +16,42 @@ class ManagedUser {
 
   String get name => '$firstName $lastName'.trim();
 
+  /// Derives moduleAccess from moduleAccessRole if moduleAccess is empty or incomplete
+  static String? _deriveModuleAccessFromRole(String? moduleAccess, String? moduleAccessRole) {
+    // If moduleAccess already has values, use it
+    if (moduleAccess != null && moduleAccess.trim().isNotEmpty) {
+      return moduleAccess;
+    }
+    
+    // If moduleAccessRole is empty, return null
+    if (moduleAccessRole == null || moduleAccessRole.trim().isEmpty) {
+      return null;
+    }
+    
+    // Extract module names from moduleAccessRole
+    final parts = moduleAccessRole.split(',');
+    final List<String> moduleNames = [];
+    
+    for (var part in parts) {
+      final trimmed = part.trim();
+      if (trimmed.startsWith('PDH')) {
+        if (!moduleNames.contains('Personal Development Hub')) {
+          moduleNames.add('Personal Development Hub');
+        }
+      } else if (trimmed.startsWith('Skills Heatmap')) {
+        if (!moduleNames.contains('Resource & Capacity Skills Heatmap')) {
+          moduleNames.add('Resource & Capacity Skills Heatmap');
+        }
+      } else if (trimmed.startsWith('Automated Recruitment Workflow')) {
+        if (!moduleNames.contains('Automated Recruitment Workflow')) {
+          moduleNames.add('Automated Recruitment Workflow');
+        }
+      }
+    }
+    
+    return moduleNames.isEmpty ? null : moduleNames.join(',');
+  }
+
   ManagedUser({
     required this.id,
     required this.firstName,
@@ -88,6 +124,15 @@ class ManagedUser {
       moduleRoleValue = null;
     }
 
+    final moduleAccessRoleValue = (onboardingData['moduleAccessRole'] as String?)?.isNotEmpty == true
+        ? onboardingData['moduleAccessRole'] as String
+        : (userData['moduleAccessRole'] as String?)?.isNotEmpty == true
+            ? userData['moduleAccessRole'] as String
+            : null;
+
+    // Derive moduleAccess from moduleAccessRole if moduleAccess is empty
+    final finalModuleAccess = _deriveModuleAccessFromRole(moduleAccessValue, moduleAccessRoleValue);
+
     return ManagedUser(
       id: id,
       firstName: firstName,
@@ -98,19 +143,25 @@ class ManagedUser {
       role: userData['role'] ?? 'Staff',
       status: userData['status'] ?? 'Active',
       entity: entityValue,
-      moduleAccess: moduleAccessValue,
+      moduleAccess: finalModuleAccess,
       moduleRole: moduleRoleValue,
-      moduleAccessRole: (onboardingData['moduleAccessRole'] as String?)?.isNotEmpty == true
-          ? onboardingData['moduleAccessRole'] as String
-          : (userData['moduleAccessRole'] as String?)?.isNotEmpty == true
-              ? userData['moduleAccessRole'] as String
-              : null,
+      moduleAccessRole: moduleAccessRoleValue,
     );
   }
 
   factory ManagedUser.fromApi(Map<String, dynamic> data) {
     final createdAtRaw = data['createdAt'];
     final updatedAtRaw = data['updatedAt'];
+
+    final moduleAccessRaw = (data['moduleAccess'] as String?)?.isNotEmpty == true
+        ? data['moduleAccess'] as String
+        : null;
+    final moduleAccessRoleRaw = (data['moduleAccessRole'] as String?)?.isNotEmpty == true
+        ? data['moduleAccessRole'] as String
+        : null;
+
+    // Derive moduleAccess from moduleAccessRole if moduleAccess is empty
+    final finalModuleAccess = _deriveModuleAccessFromRole(moduleAccessRaw, moduleAccessRoleRaw);
 
     return ManagedUser(
       id: data['id'] ?? '',
@@ -124,15 +175,11 @@ class ManagedUser {
       entity: (data['entity'] as String?)?.isNotEmpty == true
           ? data['entity'] as String
           : null,
-      moduleAccess: (data['moduleAccess'] as String?)?.isNotEmpty == true
-          ? data['moduleAccess'] as String
-          : null,
+      moduleAccess: finalModuleAccess,
       moduleRole: (data['moduleRole'] as String?)?.isNotEmpty == true
           ? data['moduleRole'] as String
           : null,
-      moduleAccessRole: (data['moduleAccessRole'] as String?)?.isNotEmpty == true
-          ? data['moduleAccessRole'] as String
-          : null,
+      moduleAccessRole: moduleAccessRoleRaw,
       createdAt: createdAtRaw is String && createdAtRaw.isNotEmpty
           ? DateTime.tryParse(createdAtRaw)
           : null,

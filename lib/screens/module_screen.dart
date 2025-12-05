@@ -54,7 +54,33 @@ class _ModuleScreenState extends State<ModuleScreen> {
         final currentUser = userProvider.users.firstWhere(
           (u) => u.email.toLowerCase() == authProvider.userEmail!.toLowerCase(),
         );
+        // Use moduleAccess if available, otherwise derive from moduleAccessRole
         cachedModuleAccess = currentUser.moduleAccess;
+        if (cachedModuleAccess == null || cachedModuleAccess.isEmpty) {
+          // Derive from moduleAccessRole if moduleAccess is empty
+          final moduleAccessRole = currentUser.moduleAccessRole;
+          if (moduleAccessRole != null && moduleAccessRole.isNotEmpty) {
+            final parts = moduleAccessRole.split(',');
+            final List<String> moduleNames = [];
+            for (var part in parts) {
+              final trimmed = part.trim();
+              if (trimmed.startsWith('PDH')) {
+                if (!moduleNames.contains('Personal Development Hub')) {
+                  moduleNames.add('Personal Development Hub');
+                }
+              } else if (trimmed.startsWith('Skills Heatmap')) {
+                if (!moduleNames.contains('Resource & Capacity Skills Heatmap')) {
+                  moduleNames.add('Resource & Capacity Skills Heatmap');
+                }
+              } else if (trimmed.startsWith('Automated Recruitment Workflow')) {
+                if (!moduleNames.contains('Automated Recruitment Workflow')) {
+                  moduleNames.add('Automated Recruitment Workflow');
+                }
+              }
+            }
+            cachedModuleAccess = moduleNames.isEmpty ? null : moduleNames.join(',');
+          }
+        }
         if (cachedModuleAccess != null && cachedModuleAccess.isNotEmpty) {
           // Set it directly in AuthProvider
           authProvider.setModuleAccess(cachedModuleAccess);
@@ -121,9 +147,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
                       final isAdmin =
                           authProvider.userRole?.toLowerCase() == 'admin';
-                      final hasPDHAccess = authProvider.hasModuleAccess('PDH');
+                      final hasPDHAccess = authProvider.hasModuleAccess('PDH') ||
+                          authProvider.hasModuleAccess('Personal Development Hub');
                       final hasSkillsHeatmapAccess = authProvider
-                          .hasModuleAccess('Skills Heatmap');
+                          .hasModuleAccess('Skills Heatmap') ||
+                          authProvider.hasModuleAccess('Resource & Capacity Skills Heatmap');
                       final hasRecruitmentAccess =
                           authProvider.hasModuleAccess(
                             'Automated Recruitment Workflow',

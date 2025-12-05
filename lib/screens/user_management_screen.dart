@@ -922,9 +922,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             : null,
                         hint: const Text(
                           'Select role',
-                          style: TextStyle(fontFamily: 'Poppins'),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Poppins',
+                          ),
                         ),
                         dropdownColor: const Color(0xFF2C3E50),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                        icon: const Icon(
+                          Icons.arrow_drop_down,
+                          color: Colors.white70,
+                        ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
                           setState(() {
@@ -939,7 +950,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             value: value,
                             child: Text(
                               value,
-                              style: const TextStyle(fontFamily: 'Poppins'),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Poppins',
+                              ),
                             ),
                           );
                         }).toList(),
@@ -975,9 +989,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             : null,
                         hint: const Text(
                           'Select status',
-                          style: TextStyle(fontFamily: 'Poppins'),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Poppins',
+                          ),
                         ),
                         dropdownColor: const Color(0xFF2C3E50),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                        icon: const Icon(
+                          Icons.arrow_drop_down,
+                          color: Colors.white70,
+                        ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
                           setState(() {
@@ -991,7 +1016,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 value: value,
                                 child: Text(
                                   value,
-                                  style: const TextStyle(fontFamily: 'Poppins'),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Poppins',
+                                  ),
                                 ),
                               );
                             })
