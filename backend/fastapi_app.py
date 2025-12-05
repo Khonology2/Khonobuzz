@@ -79,6 +79,9 @@ def derive_module_access_from_role(module_access: Optional[str], module_access_r
         elif trimmed.startswith('Automated Recruitment Workflow'):
             if 'Automated Recruitment Workflow' not in module_names:
                 module_names.append('Automated Recruitment Workflow')
+        elif trimmed.startswith('Proposal & SOW Builder') or trimmed.startswith('SOW Builder'):
+            if 'Proposal & SOW Builder' not in module_names:
+                module_names.append('Proposal & SOW Builder')
     
     return ','.join(module_names) if module_names else None
 

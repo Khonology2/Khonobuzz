@@ -23,6 +23,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   final TextEditingController _searchController = TextEditingController();
   final List<String> _moduleRoleOptionsPDH = ['Employee', 'Manager'];
   final List<String> _moduleRoleOptionsRecruitment = ['Admin', 'Hiring Manager', 'Candidate'];
+  final List<String> _moduleRoleOptionsSOWBuilder = ['Admin', 'Manager'];
   static const String _notAssignedValue = 'Not Assigned';
 
   String? expandedUserId;
@@ -31,6 +32,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   String _searchQuery = '';
   // Track selected recruitment role per user to persist selection
   final Map<String, String?> _selectedRecruitmentRoles = {};
+  // Track selected SOW Builder role per user to persist selection
+  final Map<String, String?> _selectedSOWBuilderRoles = {};
 
   Map<String, Color> get userStatusColors => {
     'Active': Colors.green.shade600,
@@ -118,6 +121,34 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     _selectedRecruitmentRoles[user.id] = _notAssignedValue;
   }
 
+  void _refreshSOWBuilderRoleCache(ManagedUser user) {
+    // Extract and cache SOW Builder role from user's moduleAccessRole
+    if (user.moduleAccessRole != null && user.moduleAccessRole!.isNotEmpty) {
+      final parts = user.moduleAccessRole!.split(', ');
+      for (var part in parts) {
+        final trimmedPart = part.trim();
+        if (trimmedPart.startsWith('Proposal & SOW Builder - ')) {
+          final extractedRole = trimmedPart.replaceFirst('Proposal & SOW Builder - ', '').trim();
+          // Match with exact option value (case-insensitive)
+          final roleLower = extractedRole.toLowerCase();
+          for (var option in _moduleRoleOptionsSOWBuilder) {
+            if (option.toLowerCase() == roleLower) {
+              _selectedSOWBuilderRoles[user.id] = option;
+              return;
+            }
+          }
+          // If no exact match, use the extracted role as-is
+          if (extractedRole.isNotEmpty) {
+            _selectedSOWBuilderRoles[user.id] = extractedRole;
+          }
+          return;
+        }
+      }
+    }
+    // If no SOW Builder role found, set to Not Assigned
+    _selectedSOWBuilderRoles[user.id] = _notAssignedValue;
+  }
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
@@ -130,11 +161,13 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     bool pdhSelected,
     bool skillsHeatmapSelected,
     bool recruitmentSelected,
+    bool sowBuilderSelected,
   ) {
     List<String> accessList = [];
     if (pdhSelected) accessList.add('Personal Development Hub');
     if (skillsHeatmapSelected) accessList.add('Resource & Capacity Skills Heatmap');
     if (recruitmentSelected) accessList.add('Automated Recruitment Workflow');
+    if (sowBuilderSelected) accessList.add('Proposal & SOW Builder');
 
     user.moduleAccess = accessList.isEmpty ? null : accessList.join(',');
   }
@@ -144,8 +177,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     bool pdhSelected,
     bool skillsHeatmapSelected,
     bool recruitmentSelected,
+    bool sowBuilderSelected,
     String? newModuleRole,
     String? newRecruitmentRole,
+    String? newSOWBuilderRole,
   ) async {
     final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
     setState(() {
@@ -156,6 +191,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     if (pdhSelected) accessList.add('Personal Development Hub');
     if (skillsHeatmapSelected) accessList.add('Resource & Capacity Skills Heatmap');
     if (recruitmentSelected) accessList.add('Automated Recruitment Workflow');
+    if (sowBuilderSelected) accessList.add('Proposal & SOW Builder');
 
     final sanitizedModuleAccess = accessList.isEmpty
         ? ''
@@ -185,9 +221,19 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           : '';
     }
     
+    String sanitizedSOWBuilderRole = '';
+    if (sowBuilderSelected) {
+      sanitizedSOWBuilderRole =
+          (newSOWBuilderRole != null &&
+              newSOWBuilderRole.trim().isNotEmpty &&
+              newSOWBuilderRole != _notAssignedValue)
+          ? newSOWBuilderRole.trim()
+          : '';
+    }
+    
     // Note: Skills Heatmap always has Manager role, but we don't store it separately
     // The moduleRole field is specifically for PDH
-    // For Recruitment, we'll include it in the combined field
+    // For Recruitment and SOW Builder, we'll include it in the combined field
 
     // Create combined moduleAccessRole field
     List<String> combinedParts = [];
@@ -203,6 +249,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       combinedParts.add('Automated Recruitment Workflow - $sanitizedRecruitmentRole');
     } else if (recruitmentSelected) {
       combinedParts.add('Automated Recruitment Workflow');
+    }
+    if (sowBuilderSelected && sanitizedSOWBuilderRole.isNotEmpty) {
+      combinedParts.add('Proposal & SOW Builder - $sanitizedSOWBuilderRole');
+    } else if (sowBuilderSelected) {
+      combinedParts.add('Proposal & SOW Builder');
     }
 
     String combinedModuleAccess = combinedParts.isEmpty
@@ -277,6 +328,29 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         } else if (!recruitmentSelected) {
           // Clear cached role if recruitment is not selected
           _selectedRecruitmentRoles[user.id] = _notAssignedValue;
+        }
+
+        // Update cached SOW Builder role if moduleAccessRole was updated
+        if (updatedModuleAccessRole != null && updatedModuleAccessRole.isNotEmpty) {
+          final parts = updatedModuleAccessRole.split(', ');
+          for (var part in parts) {
+            final trimmedPart = part.trim();
+            if (trimmedPart.startsWith('Proposal & SOW Builder - ')) {
+              final extractedRole = trimmedPart.replaceFirst('Proposal & SOW Builder - ', '').trim();
+              // Match with exact option value
+              final roleLower = extractedRole.toLowerCase();
+              for (var option in _moduleRoleOptionsSOWBuilder) {
+                if (option.toLowerCase() == roleLower) {
+                  _selectedSOWBuilderRoles[user.id] = option;
+                  break;
+                }
+              }
+              break;
+            }
+          }
+        } else if (!sowBuilderSelected) {
+          // Clear cached role if SOW Builder is not selected
+          _selectedSOWBuilderRoles[user.id] = _notAssignedValue;
         }
       });
 
@@ -521,9 +595,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       onTap: () {
         setState(() {
           if (!isExpanded) {
-            // When expanding, refresh the cached recruitment role from user data
+            // When expanding, refresh the cached recruitment and SOW Builder roles from user data
             expandedUserId = user.id;
             _refreshRecruitmentRoleCache(user);
+            _refreshSOWBuilderRoleCache(user);
           } else {
             expandedUserId = null;
           }
@@ -764,6 +839,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     bool recruitmentSelected = selectedModuleAccessList.contains(
       'Automated Recruitment Workflow',
     );
+    bool sowBuilderSelected = selectedModuleAccessList.contains(
+      'Proposal & SOW Builder',
+    ) || selectedModuleAccessList.contains('SOW Builder');
 
     // Use "Not Assigned" as default if moduleRole is null or empty
     String? selectedModuleRole =
@@ -802,6 +880,39 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       }
       // Cache the extracted value
       _selectedRecruitmentRoles[user.id] = selectedRecruitmentRole;
+    }
+
+    // Extract SOW Builder role from moduleAccessRole if it exists
+    // First check if we have a cached selection for this user
+    String? selectedSOWBuilderRole = _selectedSOWBuilderRoles[user.id];
+    
+    // If no cached selection, extract from user's moduleAccessRole
+    if (selectedSOWBuilderRole == null) {
+      selectedSOWBuilderRole = _notAssignedValue;
+      if (user.moduleAccessRole != null && user.moduleAccessRole!.isNotEmpty) {
+        final parts = user.moduleAccessRole!.split(', ');
+        for (var part in parts) {
+          final trimmedPart = part.trim();
+          if (trimmedPart.startsWith('Proposal & SOW Builder - ')) {
+            final extractedRole = trimmedPart.replaceFirst('Proposal & SOW Builder - ', '').trim();
+            // Check if the extracted role matches one of our options (case-insensitive)
+            final roleLower = extractedRole.toLowerCase();
+            for (var option in _moduleRoleOptionsSOWBuilder) {
+              if (option.toLowerCase() == roleLower) {
+                selectedSOWBuilderRole = option; // Use the exact option value
+                break;
+              }
+            }
+            // If no match found but we have a role, use it as-is
+            if (selectedSOWBuilderRole == _notAssignedValue && extractedRole.isNotEmpty) {
+              selectedSOWBuilderRole = extractedRole;
+            }
+            break;
+          }
+        }
+      }
+      // Cache the extracted value
+      _selectedSOWBuilderRoles[user.id] = selectedSOWBuilderRole;
     }
 
     return Container(
@@ -849,12 +960,13 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           pdhSelected,
                           skillsHeatmapSelected,
                           recruitmentSelected,
+                          sowBuilderSelected,
                         );
                         // If PDH is unchecked and no role selected, clear module role
                         if (!pdhSelected &&
                             selectedModuleRole != _notAssignedValue) {
-                          // Only clear if Skills Heatmap and Recruitment are also not selected
-                          if (!skillsHeatmapSelected && !recruitmentSelected) {
+                          // Only clear if Skills Heatmap, Recruitment, and SOW Builder are also not selected
+                          if (!skillsHeatmapSelected && !recruitmentSelected && !sowBuilderSelected) {
                             selectedModuleRole = _notAssignedValue;
                             user.moduleRole = null;
                           }
@@ -970,6 +1082,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           pdhSelected,
                           skillsHeatmapSelected,
                           recruitmentSelected,
+                          sowBuilderSelected,
                         );
                       });
                     },
@@ -1078,6 +1191,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           pdhSelected,
                           skillsHeatmapSelected,
                           recruitmentSelected,
+                          sowBuilderSelected,
                         );
                       });
                     },
@@ -1153,6 +1267,115 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 16.0), // Spacing between rows
+          // Proposal & SOW Builder Row: Checkbox + Module Role Dropdown
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Proposal & SOW Builder Checkbox
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 8.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2C3E50),
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: CheckboxListTile(
+                    title: const Text(
+                      'Proposal & SOW Builder',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    value: sowBuilderSelected,
+                    activeColor: const Color(0xFFC10D00),
+                    checkColor: Colors.white,
+                    onChanged: (bool? value) {
+                      setState(() {
+                        sowBuilderSelected = value ?? false;
+                        _updateModuleAccessList(
+                          user,
+                          pdhSelected,
+                          skillsHeatmapSelected,
+                          recruitmentSelected,
+                          sowBuilderSelected,
+                        );
+                      });
+                    },
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16.0), // Spacing between checkbox and dropdown
+              // Module Role Dropdown for Proposal & SOW Builder
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 8.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: sowBuilderSelected
+                        ? const Color(0xFF2C3E50)
+                        : const Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      value: sowBuilderSelected
+                          ? (_selectedSOWBuilderRoles[user.id] ?? selectedSOWBuilderRole)
+                          : _notAssignedValue,
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF2C3E50),
+                      icon: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.white70,
+                      ),
+                      hint: const Text(
+                        'Module Role',
+                        style: TextStyle(
+                          color: Colors.white60,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                      style: TextStyle(
+                        color: sowBuilderSelected ? Colors.white : Colors.white54,
+                        fontFamily: 'Poppins',
+                      ),
+                      onChanged: sowBuilderSelected
+                          ? (value) {
+                              setState(() {
+                                if (value == _notAssignedValue) {
+                                  _selectedSOWBuilderRoles[user.id] = _notAssignedValue;
+                                } else {
+                                  _selectedSOWBuilderRoles[user.id] = value;
+                                }
+                              });
+                            }
+                          : null,
+                      items: <DropdownMenuItem<String?>>[
+                        DropdownMenuItem<String?>(
+                          value: _notAssignedValue,
+                          child: Text(_notAssignedValue),
+                        ),
+                        ..._moduleRoleOptionsSOWBuilder.map(
+                          (option) => DropdownMenuItem<String?>(
+                            value: option,
+                            child: Text(option),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 16.0), // Spacing before the update button
           // Update Button
           Align(
@@ -1165,8 +1388,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       pdhSelected,
                       skillsHeatmapSelected,
                       recruitmentSelected,
+                      sowBuilderSelected,
                       selectedModuleRole,
                       _selectedRecruitmentRoles[user.id] ?? _notAssignedValue,
+                      _selectedSOWBuilderRoles[user.id] ?? _notAssignedValue,
                     ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFC10D00),

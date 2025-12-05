@@ -496,6 +496,10 @@ class AuthProvider extends ChangeNotifier {
         if (!moduleNames.contains('Automated Recruitment Workflow')) {
           moduleNames.add('Automated Recruitment Workflow');
         }
+      } else if (trimmed.startsWith('Proposal & SOW Builder') || trimmed.startsWith('SOW Builder')) {
+        if (!moduleNames.contains('Proposal & SOW Builder')) {
+          moduleNames.add('Proposal & SOW Builder');
+        }
       }
     }
     

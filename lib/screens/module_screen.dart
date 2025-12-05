@@ -76,6 +76,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 if (!moduleNames.contains('Automated Recruitment Workflow')) {
                   moduleNames.add('Automated Recruitment Workflow');
                 }
+              } else if (trimmed.startsWith('Proposal & SOW Builder') || trimmed.startsWith('SOW Builder')) {
+                if (!moduleNames.contains('Proposal & SOW Builder')) {
+                  moduleNames.add('Proposal & SOW Builder');
+                }
               }
             }
             cachedModuleAccess = moduleNames.isEmpty ? null : moduleNames.join(',');
@@ -157,15 +161,19 @@ class _ModuleScreenState extends State<ModuleScreen> {
                             'Automated Recruitment Workflow',
                           ) ||
                           authProvider.hasModuleAccess('Recruitment');
+                      final hasSOWBuilderAccess =
+                          authProvider.hasModuleAccess('Proposal & SOW Builder') ||
+                          authProvider.hasModuleAccess('SOW Builder');
 
                       // Admin users see all cards, Staff users see only cards they have access to
                       final showPDH = isAdmin || hasPDHAccess;
                       final showSkillsHeatmap =
                           isAdmin || hasSkillsHeatmapAccess;
                       final showRecruitment = isAdmin || hasRecruitmentAccess;
+                      final showSOWBuilder = isAdmin || hasSOWBuilderAccess;
 
                       // If no cards to show, show a message
-                      if (!showPDH && !showSkillsHeatmap && !showRecruitment) {
+                      if (!showPDH && !showSkillsHeatmap && !showRecruitment && !showSOWBuilder) {
                         return const Center(
                           child: Text(
                             'No module access assigned. Please contact your administrator.',
@@ -239,6 +247,26 @@ class _ModuleScreenState extends State<ModuleScreen> {
                             buttonText: 'Launch',
                             url: 'https://willowy-scone-c14f7c.netlify.app/',
                             moduleKey: 'recruitment',
+                          ),
+                        );
+                      }
+
+                      if (showSOWBuilder) {
+                        if (cards.isNotEmpty) {
+                          cards.add(const SizedBox(height: 18.0)); // 20.0 * 0.9
+                        }
+
+                        cards.add(
+                          _buildModuleCard(
+                            context: context,
+                            cardWidth: calculatedCardWidth,
+                            titleLines: [
+                              'Proposal &',
+                              'SOW Builder',
+                            ],
+                            buttonText: 'Launch',
+                            url: 'https://lukens-frontend.onrender.com',
+                            moduleKey: 'sow_builder',
                           ),
                         );
                       }
