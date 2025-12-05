@@ -11,6 +11,17 @@ if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('DEBUG', 'True').lower() == 'true'
     
+    # Print startup information
+    print("=" * 70)
+    print("Starting Khonology Backend API")
+    print("=" * 70)
+    print(f"Host: {host}")
+    print(f"Port: {port}")
+    print(f"Debug Mode: {debug}")
+    print(f"Accessible at: http://localhost:{port}")
+    print(f"API Documentation: http://localhost:{port}/docs")
+    print("=" * 70)
+    
     # Run on 0.0.0.0 to accept connections from any interface (localhost, network, etc.)
     # This allows the Flutter app to connect from emulator, simulator, or physical device
     uvicorn.run(

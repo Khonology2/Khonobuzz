@@ -1,12 +1,12 @@
-import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, defaultTargetPlatform, TargetPlatform;
 
 class ApiConfig {
   // Automatically detect environment and use appropriate backend URL
-  // For production web (deployed on Netlify or Render): use Render backend
+  // For production web (deployed on Render): use Render backend
   // For local development: use localhost
   static String get baseUrl {
     if (kIsWeb) {
-      // Check if running on production domain (Netlify or Render)
+      // Check if running on production domain (Render)
       final uri = Uri.base;
       final host = uri.host;
 
@@ -16,8 +16,7 @@ class ApiConfig {
         print('[ApiConfig] Full URI: ${uri.toString()}');
       }
 
-      if (host.contains('netlify.app') ||
-          host.contains('onrender.com') ||
+      if (host.contains('onrender.com') ||
           host.contains('khonobuzz-web')) {
         final backendUrl = 'https://khonobuzz-backend-i24f.onrender.com';
         if (kDebugMode) {
@@ -36,7 +35,27 @@ class ApiConfig {
       return 'http://localhost:5000';
     }
     // For mobile/desktop platforms
-    // Android emulator uses 10.0.2.2, iOS simulator uses localhost
+    // Android emulator uses 10.0.2.2 to access host machine's localhost
+    // iOS simulator and desktop use localhost
+    // Check if running on Android
+    try {
+      // Import Platform only when needed to avoid web compilation issues
+      final isAndroid = defaultTargetPlatform == TargetPlatform.android;
+      if (isAndroid) {
+        // Android emulator needs special IP to access host machine
+        final backendUrl = 'http://10.0.2.2:5000';
+        if (kDebugMode) {
+          print(
+            '[ApiConfig] Android platform detected, using: $backendUrl',
+          );
+        }
+        return backendUrl;
+      }
+    } catch (_) {
+      // If Platform is not available, fall back to localhost
+    }
+    
+    // For iOS, desktop, and other platforms, use localhost
     if (kDebugMode) {
       print(
         '[ApiConfig] Mobile/Desktop platform, using: http://localhost:5000',

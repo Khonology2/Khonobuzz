@@ -6,13 +6,23 @@ from firebase_admin import credentials, firestore, initialize_app
 from dotenv import load_dotenv
 import os
 import logging
+import json
+import base64
 from datetime import datetime
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from fastapi import status # Import status for HTTP status codes
 from fastapi import HTTPException # Import HTTPException for authentication errors
 from typing import Optional
-from token_utils import generate_and_encrypt_token, verify_token, parse_module_access_role_to_roles
+# Import token utilities
+# Note: PyDev may show "Unresolved import" warnings - these are false positives.
+# The functions exist in token_utils.py and work correctly at runtime.
+# If warnings persist, configure PyDev: Project Properties > PyDev - PYTHONPATH > Add 'backend' folder
+try:
+    from .token_utils import generate_and_encrypt_token, parse_module_access_role_to_roles
+except ImportError:
+    # Fallback for when running as script (not as package)
+    from token_utils import generate_and_encrypt_token, parse_module_access_role_to_roles
 
 load_dotenv()
 
@@ -72,20 +82,86 @@ def derive_module_access_from_role(module_access: Optional[str], module_access_r
     
     return ','.join(module_names) if module_names else None
 
-# Configuration
-FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH') or 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json'
-PDH_FIREBASE_CREDENTIALS_PATH = os.environ.get('PDH_FIREBASE_CREDENTIALS_PATH') or 'pdh-fe6eb-firebase-adminsdk-fbsvc-6fbc402974.json'
-SKILLS_HEATMAP_FIREBASE_CREDENTIALS_PATH = os.environ.get('SKILLS_HEATMAP_FIREBASE_CREDENTIALS_PATH') or 'resource-capacity-3b654-firebase-adminsdk-fbsvc-71599861bf.json'
+def load_firebase_credentials(env_var_name: str, default_path: str):
+    """
+    Load Firebase credentials from environment variable (JSON string or base64 encoded JSON) or file path.
+    
+    Priority:
+    1. Environment variable with JSON string (PDH_FIREBASE_CREDENTIALS_JSON, etc.)
+    2. Environment variable with base64 encoded JSON
+    3. Environment variable with file path (PDH_FIREBASE_CREDENTIALS_PATH, etc.)
+    4. Default file path
+    
+    Args:
+        env_var_name: Name of the environment variable (e.g., 'PDH_FIREBASE_CREDENTIALS')
+        default_path: Default file path if no env var is set
+    
+    Returns:
+        credentials.Certificate object
+    """
+    # First, try to get JSON string directly from environment variable
+    json_env_var = f"{env_var_name}_JSON"
+    json_str = os.environ.get(json_env_var)
+    
+    if json_str:
+        try:
+            # Remove surrounding quotes if present
+            json_str = json_str.strip().strip("'").strip('"')
+            
+            # Try to parse as direct JSON string first
+            try:
+                cred_dict = json.loads(json_str)
+                return credentials.Certificate(cred_dict)
+            except json.JSONDecodeError:
+                # If direct JSON fails, try base64 decode
+                try:
+                    json_str = base64.b64decode(json_str).decode('utf-8')
+                    cred_dict = json.loads(json_str)
+                    return credentials.Certificate(cred_dict)
+                except Exception:
+                    raise
+            
+        except Exception as e:
+            error_log(f"Failed to load credentials from {json_env_var}: {e}")
+            # Fall through to try file path
+    
+    # Second, try to get file path from environment variable
+    path_env_var = f"{env_var_name}_PATH"
+    file_path = os.environ.get(path_env_var)
+    
+    if file_path and os.path.exists(file_path):
+        return credentials.Certificate(file_path)
+    
+    # Third, try default file path
+    if os.path.exists(default_path):
+        return credentials.Certificate(default_path)
+    
+    # If nothing works, raise an error
+    raise FileNotFoundError(
+        f"Firebase credentials not found. Please set {json_env_var} (JSON string or base64 encoded JSON) "
+        f"or {path_env_var} (file path) in .env file, or ensure {default_path} exists."
+    )
 
+# Configuration - Load Firebase credentials from .env or file paths
 # PDH Firestore App Initialization
-pdh_cred = credentials.Certificate(PDH_FIREBASE_CREDENTIALS_PATH)
-pdh_app = initialize_app(pdh_cred, name='pdhApp')
-pdh_db = firestore.client(app=pdh_app)
+try:
+    pdh_cred = load_firebase_credentials('PDH_FIREBASE_CREDENTIALS', 'pdh-fe6eb-firebase-adminsdk-fbsvc-6fbc402974.json')
+    pdh_app = initialize_app(pdh_cred, name='pdhApp')
+    pdh_db = firestore.client(app=pdh_app)
+    info_log("PDH Firebase credentials loaded successfully")
+except Exception as e:
+    error_log(f"Failed to initialize PDH Firebase: {e}")
+    raise
 
 # Skills Heatmap Firestore App Initialization
-skills_heatmap_cred = credentials.Certificate(SKILLS_HEATMAP_FIREBASE_CREDENTIALS_PATH)
-skills_heatmap_app = initialize_app(skills_heatmap_cred, name='skillsHeatmapApp')
-skills_heatmap_db = firestore.client(app=skills_heatmap_app)
+try:
+    skills_heatmap_cred = load_firebase_credentials('SKILLS_HEATMAP_FIREBASE_CREDENTIALS', 'resource-capacity-3b654-firebase-adminsdk-fbsvc-71599861bf.json')
+    skills_heatmap_app = initialize_app(skills_heatmap_cred, name='skillsHeatmapApp')
+    skills_heatmap_db = firestore.client(app=skills_heatmap_app)
+    info_log("Skills Heatmap Firebase credentials loaded successfully")
+except Exception as e:
+    error_log(f"Failed to initialize Skills Heatmap Firebase: {e}")
+    raise
 
 from fastapi import Body
 
@@ -133,10 +209,33 @@ class UserUpdate(BaseModel):
     moduleAccessRole: Optional[str] = None  # Combined field: "PDH - Employee", "PDH - Manager", "SOW Builder - Manager"
     adminApproved: Optional[str] = None
 
-# Initialize Firebase Admin SDK
-cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
-initialize_app(cred)
-db = firestore.client()
+# Initialize Firebase Admin SDK (Main)
+try:
+    main_cred_json = os.environ.get('FIREBASE_CREDENTIALS_JSON')
+    if main_cred_json:
+        # Remove surrounding quotes if present
+        json_str = main_cred_json.strip().strip("'").strip('"')
+        try:
+            # Try direct JSON string first
+            cred_dict = json.loads(json_str)
+            cred = credentials.Certificate(cred_dict)
+        except json.JSONDecodeError:
+            # If direct JSON fails, try base64 decode
+            json_str = base64.b64decode(json_str).decode('utf-8')
+            cred_dict = json.loads(json_str)
+            cred = credentials.Certificate(cred_dict)
+    else:
+        FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH') or 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json'
+        if os.path.exists(FIREBASE_CREDENTIALS_PATH):
+            cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
+        else:
+            raise FileNotFoundError(f"Main Firebase credentials not found. Set FIREBASE_CREDENTIALS_JSON in .env or ensure {FIREBASE_CREDENTIALS_PATH} exists.")
+    initialize_app(cred)
+    db = firestore.client()
+    info_log("Main Firebase credentials loaded successfully")
+except Exception as e:
+    error_log(f"Failed to initialize main Firebase: {e}")
+    raise
 
 app = FastAPI(
     title="Khonology Backend API",
@@ -152,7 +251,6 @@ cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
 
 # Default production frontend URLs
 PRODUCTION_FRONTEND_URLS = [
-    'https://khonobuzz-web.netlify.app',  # Netlify deployment
     'https://khonobuzz-web-app.onrender.com',  # Render deployment
 ]
 
@@ -165,15 +263,31 @@ is_production = (
     or 'onrender.com' in os.environ.get('RENDER_EXTERNAL_URL', '')
 )
 
+# Localhost origins for development
+# Note: Android emulator uses 10.0.2.2 to access host machine, but from backend perspective
+# the request comes from the emulator's network, so we allow all origins in dev mode
+LOCALHOST_ORIGINS = [
+    'http://localhost:5000',
+    'http://localhost:3000',
+    'http://127.0.0.1:5000',
+    'http://127.0.0.1:3000',
+    'http://localhost',
+    'http://127.0.0.1',
+    'http://10.0.2.2:5000',  # Android emulator accessing host
+]
+
 if cors_origins_env == '*':
     if is_production:
         # In production, use specific origins instead of wildcard
-        cors_origins = PRODUCTION_FRONTEND_URLS + ['http://localhost:5000', 'http://localhost:3000']
+        cors_origins = PRODUCTION_FRONTEND_URLS + LOCALHOST_ORIGINS
         cors_allow_credentials = True
+        info_log(f"Production mode: CORS configured for {len(cors_origins)} origins")
     else:
-        # In development, allow all origins
+        # In development, explicitly allow localhost and all origins
+        # FastAPI CORS: when allow_origins=["*"], allow_credentials must be False
         cors_origins = ["*"]
         cors_allow_credentials = False
+        info_log("Development mode: CORS configured to allow all origins (including localhost)")
 else:
     # Split comma-separated origins and ensure production URLs are included
     cors_origins = [origin.strip() for origin in cors_origins_env.split(',')]
@@ -181,7 +295,13 @@ else:
     for prod_url in PRODUCTION_FRONTEND_URLS:
         if prod_url not in cors_origins:
             cors_origins.append(prod_url)
+    # Add localhost origins for development if not in production
+    if not is_production:
+        for localhost_origin in LOCALHOST_ORIGINS:
+            if localhost_origin not in cors_origins:
+                cors_origins.append(localhost_origin)
     cors_allow_credentials = os.environ.get('CORS_ALLOW_CREDENTIALS', 'True' if is_production else 'False').lower() == 'true'
+    info_log(f"CORS configured with {len(cors_origins)} origins from CORS_ORIGINS env var")
 
 app.add_middleware(
     CORSMiddleware,
@@ -213,6 +333,24 @@ async def log_requests(request, call_next):
     info_log(f"← {request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)")
     
     return response
+
+@app.get("/")
+async def root():
+    """Health check endpoint"""
+    return {
+        "status": "ok",
+        "message": "Khonology Backend API is running",
+        "environment": "production" if is_production else "development",
+        "cors_origins_count": len(cors_origins) if cors_origins != ["*"] else "all",
+    }
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
 
 @app.post("/api/pdh/sync-user")
 async def pdh_sync_user(data: dict):
@@ -288,7 +426,6 @@ async def pdh_update_user(uid: str, data: dict):
         new_module_access_role = ''
         user_email = ''
         user_fields_dict = user_fields or {}
-        onboarding_fields_dict = onboarding_fields or {}
         
         if onboarding_fields and 'moduleAccessRole' in onboarding_fields:
             should_regenerate_token = True
@@ -421,7 +558,6 @@ async def skills_heatmap_update_user(uid: str, data: dict):
         new_module_access_role = ''
         user_email = ''
         user_fields_dict = user_fields or {}
-        onboarding_fields_dict = onboarding_fields or {}
         
         if onboarding_fields and 'moduleAccessRole' in onboarding_fields:
             should_regenerate_token = True
