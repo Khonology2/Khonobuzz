@@ -304,26 +304,8 @@ class UserUpdate(BaseModel):
 
 # Initialize Firebase Admin SDK (Main)
 try:
-    main_cred_json = os.environ.get('FIREBASE_CREDENTIALS_JSON')
-    if main_cred_json:
-        # Remove surrounding quotes if present
-        json_str = main_cred_json.strip().strip("'").strip('"')
-        try:
-            # Try direct JSON string first
-            cred_dict = json.loads(json_str)
-            cred = credentials.Certificate(cred_dict)
-        except json.JSONDecodeError:
-            # If direct JSON fails, try base64 decode
-            json_str = base64.b64decode(json_str).decode('utf-8')
-            cred_dict = json.loads(json_str)
-            cred = credentials.Certificate(cred_dict)
-    else:
-        FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH') or 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json'
-        if os.path.exists(FIREBASE_CREDENTIALS_PATH):
-            cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
-        else:
-            raise FileNotFoundError(f"Main Firebase credentials not found. Set FIREBASE_CREDENTIALS_JSON in .env or ensure {FIREBASE_CREDENTIALS_PATH} exists.")
-    initialize_app(cred)
+    main_cred = load_firebase_credentials('FIREBASE_CREDENTIALS', 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json')
+    initialize_app(main_cred)
     db = firestore.client()
     info_log("Main Firebase credentials loaded successfully")
 except Exception as e:
