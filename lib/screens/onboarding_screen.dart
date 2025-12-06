@@ -1,20 +1,20 @@
-// ignore_for_file: use_build_context_synchronously, dead_code
+
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_aad_oauth/flutter_aad_oauth.dart'; // Import for AAD OAuth
-import 'package:provider/provider.dart'; // Import for AuthProvider
-import '../providers/auth_provider.dart'; // Import AuthProvider
-import 'lobby_screen.dart'; // Import LobbyScreen
-import 'dart:async'; // Import Timer
+import 'package:flutter_aad_oauth/flutter_aad_oauth.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import 'lobby_screen.dart';
+import 'dart:async';
 import '../widgets/animations/loading_button.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  final FlutterAadOauth? oauth; // Optional oauth object (for backward compatibility)
+  final FlutterAadOauth? oauth;
   const OnboardingScreen({
     super.key,
     this.oauth,
-  }); // Update constructor
+  });
 
   @override
   OnboardingScreenState createState() => OnboardingScreenState();
@@ -25,13 +25,13 @@ class OnboardingScreenState extends State<OnboardingScreen>
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  // Removed _departmentController as it will be managed by DropdownButtonFormField
-  // Removed _designationController as it will be managed by DropdownButtonFormField
-  double _discsOpacity = 0.0; // Initial opacity for discs.png
-  bool _isLoading = false; // Track loading state
+
+
+  double _discsOpacity = 0.0;
+  bool _isLoading = false;
   late AnimationController
-  _blinkController; // Controller for blinking animation
-  late Animation<double> _blinkAnimation; // Animation for blinking
+  _blinkController;
+  late Animation<double> _blinkAnimation;
 
   final List<String> _departments = const [
     'Management',
@@ -40,7 +40,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
     'HR',
     'Sales',
   ];
-  String? _selectedDepartment; // New state variable for selected department
+  String? _selectedDepartment;
 
   final List<String> _designations = const [
     'Director',
@@ -60,74 +60,37 @@ class OnboardingScreenState extends State<OnboardingScreen>
     'HR',
     'Junior Analyst',
   ];
-  String? _selectedDesignation; // New state variable for selected designation
+  String? _selectedDesignation;
 
-  // List of hint texts
-  /*
-  final List<String> _emailHintTexts = const [
-    'Nkosinathi.Radebe@Khonology.com',
-    'Yannie.Nkuna@Khonology.com',
-    'Mampopi.Tau@Khonology.com',
-    'Dzunisani.Mabunda@Khonology.com',
-    'Okuhle.Galdla@Khonology.com',
-    'Kgothatso.Mokgashi@Khonology.com',
-    'Thabang.Nkabinde@Khonology.com',
-    'Thembelihle.Zulu@Khonology.com',
-    'Sipho.Masango@Khonology.com',
-    'Dapo.Adeyemo@Khonology.com',
-    'Qiniso.Ngobese@Khonology.com',
-    'Tiyane.Mahange@Khonology.com',
-    'Tshiamo.Modubu@khonology.com',
-  ];
-
-  late final List<String> _firstNameHintTexts;
-  late final List<String> _lastNameHintTexts;
-
-  int _currentHintIndex = 0;
-  late Timer _timer;
-  */
 
   @override
   void initState() {
     super.initState();
-    /*
-    _firstNameHintTexts = _emailHintTexts.map((email) => email.split('.')[0]).toList();
-    _lastNameHintTexts = _emailHintTexts.map((email) => email.split('.')[1].split('@')[0]).toList();
-    */
 
-    // Initialize blink animation controller
+
     _blinkController = AnimationController(
       vsync: this,
       duration: const Duration(
         milliseconds: 500,
-      ), // Blink duration for Simple Blink animation
-    );
-    // Create blinking animation - Animation 1 (Simple Blink)
-    _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _blinkController,
-        curve: Curves.easeInOut, // Smooth ease in/out curve
       ),
     );
 
-    // Trigger fade-in animation when the screen is initialized
+    _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _blinkController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+
     Future.delayed(const Duration(milliseconds: 500), () {
       setState(() {
         _discsOpacity = 1.0;
       });
     });
-    /*_startHintTextAnimation();*/
+
   }
 
-  /*
-  void _startHintTextAnimation() {
-    _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      setState(() {
-        _currentHintIndex = (_currentHintIndex + 1) % _emailHintTexts.length;
-      });
-    });
-  }
-  */
 
   @override
   void dispose() {
@@ -135,16 +98,15 @@ class OnboardingScreenState extends State<OnboardingScreen>
     _lastNameController.dispose();
     _emailController.dispose();
     _blinkController.dispose();
-    // Removed _departmentController.dispose();
-    // Removed _designationController.dispose();
-    /*_timer.cancel();*/ // Cancel the timer to prevent memory leaks
+
+
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent, // Dark background
+      backgroundColor: Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
@@ -161,23 +123,23 @@ class OnboardingScreenState extends State<OnboardingScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Khonology Asset
+
                   Image.asset(
-                    'assets/images/khono.png', // Khonology asset
-                    height: 100, // Adjust height as needed
+                    'assets/images/khono.png',
+                    height: 100,
                   ),
                   const SizedBox(height: 48),
-                  // Text fields
+
                   Center(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        // Calculate responsive width (max 590, but respect available space)
+
                         final maxWidth = constraints.maxWidth > 0
                             ? constraints.maxWidth.clamp(0.0, 590.0)
                             : 590.0;
                         final isNarrow = maxWidth < 590;
-                        
-                        // For narrow screens, stack vertically; otherwise side by side
+
+
                         if (isNarrow || constraints.maxWidth < 600) {
                           return SizedBox(
                             width: maxWidth,
@@ -212,7 +174,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                         controller: _lastNameController,
                                       ),
                                       const SizedBox(height: 16),
-                                      // Department dropdown
+
                                       Column(
                                         crossAxisAlignment: CrossAxisAlignment.center,
                                         children: [
@@ -286,7 +248,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                             ),
                           );
                         } else {
-                            // Wide screen: side by side layout
+
                             return SizedBox(
                               width: maxWidth,
                               child: Row(
@@ -318,7 +280,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                           controller: _lastNameController,
                                         ),
                                         const SizedBox(height: 16),
-                                        // Department dropdown
+
                                         Column(
                                           crossAxisAlignment: CrossAxisAlignment.center,
                                           children: [
@@ -396,7 +358,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                       ),
                     ),
                   const SizedBox(height: 16),
-                  // Replaced _buildTextField for Designation with DropdownButtonFormField
+
                   Center(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
@@ -471,7 +433,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                     ),
                   ),
                   const SizedBox(height: 32),
-                  // Buttons
+
                   _LoadingConfirmButtonWrapper(
                     text: 'CONFIRM',
                     color: const Color(0xFFC10D00),
@@ -486,7 +448,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                       });
                     },
                     onPressed: () async {
-                      // Validate email domain
+
                       final email = _emailController.text.trim();
                       if (email.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -496,10 +458,10 @@ class OnboardingScreenState extends State<OnboardingScreen>
                         );
                         return;
                       }
-                      
-                      // Check if email ends with @khonology.com (case-insensitive)
+
+
                       if (!email.toLowerCase().endsWith('@khonology.com')) {
-                        // Show popup dialog for invalid email domain
+
                         showDialog(
                           context: context,
                           barrierColor: Colors.black54,
@@ -510,7 +472,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF2C3E50).withOpacity(0.85),
+                                    color: const Color(0xFF2C3E50).withValues(alpha: 0.85),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Padding(
@@ -619,11 +581,11 @@ class OnboardingScreenState extends State<OnboardingScreen>
                     onPressed: () {
                       Navigator.of(
                         context,
-                      ).pop(); // Go back to the previous screen
+                      ).pop();
                     },
                   ),
                   const SizedBox(height: 48),
-                  // Discs Asset with blinking animation
+
                   AnimatedBuilder(
                     animation: _blinkAnimation,
                     builder: (context, child) {
@@ -632,8 +594,8 @@ class OnboardingScreenState extends State<OnboardingScreen>
                             ? _blinkAnimation.value * _discsOpacity
                             : _discsOpacity,
                         child: Image.asset(
-                          'assets/images/discs.png', // Discs asset
-                          height: 80, // Adjust height as needed
+                          'assets/images/discs.png',
+                          height: 80,
                         ),
                       );
                     },
@@ -689,21 +651,20 @@ class OnboardingScreenState extends State<OnboardingScreen>
   }
 
   String _getHintText(String label) {
-    // Explicitly define return type as String
+
     switch (label) {
       case 'First Name':
-        return 'John'; // Static hint text
+        return 'John';
       case 'Surname':
-        return 'Doe'; // Static hint text
+        return 'Doe';
       case 'Email Address':
-        return 'john.doe@example.com'; // Static hint text
+        return 'john.doe@example.com';
       default:
         return '';
     }
   }
 
-  // Animation 1: Simple Blink (Default)
-  // Fast, smooth blinking effect
+
   void _startBlinking() {
     _blinkController.duration = const Duration(milliseconds: 500);
     _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
@@ -726,7 +687,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
   }
 }
 
-// Wrapper widget to track loading state from LoadingConfirmButton
+
 class _LoadingConfirmButtonWrapper extends StatefulWidget {
   final String text;
   final Color color;

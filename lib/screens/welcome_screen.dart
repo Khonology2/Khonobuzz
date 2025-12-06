@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'landing_screen.dart'; // Import LandingScreen
-import 'dart:async'; // Import for Timer
+import 'landing_screen.dart';
+import 'dart:async';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -24,13 +24,13 @@ class WelcomeScreen extends StatelessWidget {
                 height: 150,
               ),
               const SizedBox(height: 50),
-              const AnimatedTextSwitcher(), // New widget for animated text
-              const SizedBox(height: 50), // Adjusted spacing
+              const AnimatedTextSwitcher(),
+              const SizedBox(height: 50),
               ElevatedButton(
                 onPressed: () {
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (context) => const LandingScreen()), // Navigate to LandingScreen
+                    MaterialPageRoute(builder: (context) => const LandingScreen()),
                   );
                 },
                 style: ElevatedButton.styleFrom(
@@ -98,7 +98,7 @@ class _AnimatedTextSwitcherState extends State<AnimatedTextSwitcher> {
 
   @override
   void dispose() {
-    _timer?.cancel(); // Cancel timer to prevent memory leaks
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -106,7 +106,7 @@ class _AnimatedTextSwitcherState extends State<AnimatedTextSwitcher> {
 
   void _startQuoteTimer() {
     _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      if (!mounted) return; // Add mounted check here
+      if (!mounted) return;
       setState(() {
         _currentIndex = (_currentIndex + 1) % quotes.length;
       });
@@ -116,7 +116,7 @@ class _AnimatedTextSwitcherState extends State<AnimatedTextSwitcher> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 100, // Give it a fixed height
+      height: 100,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 500),
         transitionBuilder: (Widget child, Animation<double> animation) {
@@ -124,7 +124,7 @@ class _AnimatedTextSwitcherState extends State<AnimatedTextSwitcher> {
         },
         child: Text(
           quotes[_currentIndex],
-          key: ValueKey<int>(_currentIndex), // Key is important for AnimatedSwitcher
+          key: ValueKey<int>(_currentIndex),
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: Colors.white,

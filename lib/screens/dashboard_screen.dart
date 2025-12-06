@@ -6,7 +6,7 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent, // Set to transparent to show background image
+      backgroundColor: Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
@@ -21,4 +21,3 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 }
-

@@ -1,13 +1,13 @@
-// ignore_for_file: use_build_context_synchronously
+
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
-import 'package:provider/provider.dart'; // Import for AuthProvider
-import '../providers/auth_provider.dart'; // Import AuthProvider
-import 'manual_login_screen.dart'; // Import ManualLoginScreen
-import '../main.dart'; // For MainScreen navigation
-import 'onboarding_screen.dart'; // Import OnboardingScreen
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import 'manual_login_screen.dart';
+import '../main.dart';
+import 'onboarding_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -17,21 +17,20 @@ class AuthScreen extends StatefulWidget {
 }
 
 class AuthScreenState extends State<AuthScreen> {
-  double _discsOpacity = 0.0; // Initial opacity for discs.png
-  bool _isCheckingRedirect = false; // Flag to prevent multiple redirect checks
+  double _discsOpacity = 0.0;
+  bool _isCheckingRedirect = false;
 
   @override
   void initState() {
     super.initState();
-    // Trigger fade-in animation when the screen is initialized
+
     Future.delayed(const Duration(milliseconds: 500), () {
       setState(() {
         _discsOpacity = 1.0;
       });
     });
 
-    // Handle Microsoft sign-in redirect result (for web with PKCE)
-    // Wait a bit for Firebase to be fully initialized
+
     if (kIsWeb) {
       Future.delayed(const Duration(milliseconds: 100), () {
         _handleRedirectResult();
@@ -40,7 +39,7 @@ class AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _handleRedirectResult() async {
-    if (_isCheckingRedirect) return; // Prevent multiple simultaneous checks
+    if (_isCheckingRedirect) return;
     _isCheckingRedirect = true;
 
     try {
@@ -66,21 +65,21 @@ class AuthScreenState extends State<AuthScreen> {
           }
 
           if (success) {
-            // After successful Microsoft login, go directly to MainScreen with Module Screen
+
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(
                 builder: (context) => const MainScreen(
-                  initialIndex: 8, // Navigate to Module Screen
+                  initialIndex: 8,
                 ),
               ),
               (route) => false,
             );
           } else {
+            await fb_auth.FirebaseAuth.instance.signOut();
             if (!mounted) {
               _isCheckingRedirect = false;
               return;
             }
-            await fb_auth.FirebaseAuth.instance.signOut();
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Login failed. Please try again later.'),
@@ -103,7 +102,7 @@ class AuthScreenState extends State<AuthScreen> {
         debugPrint('No redirect result found');
       }
     } catch (e, stackTrace) {
-      // Log errors for debugging
+
       debugPrint('Redirect result error: $e');
       debugPrint('Stack trace: $stackTrace');
       if (mounted) {
@@ -123,7 +122,7 @@ class AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor:
-          Colors.transparent, // Set to transparent to show background image
+          Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
@@ -140,13 +139,13 @@ class AuthScreenState extends State<AuthScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Khonology Asset
+
                   Image.asset(
-                    'assets/images/khono.png', // Khonology asset
-                    height: 100, // Adjust height as needed
+                    'assets/images/khono.png',
+                    height: 100,
                   ),
-                  const SizedBox(height: 48), // Adjusted spacing
-                  // Removed 'KHONOLOGY' text
+                  const SizedBox(height: 48),
+
                   const SizedBox(height: 32),
                   const Text(
                     'Select Login Preference',
@@ -162,18 +161,18 @@ class AuthScreenState extends State<AuthScreen> {
                     color: const Color(0xFFC10D00),
                     onPressed: () async {
                       try {
-                        // Use FirebaseAuth Microsoft provider instead of direct AAD
+
                         final provider = fb_auth.OAuthProvider('microsoft.com');
 
                         fb_auth.UserCredential credential;
                         if (kIsWeb) {
-                          // Use signInWithRedirect for web to support PKCE (required by Microsoft)
+
                           debugPrint(
                             'Initiating Microsoft sign-in redirect...',
                           );
                           await fb_auth.FirebaseAuth.instance
                               .signInWithRedirect(provider);
-                          // The redirect will be handled by getRedirectResult in initState
+
                           return;
                         } else {
                           credential = await fb_auth.FirebaseAuth.instance
@@ -185,13 +184,15 @@ class AuthScreenState extends State<AuthScreen> {
                             !email.toLowerCase().endsWith('@khonology.com')) {
                           await fb_auth.FirebaseAuth.instance.signOut();
                           if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Only khonology.com accounts are allowed',
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Only khonology.com accounts are allowed',
+                                ),
                               ),
-                            ),
-                          );
+                            );
+                          }
                           return;
                         }
 
@@ -202,6 +203,7 @@ class AuthScreenState extends State<AuthScreen> {
                         if (!mounted) return;
 
                         if (!success) {
+                          if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
@@ -212,11 +214,11 @@ class AuthScreenState extends State<AuthScreen> {
                           return;
                         }
 
-                        // After successful Microsoft login, go directly to MainScreen with Module Screen
+                        if (!mounted) return;
                         Navigator.of(context).pushAndRemoveUntil(
                           MaterialPageRoute(
                             builder: (context) => const MainScreen(
-                              initialIndex: 8, // Navigate to Module Screen
+                              initialIndex: 8,
                             ),
                           ),
                           (route) => false,
@@ -243,7 +245,7 @@ class AuthScreenState extends State<AuthScreen> {
                       );
                     },
                   ),
-                  const SizedBox(height: 16), // Added spacing between buttons
+                  const SizedBox(height: 16),
                   _buildLoginButton(
                     text: 'ONBOARD WITH US',
                     color: Colors.grey,
@@ -256,16 +258,16 @@ class AuthScreenState extends State<AuthScreen> {
                     },
                   ),
                   const SizedBox(height: 48),
-                  // Logo Asset
+
                   AnimatedOpacity(
                     opacity: _discsOpacity,
                     duration: const Duration(milliseconds: 1000),
                     child: Image.asset(
-                      'assets/images/discs.png', // Logo asset
-                      height: 80, // Adjust height as needed
+                      'assets/images/discs.png',
+                      height: 80,
                     ),
                   ),
-                  // Removed 'OGC' text as per instruction
+
                 ],
               ),
             ),
@@ -582,7 +584,7 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
                 return CustomPaint(
                   painter: _BubblesPainter(
                     progress: _clickProgress.value,
-                    color: red, // force red bubbles as requested
+                    color: red,
                   ),
                 );
               },

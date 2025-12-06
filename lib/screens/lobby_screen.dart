@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'auth_screen.dart'; // Import AuthScreen
-import 'package:flutter_aad_oauth/flutter_aad_oauth.dart'; // Import FlutterAadOauth
+import 'auth_screen.dart';
+import 'package:flutter_aad_oauth/flutter_aad_oauth.dart';
 import 'package:video_player/video_player.dart';
 
 class LobbyScreen extends StatefulWidget {
-  final FlutterAadOauth? oauth; // Optional oauth object (for backward compatibility)
-  const LobbyScreen({super.key, this.oauth}); // Update constructor
+  final FlutterAadOauth? oauth;
+  const LobbyScreen({super.key, this.oauth});
 
   @override
   LobbyScreenState createState() => LobbyScreenState();
@@ -210,7 +210,7 @@ class _BubblesPainter extends CustomPainter {
 }
 
 class LobbyScreenState extends State<LobbyScreen> {
-  double _discsOpacity = 0.0; // Initial opacity for discs.png
+  double _discsOpacity = 0.0;
   VideoPlayerController? _videoController;
 
   @override
@@ -227,7 +227,7 @@ class LobbyScreenState extends State<LobbyScreen> {
           });
         }
       });
-    // Trigger fade-in animation when the screen is initialized
+
     Future.delayed(const Duration(milliseconds: 500), () {
       setState(() {
         _discsOpacity = 1.0;
@@ -245,7 +245,7 @@ class LobbyScreenState extends State<LobbyScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor:
-          Colors.transparent, // Set to transparent to show background image
+          Colors.transparent,
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -253,7 +253,7 @@ class LobbyScreenState extends State<LobbyScreen> {
           image: DecorationImage(
             image: AssetImage(
               'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
-            ), // Use the new background image
+            ),
             fit: BoxFit.cover,
           ),
         ),
@@ -268,7 +268,7 @@ class LobbyScreenState extends State<LobbyScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Rocket Asset
+
                   if ((_videoController?.value.isInitialized ?? false))
                     Container(
                       width: 72,
@@ -291,10 +291,10 @@ class LobbyScreenState extends State<LobbyScreen> {
                   else
                     const SizedBox(height: 72),
                   const SizedBox(height: 24),
-                  // Khonology Asset
+
                   Image.asset(
-                    'assets/images/khono.png', // Khonology asset
-                    height: 100, // Adjust height as needed
+                    'assets/images/khono.png',
+                    height: 100,
                   ),
                   const SizedBox(height: 16),
                   const Text(
@@ -306,7 +306,7 @@ class LobbyScreenState extends State<LobbyScreen> {
                       fontFamily: 'Poppins',
                     ),
                   ),
-                  const SizedBox(height: 24), // Added spacing for the new button
+                  const SizedBox(height: 24),
                   _AnimatedBubblyButton(
                     text: 'Go Back',
                     color: const Color(0xFFC10D00),
@@ -321,15 +321,15 @@ class LobbyScreenState extends State<LobbyScreen> {
                     bounceDelayMs: 250,
                   ),
                   const SizedBox(height: 32),
-                  // Discs Asset
+
                   AnimatedOpacity(
                     opacity: _discsOpacity,
                     duration: const Duration(milliseconds: 1000),
                     child: RotatedBox(
                       quarterTurns: 1,
                       child: Image.asset(
-                        'assets/videos/spinning_discs.gif', // Discs asset
-                        height: 122, // Adjust height as needed
+                        'assets/videos/spinning_discs.gif',
+                        height: 122,
                       ),
                     ),
                   ),

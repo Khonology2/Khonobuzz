@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 
-// Define the custom colors used in the HTML design
+
 const Color primaryDark = Color(0xFF1F2937);
 const Color primaryAccent = Color(0xFFC10D00);
 
@@ -24,7 +24,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   @override
   void initState() {
     super.initState();
-    // Fetch immediately when screen loads - don't wait for postFrameCallback
+
     _loadModuleAccess();
   }
 
@@ -34,30 +34,30 @@ class _ModuleScreenState extends State<ModuleScreen> {
     final authProvider = context.read<AuthProvider>();
     final userProvider = context.read<UserProvider>();
 
-    // If module access is already loaded, we're done
+
     if (authProvider.userModuleAccess != null &&
         authProvider.userModuleAccess!.isNotEmpty) {
       return;
     }
 
-    // Set loading state
+
     if (mounted) {
       setState(() {
         _isLoadingModuleAccess = true;
       });
     }
 
-    // First, try to get from UserProvider cache (much faster than API call)
+
     String? cachedModuleAccess;
     if (userProvider.users.isNotEmpty && authProvider.userEmail != null) {
       try {
         final currentUser = userProvider.users.firstWhere(
           (u) => u.email.toLowerCase() == authProvider.userEmail!.toLowerCase(),
         );
-        // Use moduleAccess if available, otherwise derive from moduleAccessRole
+
         cachedModuleAccess = currentUser.moduleAccess;
         if (cachedModuleAccess == null || cachedModuleAccess.isEmpty) {
-          // Derive from moduleAccessRole if moduleAccess is empty
+
           final moduleAccessRole = currentUser.moduleAccessRole;
           if (moduleAccessRole != null && moduleAccessRole.isNotEmpty) {
             final parts = moduleAccessRole.split(',');
@@ -86,25 +86,25 @@ class _ModuleScreenState extends State<ModuleScreen> {
           }
         }
         if (cachedModuleAccess != null && cachedModuleAccess.isNotEmpty) {
-          // Set it directly in AuthProvider
+
           authProvider.setModuleAccess(cachedModuleAccess);
           debugPrint(
             '[ModuleScreen] Module access loaded from UserProvider cache',
           );
         }
       } catch (_) {
-        // User not found in cache, will fetch from API
+
       }
     }
 
-    // If not found in cache, fetch from API
+
     if (cachedModuleAccess == null || cachedModuleAccess.isEmpty) {
       await authProvider.fetchCurrentUserModuleAccess(
         preFetchedModuleAccess: cachedModuleAccess,
       );
     }
 
-    // Also fetch token if needed (non-blocking)
+
     if (authProvider.userToken == null) {
       authProvider.fetchUserToken();
     }
@@ -137,7 +137,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 builder: (context, constraints) {
                   return Consumer<AuthProvider>(
                     builder: (context, authProvider, child) {
-                      // Show loading indicator while fetching module access
+
                       if (_isLoadingModuleAccess &&
                           authProvider.userModuleAccess == null) {
                         return const Center(
@@ -165,14 +165,14 @@ class _ModuleScreenState extends State<ModuleScreen> {
                           authProvider.hasModuleAccess('Proposal & SOW Builder') ||
                           authProvider.hasModuleAccess('SOW Builder');
 
-                      // Admin users see all cards, Staff users see only cards they have access to
+
                       final showPDH = isAdmin || hasPDHAccess;
                       final showSkillsHeatmap =
                           isAdmin || hasSkillsHeatmapAccess;
                       final showRecruitment = isAdmin || hasRecruitmentAccess;
                       final showSOWBuilder = isAdmin || hasSOWBuilderAccess;
 
-                      // If no cards to show, show a message
+
                       if (!showPDH && !showSkillsHeatmap && !showRecruitment && !showSOWBuilder) {
                         return const Center(
                           child: Text(
@@ -189,12 +189,12 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
                       final List<Widget> cards = [];
 
-                      // Calculate card width - use a fixed max width or responsive width
+
                       final double calculatedCardWidth =
                           (constraints.maxWidth > 500
                               ? 500
                               : constraints.maxWidth * 0.9) *
-                          0.9; // Apply 90% scale factor
+                          0.9;
 
                       if (showPDH) {
                         cards.add(
@@ -211,7 +211,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
                       if (showSkillsHeatmap) {
                         if (cards.isNotEmpty) {
-                          cards.add(const SizedBox(height: 18.0)); // 20.0 * 0.9
+                          cards.add(const SizedBox(height: 18.0));
                         }
 
                         cards.add(
@@ -232,7 +232,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
                       if (showRecruitment) {
                         if (cards.isNotEmpty) {
-                          cards.add(const SizedBox(height: 18.0)); // 20.0 * 0.9
+                          cards.add(const SizedBox(height: 18.0));
                         }
 
                         cards.add(
@@ -253,7 +253,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
                       if (showSOWBuilder) {
                         if (cards.isNotEmpty) {
-                          cards.add(const SizedBox(height: 18.0)); // 20.0 * 0.9
+                          cards.add(const SizedBox(height: 18.0));
                         }
 
                         cards.add(
@@ -271,7 +271,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         );
                       }
 
-                      // Always stack vertically from top to bottom
+
                       return Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: cards,
@@ -391,7 +391,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     width: widget.cardWidth,
-                    padding: const EdgeInsets.all(28.8), // 32.0 * 0.9
+                    padding: const EdgeInsets.all(28.8),
                     decoration: BoxDecoration(
                       color: primaryDark.withValues(
                         alpha: _isHovered ? 0.7 : 0.5,
@@ -423,16 +423,16 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                               return Padding(
                                 padding: const EdgeInsets.only(
                                   bottom: 3.6,
-                                ), // 4.0 * 0.9
+                                ),
                                 child: Text(
                                   line,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: widget.cardWidth > 300
-                                        ? 23.4 // 26.0 * 0.9
+                                        ? 23.4
                                         : widget.cardWidth > 200
-                                        ? 19.8 // 22.0 * 0.9
-                                        : 16.2, // 18.0 * 0.9
+                                        ? 19.8
+                                        : 16.2,
                                     fontWeight: FontWeight.w900,
                                     color: Colors.white,
                                     height: 1.3,
@@ -443,12 +443,12 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                           ),
                           if (widget.subtitle != null &&
                               widget.subtitle!.isNotEmpty) ...[
-                            const SizedBox(height: 10.8), // 12.0 * 0.9
+                            const SizedBox(height: 10.8),
                             Text(
                               widget.subtitle!,
                               textAlign: TextAlign.center,
                               style: const TextStyle(
-                                fontSize: 18.0, // 20.0 * 0.9
+                                fontSize: 18.0,
                                 fontWeight: FontWeight.w600,
                                 color: primaryAccent,
                               ),
@@ -457,19 +457,19 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                             ),
                           ],
                           if (_lastAccessedText != null) ...[
-                            const SizedBox(height: 10.8), // 12.0 * 0.9
+                            const SizedBox(height: 10.8),
                             Text(
                               _lastAccessedText!,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 12.6, // 14.0 * 0.9
+                                fontSize: 12.6,
                                 fontWeight: FontWeight.w400,
                                 color: Colors.white70,
                                 fontStyle: FontStyle.italic,
                               ),
                             ),
                           ],
-                          const SizedBox(height: 28.8), // 32.0 * 0.9
+                          const SizedBox(height: 28.8),
                           ElevatedButton(
                             onPressed: _isLoading
                                 ? null
@@ -481,7 +481,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                         widget.url,
                                         widget.moduleKey,
                                       );
-                                      // Reload last accessed time after launch
+
                                       await _loadLastAccessed();
                                     } finally {
                                       if (mounted) {
@@ -493,16 +493,16 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                               backgroundColor: primaryAccent,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 36.0, // 40.0 * 0.9
-                                vertical: 14.4, // 16.0 * 0.9
+                                horizontal: 36.0,
+                                vertical: 14.4,
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(
                                   45.0,
-                                ), // 50.0 * 0.9
+                                ),
                               ),
                               textStyle: const TextStyle(
-                                fontSize: 16.2, // 18.0 * 0.9
+                                fontSize: 16.2,
                                 fontWeight: FontWeight.bold,
                               ),
                               elevation: 10,
@@ -545,7 +545,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
     );
   }
 
-  // ignore: unused_element
+
   Widget _buildLaunchButton({
     required BuildContext context,
     required String text,
@@ -569,13 +569,13 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
   }
 
   Future<void> _launchUrl(BuildContext context, String url) async {
-    // This method is unused but kept for potential future use
-    // If used, moduleKey should be provided
+
+
     await _launchUrlFromContext(context, url, 'unknown');
   }
 }
 
-// Bouncing red spinner widget
+
 class _BouncingRedSpinner extends StatefulWidget {
   @override
   State<_BouncingRedSpinner> createState() => _BouncingRedSpinnerState();
@@ -622,7 +622,7 @@ class _BouncingRedSpinnerState extends State<_BouncingRedSpinner>
   }
 }
 
-// Helper functions for last accessed timestamp
+
 Future<void> _saveLastAccessedTime(String moduleKey) async {
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -644,22 +644,22 @@ Future<String?> _getLastAccessedTime(String moduleKey) async {
     final difference = now.difference(lastAccessed);
 
     if (difference.inDays > 7) {
-      // Show date if older than 7 days
+
       return 'Last accessed: ${DateFormat('MMM d, yyyy').format(lastAccessed)}';
     } else if (difference.inDays > 0) {
-      // Show days ago
+
       final days = difference.inDays;
       return 'Last accessed: $days ${days == 1 ? 'day' : 'days'} ago';
     } else if (difference.inHours > 0) {
-      // Show hours ago
+
       final hours = difference.inHours;
       return 'Last accessed: $hours ${hours == 1 ? 'hour' : 'hours'} ago';
     } else if (difference.inMinutes > 0) {
-      // Show minutes ago
+
       final minutes = difference.inMinutes;
       return 'Last accessed: $minutes ${minutes == 1 ? 'minute' : 'minutes'} ago';
     } else {
-      // Show just now
+
       return 'Last accessed: Just now';
     }
   } catch (e) {
@@ -668,14 +668,14 @@ Future<String?> _getLastAccessedTime(String moduleKey) async {
   }
 }
 
-// Standalone function to launch URLs - can be called from anywhere
+
 Future<void> _launchUrlFromContext(
   BuildContext context,
   String url,
   String moduleKey,
 ) async {
   try {
-    // Trim and ensure URL uses HTTPS for secure transmission
+
     String secureUrl = url.trim();
     if (secureUrl.startsWith('http://')) {
       secureUrl = secureUrl.replaceFirst('http://', 'https://');
@@ -683,23 +683,23 @@ Future<void> _launchUrlFromContext(
       secureUrl = 'https://$secureUrl';
     }
 
-    // Check if this is a PDH URL (only PDH should get the token)
+
     final bool isPDHUrl =
         secureUrl.contains('pdh-web-app.onrender.com') ||
         secureUrl.contains('pdh');
 
-    // Get user token from AuthProvider only if it's a PDH URL
+
     String? token;
     if (isPDHUrl) {
       final authProvider = context.read<AuthProvider>();
 
-      // Use existing token if available, only fetch if null
+
       if (authProvider.userEmail != null) {
         token = authProvider.userToken;
 
-        // Only fetch new token if current one is missing
+
         if (token == null || token.isEmpty) {
-          // Show loading indicator while fetching token
+
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -712,7 +712,7 @@ Future<void> _launchUrlFromContext(
             );
           }
 
-          // Fetch fresh token only if needed
+
           await authProvider.fetchUserToken();
           token = authProvider.userToken;
 
@@ -732,14 +732,14 @@ Future<void> _launchUrlFromContext(
       }
     }
 
-    // Build redirect URL with token for PDH URLs
+
     Uri uri = Uri.parse(secureUrl);
     if (isPDHUrl && token != null && token.isNotEmpty) {
-      // Format: https://pdh-app-url/?token=<fresh-jwt>
+
       uri = uri.replace(queryParameters: {'token': token});
     }
 
-    // Debug: Print the URL being launched (remove in production if not needed)
+
     debugPrint('[ModuleLaunch] Launching URL for $moduleKey: $uri');
 
     final bool launched = await launchUrl(
@@ -749,7 +749,7 @@ Future<void> _launchUrlFromContext(
     );
     if (!context.mounted) return;
     if (launched) {
-      // Save last accessed time when successfully launched
+
       await _saveLastAccessedTime(moduleKey);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(

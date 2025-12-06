@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import 'landing_screen.dart'; // Added import for LandingScreen
+import 'landing_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -19,7 +19,7 @@ class HomeScreen extends StatelessWidget {
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (context) => const LandingScreen()),
                 (Route<dynamic> route) => false,
-              ); // Navigate to LandingScreen and clear stack
+              );
             },
           ),
         ],

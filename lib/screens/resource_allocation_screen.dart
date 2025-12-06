@@ -18,4 +18,3 @@ class ResourceAllocationScreen extends StatelessWidget {
     );
   }
 }
-

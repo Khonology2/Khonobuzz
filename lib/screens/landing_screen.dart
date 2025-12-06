@@ -1,10 +1,10 @@
-// ignore_for_file: unused_local_variable
+
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io' show Platform;
-import 'package:flutter_aad_oauth/model/config.dart'; // Import for AAD OAuth config (still used for aadConfig)
-import 'auth_screen.dart'; // Import AuthScreen
+import 'package:flutter_aad_oauth/model/config.dart';
+import 'auth_screen.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -15,7 +15,7 @@ class LandingScreen extends StatefulWidget {
 
 class _LandingScreenState extends State<LandingScreen>
     with TickerProviderStateMixin {
-  double _logoOpacity = 0.0; // Initial opacity for khono.png
+  double _logoOpacity = 0.0;
   late AnimationController _btnController;
   Animation<Offset> _btnOffset =
       const AlwaysStoppedAnimation<Offset>(Offset.zero);
@@ -85,7 +85,7 @@ class _LandingScreenState extends State<LandingScreen>
       }
     });
 
-    // Trigger fade-in animation when the screen is initialized
+
     Future.delayed(const Duration(milliseconds: 500), () {
       setState(() {
         _logoOpacity = 1.0;
@@ -97,15 +97,14 @@ class _LandingScreenState extends State<LandingScreen>
     });
   }
 
-  // Azure AD configuration
+
   static const String _tenantId =
-      'aacabed7-5b1f-403b-81ec-c4fbec6948d2'; // Replace with your Tenant ID
+      'aacabed7-5b1f-403b-81ec-c4fbec6948d2';
   static const String _clientId =
-      '3592de85-8d67-43ee-a2c6-66e3f92d8e3e'; // Replace with your Client ID
-  static const String _redirectPath = '/auth.html'; // Web redirect page
-  // Mobile redirect URIs must be registered in Azure AD and match app config
-  // Replace the placeholders below once you generate the Android signature hash
-  // and set the iOS URL scheme.
+      '3592de85-8d67-43ee-a2c6-66e3f92d8e3e';
+  static const String _redirectPath = '/auth.html';
+
+
   static const String _androidRedirectUri =
       'msauth://com.example.khonology_app/REPLACE_WITH_SIGNATURE_HASH';
   static const String _iosRedirectUri =
@@ -115,13 +114,13 @@ class _LandingScreenState extends State<LandingScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor:
-          Colors.transparent, // Set to transparent to show background image
+          Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
             image: AssetImage(
               'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
-            ), // Use the new background image
+            ),
             fit: BoxFit.cover,
           ),
         ),
@@ -129,17 +128,14 @@ class _LandingScreenState extends State<LandingScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Your Logo
-              // Image.asset(
-              //   'assets/images/logo.png',
-              //   height: 150,
-              // ),
+
+
               AnimatedOpacity(
                 opacity: _logoOpacity,
                 duration: const Duration(milliseconds: 1000),
                 child: Image.asset(
                   'assets/images/khono.png',
-                  height: 150, // Adjust height as needed
+                  height: 150,
                 ),
               ),
               const SizedBox(height: 50),
@@ -149,7 +145,7 @@ class _LandingScreenState extends State<LandingScreen>
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
-                  fontFamily: 'Poppins', // Apply Poppins font
+                  fontFamily: 'Poppins',
                 ),
               ),
               const SizedBox(height: 20),
@@ -159,7 +155,7 @@ class _LandingScreenState extends State<LandingScreen>
                 style: TextStyle(
                   fontSize: 18,
                   color: Colors.white70,
-                  fontFamily: 'Poppins', // Apply Poppins font
+                  fontFamily: 'Poppins',
                 ),
               ),
               const SizedBox(height: 50),
@@ -172,7 +168,7 @@ class _LandingScreenState extends State<LandingScreen>
                   color: const Color(0xFFC10D00),
                   onPressed: () {
                     String redirectUri;
-                    // Select redirect URI per-platform
+
                     if (kIsWeb) {
                       final current = Uri.base;
                       redirectUri = Uri(
@@ -198,7 +194,7 @@ class _LandingScreenState extends State<LandingScreen>
                     } else if (Platform.isIOS) {
                       redirectUri = _iosRedirectUri;
                     } else {
-                      // Fallback to web-style in unsupported platforms (desktop)
+
                       final current = Uri.base;
                       redirectUri = Uri(
                         host: current.host,
@@ -208,7 +204,7 @@ class _LandingScreenState extends State<LandingScreen>
                       ).toString();
                     }
 
-                    // Include email scope to ensure id_token contains email/claims
+
                     final scope = 'openid profile email offline_access';
                     final responseType = 'code';
 
@@ -219,7 +215,7 @@ class _LandingScreenState extends State<LandingScreen>
                       redirectUri: redirectUri,
                       responseType: responseType,
                     );
-                    // Note: AuthScreen now uses Firebase Auth, oauth parameter no longer needed
+
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) => const AuthScreen(),
@@ -300,7 +296,7 @@ class _LandingScreenState extends State<LandingScreen>
       ),
     );
   }
-  
+
   @override
   void dispose() {
     _pulseController.dispose();

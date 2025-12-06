@@ -25,7 +25,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   static const String _notAssignedValue = 'Not Assigned';
 
   String? expandedUserId;
-  String? _updatingUserId; // Track which user is being updated
+  String? _updatingUserId;
   Timer? _debounceTimer;
   String _searchQuery = '';
 
@@ -61,9 +61,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   void initState() {
     super.initState();
     final userProvider = Provider.of<UserProvider>(context, listen: false);
-    // Fetch users if not cached or cache expired
+
     userProvider.fetchUsers();
-    // Refresh in background if cache exists
+
     if (userProvider.hasCachedData) {
       userProvider.refreshUsersInBackground();
     }
@@ -94,7 +94,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       _updatingUserId = user.id;
     });
 
-    // Convert "Not Assigned" to empty string for backend
+
     final sanitizedEntity =
         (newEntity != null &&
             newEntity.trim().isNotEmpty &&
@@ -120,7 +120,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         );
       }
 
-      // If backend returned updated user payload, prefer that canonical source
+
       final backendUser = decodedResp['user'] as Map<String, dynamic>?;
       final updatedEntity = backendUser != null
           ? (backendUser['entity'] as String?)?.isNotEmpty == true
@@ -132,8 +132,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         user.entity = updatedEntity;
       });
 
-      // Update user in provider cache
-      // ignore: use_build_context_synchronously
+
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       userProvider.updateUser(user);
 
@@ -144,7 +143,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           : null;
 
       try {
-        // Sync with PDH
+
         await updatePDHUserPartial(
           user.id,
           {'entity': updatedEntity, if (adminField != null) ...adminField},
@@ -169,7 +168,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       }
 
       try {
-        // Sync with Skills Heatmap
+
         await updateSkillsHeatmapUserPartial(
           user.id,
           {'entity': updatedEntity, if (adminField != null) ...adminField},
@@ -180,7 +179,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         );
       } catch (e) {
         debugPrint('Skills Heatmap sync failed for entity update: $e');
-        // Don't show error to user, just log it
+
       }
 
       if (mounted) {
@@ -368,18 +367,18 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         padding: const EdgeInsets.all(16.0),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Calculate column widths to match filter layout exactly
+
             final availableWidth = constraints.maxWidth;
-            final spacingWidth = 8.0 * 2; // Two spacings between three columns
+            final spacingWidth = 8.0 * 2;
             final columnWidth = (availableWidth - spacingWidth) / 3;
             final leftPadding = columnWidth * 0.12;
-            
-            // Adjust second column width to account for padding to prevent overflow
+
+
             final secondColumnWidth = columnWidth - leftPadding;
 
             return Row(
               children: [
-                // First column: Avatar + Name + Email (aligned with "All Statuses" filter)
+
                 SizedBox(
                   width: columnWidth,
                   child: Row(
@@ -417,8 +416,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8.0), // Match filter spacing exactly
-                // Second column: Designation + Department (aligned with "All Departments" filter - red vertical line)
+                const SizedBox(width: 8.0),
+
                 Padding(
                   padding: EdgeInsets.only(left: leftPadding),
                   child: SizedBox(
@@ -452,8 +451,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8.0), // Match filter spacing exactly
-                // Third column: Entity Chip + Dropdown (aligned with "All Designations" filter)
+                const SizedBox(width: 8.0),
+
                 SizedBox(
                   width: columnWidth,
                   child: Row(
@@ -505,7 +504,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   }
 
   Widget _buildEntityPanel(ManagedUser user) {
-    // Use "Not Assigned" as default if entity is null or empty
+
     String? selectedEntity = (user.entity == null || user.entity!.isEmpty)
         ? _notAssignedValue
         : user.entity;
@@ -550,7 +549,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                 ),
                 onChanged: (value) {
                   setState(() {
-                    // Convert "Not Assigned" to null/empty for storage
+
                     if (value == _notAssignedValue) {
                       selectedEntity = _notAssignedValue;
                       user.entity = null;

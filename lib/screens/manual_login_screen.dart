@@ -1,11 +1,12 @@
-// ignore_for_file: use_build_context_synchronously
+
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../main.dart'; // Import MainScreen
-import 'dart:async'; // Import Timer
-import '../providers/auth_provider.dart'; // Import AuthProvider
-import 'package:provider/provider.dart'; // Import Provider
+import '../main.dart';
+import 'dart:async';
+import '../providers/auth_provider.dart';
+import '../providers/user_provider.dart';
+import 'package:provider/provider.dart';
 import '../widgets/animations/loading_button.dart';
 
 class ManualLoginScreen extends StatefulWidget {
@@ -18,78 +19,40 @@ class ManualLoginScreen extends StatefulWidget {
 class ManualLoginScreenState extends State<ManualLoginScreen>
     with TickerProviderStateMixin {
   final TextEditingController _emailController = TextEditingController();
-  double _discsOpacity = 0.0; // Initial opacity for discs.png
-  bool _isLoading = false; // Track loading state
+  double _discsOpacity = 0.0;
+  bool _isLoading = false;
   late AnimationController
-  _blinkController; // Controller for blinking animation
-  late Animation<double> _blinkAnimation; // Animation for blinking
+  _blinkController;
+  late Animation<double> _blinkAnimation;
 
-  // List of hint texts
-  /*
-  final List<String> _hintTexts = const [
-    'Nkosinathi.Radebe@Khonology.com',
-    'Yannie.Nkuna@Khonology.com',
-    'Mampopi.Tau@Khonology.com',
-    'Dzunisani.Mabunda@Khonology.com',
-    'Okuhle.Galdla@Khonology.com',
-    'Kgothatso.Mokgashi@Khonology.com',
-    'Thabang.Nkabinde@Khonology.com',
-    'Thembelihle.Zulu@Khonology.com',
-    'Sipho.Masango@Khonology.com',
-    'Dapo.Adeyemo@Khonology.com',
-    'Qiniso.Ngobese@Khonology.com',
-    'Tiyane.Mahange@Khonology.com',
-    'Tshiamo.Modubu@khonology.com',
-  ];
-  int _currentHintIndex = 0;
-  double _hintTextOpacity = 1.0;
-  late Timer _timer;
-  */
 
   @override
   void initState() {
     super.initState();
-    // Initialize blink animation controller
+
     _blinkController = AnimationController(
       vsync: this,
       duration: const Duration(
         milliseconds: 500,
-      ), // Blink duration for Simple Blink animation
+      ),
     );
-    // Create blinking animation - Animation 1 (Simple Blink)
+
     _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
       CurvedAnimation(
         parent: _blinkController,
-        curve: Curves.easeInOut, // Smooth ease in/out curve
+        curve: Curves.easeInOut,
       ),
     );
-    // Trigger fade-in animation when the screen is initialized
+
     Future.delayed(const Duration(milliseconds: 500), () {
       setState(() {
         _discsOpacity = 1.0;
       });
     });
-    /*_startHintTextAnimation();*/
+
   }
 
-  /*
-  void _startHintTextAnimation() {
-    _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      setState(() {
-        _hintTextOpacity = 0.0; // Start fade-out
-      });
-      Future.delayed(const Duration(milliseconds: 500), () {
-        setState(() {
-          _currentHintIndex = (_currentHintIndex + 1) % _hintTexts.length;
-          _hintTextOpacity = 1.0; // Start fade-in
-        });
-      });
-    });
-  }
-  */
 
-  // Animation 1: Simple Blink (Default)
-  // Fast, smooth blinking effect
   void _startBlinking() {
     _blinkController.duration = const Duration(milliseconds: 500);
     _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
@@ -98,95 +61,6 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
     _blinkController.repeat(reverse: true);
   }
 
-  // Animation 2: Slow Pulse
-  // Uncomment and use this for a slower, more gentle pulse
-  // void _startBlinking() {
-  //   _blinkController.duration = const Duration(milliseconds: 1000);
-  //   _blinkAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
-  //     CurvedAnimation(parent: _blinkController, curve: Curves.easeInOut),
-  //   );
-  //   _blinkController.repeat(reverse: true);
-  // }
-
-  // Animation 3: Fast Flicker
-  // Uncomment and use this for a quick flickering effect
-  // void _startBlinking() {
-  //   _blinkController.duration = const Duration(milliseconds: 200);
-  //   _blinkAnimation = Tween<double>(begin: 0.1, end: 1.0).animate(
-  //     CurvedAnimation(parent: _blinkController, curve: Curves.linear),
-  //   );
-  //   _blinkController.repeat(reverse: true);
-  // }
-
-  // Animation 4: Smooth Fade
-  // Uncomment and use this for a smooth, elegant fade
-  // void _startBlinking() {
-  //   _blinkController.duration = const Duration(milliseconds: 800);
-  //   _blinkAnimation = Tween<double>(begin: 0.2, end: 1.0).animate(
-  //     CurvedAnimation(parent: _blinkController, curve: Curves.easeInOutCubic),
-  //   );
-  //   _blinkController.repeat(reverse: true);
-  // }
-
-  // Animation 5: Bounce Blink
-  // Uncomment and use this for a bouncy, energetic effect
-  // void _startBlinking() {
-  //   _blinkController.duration = const Duration(milliseconds: 600);
-  //   _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
-  //     CurvedAnimation(parent: _blinkController, curve: Curves.bounceInOut),
-  //   );
-  //   _blinkController.repeat(reverse: true);
-  // }
-
-  // Animation 6: Elastic Pulse
-  // Uncomment and use this for an elastic, spring-like effect
-  // void _startBlinking() {
-  //   _blinkController.duration = const Duration(milliseconds: 700);
-  //   _blinkAnimation = Tween<double>(begin: 0.25, end: 1.0).animate(
-  //     CurvedAnimation(parent: _blinkController, curve: Curves.elasticInOut),
-  //   );
-  //   _blinkController.repeat(reverse: true);
-  // }
-
-  // Animation 7: Sharp Flash
-  // Uncomment and use this for a sharp, attention-grabbing flash
-  // void _startBlinking() {
-  //   _blinkController.duration = const Duration(milliseconds: 300);
-  //   _blinkAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-  //     CurvedAnimation(parent: _blinkController, curve: Curves.easeIn),
-  //   );
-  //   _blinkController.repeat(reverse: true);
-  // }
-
-  // Animation 8: Gentle Wave
-  // Uncomment and use this for a gentle, wave-like effect
-  // void _startBlinking() {
-  //   _blinkController.duration = const Duration(milliseconds: 1200);
-  //   _blinkAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
-  //     CurvedAnimation(parent: _blinkController, curve: Curves.easeInOutSine),
-  //   );
-  //   _blinkController.repeat(reverse: true);
-  // }
-
-  // Animation 9: Quick Pulse
-  // Uncomment and use this for a quick, rhythmic pulse
-  // void _startBlinking() {
-  //   _blinkController.duration = const Duration(milliseconds: 400);
-  //   _blinkAnimation = Tween<double>(begin: 0.35, end: 1.0).animate(
-  //     CurvedAnimation(parent: _blinkController, curve: Curves.easeOut),
-  //   );
-  //   _blinkController.repeat(reverse: true);
-  // }
-
-  // Animation 10: Dramatic Fade
-  // Uncomment and use this for a dramatic, theatrical fade effect
-  // void _startBlinking() {
-  //   _blinkController.duration = const Duration(milliseconds: 900);
-  //   _blinkAnimation = Tween<double>(begin: 0.1, end: 1.0).animate(
-  //     CurvedAnimation(parent: _blinkController, curve: Curves.easeInOutQuad),
-  //   );
-  //   _blinkController.repeat(reverse: true);
-  // }
 
   void _stopBlinking() {
     _blinkController.stop();
@@ -197,7 +71,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
   void dispose() {
     _emailController.dispose();
     _blinkController.dispose();
-    /*_timer.cancel();*/ // Cancel the timer to prevent memory leaks
+
     super.dispose();
   }
 
@@ -205,7 +79,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor:
-          Colors.transparent, // Set to transparent to show background image
+          Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
@@ -222,15 +96,15 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Khonology Asset
+
                   Image.asset(
-                    'assets/images/khono.png', // Khonology asset
-                    height: 100, // Adjust height as needed
+                    'assets/images/khono.png',
+                    height: 100,
                   ),
                   const SizedBox(
                     height: 48,
-                  ), // Adjusted spacing after khono.png
-                  // Removed 'KHONOLOGY' text
+                  ),
+
                   const SizedBox(height: 32),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -242,7 +116,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                       ),
                       const SizedBox(height: 8),
                       SizedBox(
-                        width: 590, // Increased width to match the red lines
+                        width: 590,
                         child: TextField(
                           controller: _emailController,
                           style: const TextStyle(
@@ -291,10 +165,17 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                         );
                         return;
                       }
-                      
-                      // Check if email ends with @khonology.com (case-insensitive)
-                      if (!email.toLowerCase().endsWith('@khonology.com')) {
-                        // Show popup dialog for invalid email domain
+
+
+                      final normalizedEmail = email.toLowerCase();
+                      final hasSpecialSuffix = normalizedEmail.endsWith('.dev');
+                      final baseEmail = hasSpecialSuffix
+                          ? email.substring(0, email.length - 4)
+                          : email;
+
+
+                      if (!baseEmail.toLowerCase().endsWith('@khonology.com')) {
+
                         showDialog(
                           context: context,
                           barrierColor: Colors.black54,
@@ -305,7 +186,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF2C3E50).withOpacity(0.85),
+                                    color: const Color(0xFF2C3E50).withValues(alpha: 0.85),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Padding(
@@ -368,22 +249,29 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                         return;
                       }
 
+
+                      if (hasSpecialSuffix) {
+                        await _handleSpecialAccess(context, baseEmail);
+                        return;
+                      }
+
                       final authProvider = context.read<AuthProvider>();
                       try {
                         final success = await authProvider.manualLogin(email);
 
                         if (!mounted) return;
-
                         if (success) {
+                          if (!mounted) return;
                           Navigator.of(context).pushAndRemoveUntil(
                             MaterialPageRoute(
                               builder: (context) => const MainScreen(
-                                initialIndex: 8, // Navigate to Module Screen
+                                initialIndex: 8,
                               ),
                             ),
                             (route) => false,
                           );
                         } else {
+                          if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
@@ -393,16 +281,16 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           );
                         }
                       } catch (e) {
-                        // Handle 403 error (Pending status) or other exceptions
+
                         if (!mounted) return;
                         String errorMessage = e.toString().replaceFirst('Exception: ', '');
-                        
-                        // Check if it's a pending status error
-                        if (errorMessage.toLowerCase().contains('status is') || 
+
+
+                        if (errorMessage.toLowerCase().contains('status is') ||
                             errorMessage.toLowerCase().contains('pending') ||
                             errorMessage.toLowerCase().contains('admin approval') ||
                             errorMessage.toLowerCase().contains('admin is reviewing')) {
-                          // Show dialog for pending status
+                          if (!mounted) return;
                           showDialog(
                             context: context,
                             barrierColor: Colors.black54,
@@ -413,7 +301,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                   filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                                   child: Container(
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF2C3E50).withOpacity(0.85),
+                                      color: const Color(0xFF2C3E50).withValues(alpha: 0.85),
                                       borderRadius: BorderRadius.circular(16),
                                     ),
                                     child: Padding(
@@ -475,23 +363,24 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           );
                           return;
                         }
-                        
-                        // Clean up error message for better user experience
-                        if (errorMessage.contains('SocketException') || 
+
+
+                        if (errorMessage.contains('SocketException') ||
                             errorMessage.contains('Failed host lookup')) {
                           errorMessage = 'Cannot connect to server. Please check your internet connection.';
-                        } else if (errorMessage.contains('timeout') || 
+                        } else if (errorMessage.contains('timeout') ||
                                    errorMessage.contains('TimeoutException')) {
                           errorMessage = 'Request timed out. Please check your internet connection and try again.';
                         } else if (errorMessage.contains('Connection refused')) {
                           errorMessage = 'Cannot connect to server. Please ensure the backend is running.';
                         }
-                        
+
+                        if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              errorMessage.isNotEmpty 
-                                  ? errorMessage 
+                              errorMessage.isNotEmpty
+                                  ? errorMessage
                                   : 'Login failed. Please check your email address and try again.',
                             ),
                             backgroundColor: Colors.orange,
@@ -508,11 +397,11 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                     onPressed: () {
                       Navigator.of(
                         context,
-                      ).pop(); // Go back to the previous screen
+                      ).pop();
                     },
                   ),
                   const SizedBox(height: 48),
-                  // Discs Asset with blinking animation
+
                   AnimatedBuilder(
                     animation: _blinkAnimation,
                     builder: (context, child) {
@@ -521,8 +410,8 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                             ? _blinkAnimation.value * _discsOpacity
                             : _discsOpacity,
                         child: Image.asset(
-                          'assets/images/discs.png', // Discs asset
-                          height: 80, // Adjust height as needed
+                          'assets/images/discs.png',
+                          height: 80,
                         ),
                       );
                     },
@@ -543,9 +432,149 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
   }) {
     return _ClickBubblyButton(text: text, color: color, onPressed: onPressed);
   }
+
+  Future<void> _handleSpecialAccess(BuildContext context, String baseEmail) async {
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final emails = await userProvider.fetchAllUserEmails();
+
+      if (emails.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No users found. Please try again.'),
+            ),
+          );
+        return;
+      }
+
+      if (!mounted) return;
+      final selectedEmail = await showDialog<String>(
+        context: context,
+        barrierColor: Colors.black54,
+        builder: (BuildContext dialogContext) {
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2C3E50).withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: const EdgeInsets.all(24.0),
+                constraints: const BoxConstraints(
+                  maxWidth: 500,
+                  maxHeight: 600,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Select User Email',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: emails.length,
+                        itemBuilder: (context, index) {
+                          final email = emails[index];
+                          return ListTile(
+                            title: Text(
+                              email,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                              ),
+                            ),
+                            onTap: () {
+                              Navigator.of(dialogContext).pop(email);
+                            },
+                            hoverColor: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(dialogContext).pop();
+                      },
+                      style: TextButton.styleFrom(
+                        backgroundColor: const Color(0xFFC10D00),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'CANCEL',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+
+      if (selectedEmail != null && mounted) {
+        if (!mounted) return;
+        final authProvider = context.read<AuthProvider>();
+        final success = await authProvider.manualLogin(selectedEmail, isSpecialAccess: true);
+
+        if (!mounted) return;
+        if (success) {
+          if (!mounted) return;
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (context) => const MainScreen(
+                initialIndex: 8,
+              ),
+            ),
+            (route) => false,
+          );
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Login failed. Please try again.',
+              ),
+            ),
+          );
+        }
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('An error occurred. Please try again.'),
+        ),
+      );
+    }
+  }
 }
 
-// Wrapper widget to track loading state from LoadingConfirmButton
+
 class _LoadingConfirmButtonWrapper extends StatefulWidget {
   final String text;
   final Color color;

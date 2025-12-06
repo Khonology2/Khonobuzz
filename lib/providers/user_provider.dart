@@ -169,4 +169,27 @@ class UserProvider extends ChangeNotifier {
     _lastFetchTime = null;
     notifyListeners();
   }
+
+  // Fetch all user emails for selection (silent operation)
+  Future<List<String>> fetchAllUserEmails() async {
+    try {
+      final response = await http
+          .get(Uri.parse(ApiConfig.usersEndpoint))
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        final usersData = (decoded['users'] as List<dynamic>? ?? [])
+            .cast<Map<String, dynamic>>();
+        
+        return usersData
+            .map((user) => (user['email'] as String? ?? '').trim())
+            .where((email) => email.isNotEmpty)
+            .toList();
+      }
+    } catch (_) {
+      // Silent error handling
+    }
+    return [];
+  }
 }

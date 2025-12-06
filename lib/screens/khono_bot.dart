@@ -13,7 +13,7 @@ class KhonoBotScreen extends StatelessWidget {
       builder: (BuildContext context, ScrollController scrollController) {
         return Container(
           decoration: BoxDecoration(
-            color: Theme.of(context).canvasColor, // Use theme color or a specific color
+            color: Theme.of(context).canvasColor,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(
@@ -21,7 +21,7 @@ class KhonoBotScreen extends StatelessWidget {
               Container(
                 height: 50,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFC10D00), // Chatbot header color
+                  color: const Color(0xFFC10D00),
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 ),
                 child: Row(
@@ -50,7 +50,7 @@ class KhonoBotScreen extends StatelessWidget {
               Expanded(
                 child: ListView.builder(
                   controller: scrollController,
-                  itemCount: 1, // Placeholder for chat messages
+                  itemCount: 1,
                   itemBuilder: (BuildContext context, int index) {
                     return const ListTile(
                       title: Text('Hello, how can I help you today?'),
@@ -74,7 +74,7 @@ class KhonoBotScreen extends StatelessWidget {
                     const SizedBox(width: 8),
                     FloatingActionButton(
                       onPressed: () {
-                        // Handle sending message
+
                       },
                       mini: true,
                       backgroundColor: const Color(0xFFC10D00),

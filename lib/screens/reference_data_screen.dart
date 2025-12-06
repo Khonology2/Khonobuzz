@@ -6,11 +6,11 @@ class ReferenceDataScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent, // Set to transparent to show background image
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Reference Data Screen'),
-        backgroundColor: const Color(0xFFC10D00), // Consistent AppBar color
-        elevation: 0.0, // Remove AppBar shadow
+        backgroundColor: const Color(0xFFC10D00),
+        elevation: 0.0,
       ),
       body: Container(
         decoration: const BoxDecoration(

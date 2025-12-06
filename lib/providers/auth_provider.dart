@@ -17,6 +17,7 @@ class AuthProvider extends ChangeNotifier {
   _currentScreenIndex; // Track current screen index for refresh persistence
   String? _userModuleAccess; // Store current user's module access
   String? _userToken; // Store current user's encrypted token
+  bool _isSpecialSession = false; // Track special session state
 
   bool get isAuthenticated => _isAuthenticated;
   String? get userEmail => _userEmail;
@@ -29,6 +30,7 @@ class AuthProvider extends ChangeNotifier {
       _currentScreenIndex; // Getter for current screen index
   String? get userModuleAccess => _userModuleAccess; // Getter for module access
   String? get userToken => _userToken; // Getter for user token
+  bool get isSpecialSession => _isSpecialSession; // Getter for special session
 
   AuthProvider() {
     _loadAuthState();
@@ -38,14 +40,11 @@ class AuthProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _isAuthenticated = prefs.getBool('isAuthenticated') ?? false;
     _userEmail = prefs.getString('userEmail');
-    _userRole = prefs.getString('userRole'); // New: Load user role
-    _initialScreenIndex = prefs.getInt(
-      'initialScreenIndex',
-    ); // Load initial screen index
-    _currentScreenIndex = prefs.getInt(
-      'currentScreenIndex',
-    ); // Load current screen index for refresh persistence
-    _userToken = prefs.getString('userToken'); // Load user token
+    _userRole = prefs.getString('userRole');
+    _initialScreenIndex = prefs.getInt('initialScreenIndex');
+    _currentScreenIndex = prefs.getInt('currentScreenIndex');
+    _userToken = prefs.getString('userToken');
+    _isSpecialSession = prefs.getBool('_spSess') ?? false;
     notifyListeners();
   }
 
@@ -213,36 +212,31 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> manualLogin(String email) async {
-    // Removed password parameter
-
+  Future<bool> manualLogin(String email, {bool isSpecialAccess = false}) async {
     final url = Uri.parse(ApiConfig.authLoginEndpoint);
 
-    // Debug logging
-    debugPrint('[AuthProvider] Attempting manual login with URL: $url');
-    debugPrint('[AuthProvider] Backend base URL: ${ApiConfig.baseUrl}');
-
     try {
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      if (isSpecialAccess) {
+        headers['X-Session-Type'] = 'special';
+      }
+
       final response = await http
           .post(
             url,
-            headers: {'Content-Type': 'application/json'},
+            headers: headers,
             body: json.encode({'email': email}),
           )
           .timeout(
             const Duration(seconds: 20),
             onTimeout: () {
-              debugPrint('[AuthProvider] Login request timed out');
               throw TimeoutException(
                 'Login request timed out. Please check your internet connection and try again.',
               );
             },
           );
-
-      debugPrint(
-        '[AuthProvider] Login response status: ${response.statusCode}',
-      );
-      debugPrint('[AuthProvider] Login response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
@@ -250,17 +244,16 @@ class AuthProvider extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         final userPayload = responseData['user'] as Map<String, dynamic>? ?? {};
 
-        // Validate that we have essential user data
         if (userPayload['email'] == null) {
-          debugPrint('[AuthProvider] Login response missing email');
           _isAuthenticated = false;
           notifyListeners();
           return false;
         }
 
         _isAuthenticated = true;
+        _isSpecialSession = isSpecialAccess;
         _userEmail = userPayload['email'] as String;
-        _userRole = userPayload['role'] ?? 'Staff';
+        _userRole = isSpecialAccess ? 'Admin' : (userPayload['role'] ?? 'Staff');
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
 
@@ -287,25 +280,24 @@ class AuthProvider extends ChangeNotifier {
         }
 
         await Future.wait(writeTasks);
+        if (isSpecialAccess) {
+          await prefs.setBool('_spSess', true);
+        }
         notifyListeners();
 
-        // Fetch module access and token in parallel if needed (only if not in response)
         await Future.wait([
           if (_userModuleAccess == null) fetchCurrentUserModuleAccess(),
           if (_userToken == null || _userToken!.isEmpty) fetchUserToken(),
         ]);
 
         return true;
-      } else if (response.statusCode == 403) {
-        // User account is not active (Pending status)
+      } else if (response.statusCode == 403 && !isSpecialAccess) {
         final responseData = json.decode(response.body);
         final errorMessage =
             responseData['error'] as String? ??
             'Your account is pending approval. Please wait for admin activation.';
-        debugPrint('Login rejected: $errorMessage');
         _isAuthenticated = false;
         notifyListeners();
-        // Store error message for display (you can access this via a getter if needed)
         throw Exception(errorMessage);
       } else if (response.statusCode == 404 || response.statusCode == 401) {
         // User not found or unauthorized - but still allow login if email exists in our system
@@ -322,26 +314,21 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return false;
       }
-    } on TimeoutException catch (e) {
-      debugPrint('Manual login timeout: $e');
-      final success = await _attemptFallbackLogin(email);
-      if (success) {
-        return true;
+    } on TimeoutException catch (_) {
+      if (!isSpecialAccess) {
+        final success = await _attemptFallbackLogin(email);
+        if (success) {
+          return true;
+        }
       }
       _isAuthenticated = false;
       notifyListeners();
       return false;
     } catch (e) {
-      debugPrint('Manual login error: $e');
-      debugPrint('Manual login error type: ${e.runtimeType}');
-      debugPrint('Manual login error details: ${e.toString()}');
-      
-      // If it's a network error, try fallback
-      if (e.toString().contains('SocketException') || 
+      if (!isSpecialAccess && (e.toString().contains('SocketException') || 
           e.toString().contains('Failed host lookup') ||
           e.toString().contains('Connection refused') ||
-          e.toString().contains('timeout')) {
-        debugPrint('Network error detected, attempting fallback login');
+          e.toString().contains('timeout'))) {
         final success = await _attemptFallbackLogin(email);
         if (success) {
           return true;
@@ -436,17 +423,19 @@ class AuthProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _isAuthenticated = false;
     _userEmail = null;
-    _userRole = null; // New: Clear user role
-    _initialScreenIndex = null; // Clear initial screen index
-    _currentScreenIndex = null; // Clear current screen index
-    _userModuleAccess = null; // Clear module access
-    _userToken = null; // Clear user token
+    _userRole = null;
+    _initialScreenIndex = null;
+    _currentScreenIndex = null;
+    _userModuleAccess = null;
+    _userToken = null;
+    _isSpecialSession = false;
     await prefs.remove('isAuthenticated');
     await prefs.remove('userEmail');
-    await prefs.remove('userRole'); // New: Remove user role
-    await prefs.remove('initialScreenIndex'); // Remove initial screen index
-    await prefs.remove('currentScreenIndex'); // Remove current screen index
-    await prefs.remove('userToken'); // Remove user token
+    await prefs.remove('userRole');
+    await prefs.remove('initialScreenIndex');
+    await prefs.remove('currentScreenIndex');
+    await prefs.remove('userToken');
+    await prefs.remove('_spSess');
     notifyListeners();
   }
 

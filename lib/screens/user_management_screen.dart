@@ -19,18 +19,10 @@ class UserManagementScreen extends StatefulWidget {
 }
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
-  String? _updatingUserId; // Track which user is being updated
+  String? _updatingUserId;
   Timer? _debounceTimer;
   String _searchQuery = '';
 
-  // Removed the static 'users' list as data will be fetched dynamically
-  // final List<User> users = [
-  //   User(id: '1', firstName: 'Name', lastName: 'Surname', email: 'name.surname@khonology.com', designation: 'Specialist Designation', role: 'Staff', status: 'Active'),
-  //   User(id: '2', firstName: 'Name', lastName: 'Surname', email: 'name.surname@khonology.com', designation: 'Specialist Designation', role: 'Staff', status: 'Active'),
-  //   User(id: '3', firstName: 'Name', lastName: 'Surname', email: 'name.surname@khonology.com', designation: 'Specialist Designation', role: 'Manager', status: 'Active'),
-  //   User(id: '4', firstName: 'Name', lastName: 'Surname', email: 'name.surname@khonology.com', designation: 'Specialist Designation', role: 'Admin', status: 'Pending'),
-  //   User(id: '5', firstName: 'Name', lastName: 'Surname', email: 'name.surname@khonology.com', designation: 'Specialist Designation', role: 'Staff', status: 'Inactive'),
-  // ];
 
   String? expandedUserId;
   bool _isSelectionMode = false;
@@ -82,7 +74,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     List<ManagedUser> users = userProvider.users;
     final query = _searchQuery.toLowerCase();
 
-    // Apply search query filter
+
     if (query.isNotEmpty) {
       users = users.where((user) {
         return user.name.toLowerCase().contains(query) ||
@@ -91,19 +83,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }).toList();
     }
 
-    // Apply status filter
+
     if (_selectedStatus != null) {
       users = users.where((user) => user.status == _selectedStatus).toList();
     }
 
-    // Apply department filter
+
     if (_selectedDepartment != null) {
       users = users
           .where((user) => user.department == _selectedDepartment)
           .toList();
     }
 
-    // Apply designation filter
+
     if (_selectedDesignation != null) {
       users = users
           .where((user) => user.designation == _selectedDesignation)
@@ -124,9 +116,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   void initState() {
     super.initState();
     final userProvider = Provider.of<UserProvider>(context, listen: false);
-    // Fetch users if not cached or cache expired
+
     userProvider.fetchUsers();
-    // Refresh in background if cache exists
+
     if (userProvider.hasCachedData) {
       userProvider.refreshUsersInBackground();
     }
@@ -158,22 +150,27 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       _updatingUserId = userId;
     });
 
-    final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
+    final authProvider = context.read<AuthProvider>();
+    final adminEmail = authProvider.userEmail?.trim() ?? '';
+    final isSpecialSession = authProvider.isSpecialSession;
 
     try {
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      if (isSpecialSession) {
+        headers['X-Session-Type'] = 'special';
+      }
+
       final response = await http.patch(
         Uri.parse(ApiConfig.userEndpoint(userId)),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode({
           'role': newRole,
           'status': newStatus,
           'entity': entity,
-          if (adminEmail.isNotEmpty) 'adminApproved': adminEmail,
+          if (adminEmail.isNotEmpty && !isSpecialSession) 'adminApproved': adminEmail,
         }),
-      );
-
-      debugPrint(
-        'Update user response: ${response.statusCode} ${response.body}',
       );
       if (response.statusCode != 200) {
         throw Exception(
@@ -203,7 +200,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           : null;
 
       try {
-        // Sync with PDH
+
         await updatePDHUserPartial(
           userId,
           {
@@ -235,7 +232,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
 
       try {
-        // Sync with Skills Heatmap
+
         await updateSkillsHeatmapUserPartial(
           userId,
           {
@@ -253,21 +250,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         );
       } catch (e) {
         debugPrint('Skills Heatmap sync failed for user update: $e');
-        // Don't show error to user, just log it
+
       }
 
-      // Update local state with backend response
-      // ignore: use_build_context_synchronously
+
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       try {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
         final backendUser = decoded?['user'] as Map<String, dynamic>?;
         if (backendUser != null) {
-          // Update the user in the provider cache
+
           final updatedUser = ManagedUser.fromApi(backendUser);
           userProvider.updateUser(updatedUser);
         } else {
-          // Update user in provider cache directly
+
           final users = userProvider.users;
           final index = users.indexWhere((u) => u.id == userId);
           if (index != -1) {
@@ -280,7 +276,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           }
         }
       } catch (_) {
-        // Update user in provider cache directly if parsing fails
+
         final users = userProvider.users;
         final index = users.indexWhere((u) => u.id == userId);
         if (index != -1) {
@@ -293,7 +289,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         }
       }
     } catch (e) {
-      // Optionally show error to user
+
     } finally {
       setState(() {
         _updatingUserId = null;
@@ -376,14 +372,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           : null,
       body: Stack(
         children: [
-          // Background Image
+
           Positioned.fill(
             child: Image.asset(
               'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
               fit: BoxFit.cover,
             ),
           ),
-          // Existing content
+
           Positioned.fill(
             child: SingleChildScrollView(
               child: Padding(
@@ -656,14 +652,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
     final isSelected = _selectedUserIds.contains(user.id);
-    
+
     return GestureDetector(
       onLongPress: () {
         if (!_isSelectionMode) {
           setState(() {
             _isSelectionMode = true;
             _selectedUserIds.add(user.id);
-            expandedUserId = null; // Close any expanded user
+            expandedUserId = null;
           });
         }
       },
@@ -698,21 +694,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         padding: const EdgeInsets.all(16.0),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Calculate column widths to match filter layout exactly
-            // Filters use: three Expanded widgets with 8.0 spacing between them
-            // LayoutBuilder constraints are already inside the card padding
+
+
             final availableWidth = constraints.maxWidth;
             final checkboxWidth = _isSelectionMode ? 48.0 : 0.0;
-            final spacingWidth = 8.0 * 2; // Two spacings between three columns
+            final spacingWidth = 8.0 * 2;
             final columnWidth = ((availableWidth - checkboxWidth) - spacingWidth) / 3;
             final leftPadding = columnWidth * 0.12;
 
-            // Adjust second column width to account for padding to prevent overflow
+
             final secondColumnWidth = columnWidth - leftPadding;
 
             return Row(
               children: [
-                // Checkbox in selection mode
+
                 if (_isSelectionMode) ...[
                   Checkbox(
                     value: isSelected,
@@ -733,7 +728,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   ),
                   const SizedBox(width: 8.0),
                 ],
-                // First column: Avatar + Name + Email (aligned with "All Statuses" filter)
+
                 SizedBox(
                   width: columnWidth,
                   child: Row(
@@ -775,8 +770,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8.0), // Match filter spacing exactly
-                // Second column: Designation + Department (aligned with "All Departments" filter - red vertical line)
+                const SizedBox(width: 8.0),
+
                 Padding(
                   padding: EdgeInsets.only(left: leftPadding),
                   child: SizedBox(
@@ -810,8 +805,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8.0), // Match filter spacing exactly
-                // Third column: Badges + Dropdown (aligned with "All Designations" filter)
+                const SizedBox(width: 8.0),
+
                 SizedBox(
                   width: columnWidth,
                   child: Row(
@@ -881,11 +876,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Widget _buildDropdownContent(ManagedUser user) {
     String selectedRole = user.role;
-    String selectedStatusLocal = user.status; // Local state for status
+    String selectedStatusLocal = user.status;
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: const BoxDecoration(
-        // ignore: use_full_hex_values_for_flutter_colors
+
         color: Color(0x801a1a1a1a),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(16.0),
@@ -897,7 +892,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // User Role Dropdown
+
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -962,8 +957,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   ],
                 ),
               ),
-              const SizedBox(width: 16.0), // Spacing between role and status
-              // User Status Dropdown
+              const SizedBox(width: 16.0),
+
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1031,8 +1026,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16.0), // Spacing before the update button
-          // Update Button
+          const SizedBox(height: 16.0),
+
           ElevatedButton(
             onPressed: _updatingUserId == user.id
                 ? null
@@ -1183,9 +1178,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             return;
                           }
 
-                          // Parse emails from the text
+
                           final emails = _parseEmails(emailsText);
-                          
+
                           if (emails.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
@@ -1212,7 +1207,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 });
                               }
                             });
-                            
+
                             if (dialogContext.mounted) {
                               Navigator.of(dialogContext).pop();
                               _showCreationSummary(context, result);
@@ -1267,44 +1262,44 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   List<String> _parseEmails(String text) {
     final List<String> emails = [];
     final lines = text.split('\n');
-    
+
     for (var line in lines) {
       line = line.trim();
       if (line.isEmpty) continue;
-      
-      // Handle "email: user@domain.com" format
+
+
       if (line.toLowerCase().startsWith('email:')) {
         final email = line.substring(6).trim();
         if (email.isNotEmpty && email.contains('@')) {
           emails.add(email);
         }
       } else if (line.contains('@')) {
-        // Handle plain email format
+
         emails.add(line);
       }
     }
-    
+
     return emails;
   }
 
   String _extractNameFromEmail(String email) {
-    // Extract the part before @
+
     final emailParts = email.split('@');
     if (emailParts.isEmpty) return email;
-    
+
     final localPart = emailParts[0];
-    // Split by dots and capitalize each part
+
     final nameParts = localPart.split('.');
     final capitalizedParts = nameParts.map((part) {
       if (part.isEmpty) return part;
       return part[0].toUpperCase() + part.substring(1).toLowerCase();
     }).toList();
-    
+
     return capitalizedParts.join(' ');
   }
 
   bool _userExists(String email) {
-    // ignore: use_build_context_synchronously
+
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     return userProvider.users.any(
       (user) => user.email.toLowerCase() == email.toLowerCase(),
@@ -1323,15 +1318,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final List<String> skippedEmails = [];
     final List<String> errorMessages = [];
 
-    // Ensure user list is loaded before checking for duplicates
-    // ignore: use_build_context_synchronously
+
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     if (userProvider.users.isEmpty) {
       onProgress('Loading existing users...');
       await userProvider.fetchUsers();
     }
 
-    // Filter out invalid emails and check for duplicates
+
     final validEmails = <String>[];
     for (final email in emails) {
       final trimmedEmail = email.trim();
@@ -1359,8 +1353,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       };
     }
 
-    // Process in batches to avoid overwhelming the API
-    // Batch size of 10 allows parallel processing while maintaining API stability
+
     const int batchSize = 10;
     int processedCount = 0;
     final totalEmails = validEmails.length;
@@ -1374,7 +1367,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         'Processing batch $batchNumber of $totalBatches (${processedCount + batch.length}/$totalEmails users)...',
       );
 
-      // Process batch in parallel
+
       final results = await Future.wait(
         batch.map((email) async {
           try {
@@ -1390,10 +1383,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             };
           }
         }),
-        eagerError: false, // Don't stop on first error
+        eagerError: false,
       );
 
-      // Process results
+
       for (final result in results) {
         if (result['success'] as bool) {
           successCount++;
@@ -1406,21 +1399,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         processedCount++;
       }
 
-      // Update progress
+
       onProgress(
         'Progress: $processedCount/$totalEmails users processed ($successCount created, $failureCount failed, $skippedCount skipped)',
       );
 
-      // Small delay between batches to avoid rate limiting
+
       if (i + batchSize < validEmails.length) {
         await Future.delayed(const Duration(milliseconds: 100));
       }
     }
 
-    // Final refresh of user list after all users are created
+
     if (successCount > 0) {
       onProgress('Refreshing user list...');
-      // ignore: use_build_context_synchronously
+
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       await userProvider.fetchUsers();
     }
@@ -1538,8 +1531,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   ...failureEmails.asMap().entries.take(10).map((entry) {
                     final index = entry.key;
                     final email = entry.value;
-                    final errorMsg = index < errorMessages.length 
-                        ? errorMessages[index] 
+                    final errorMsg = index < errorMessages.length
+                        ? errorMessages[index]
                         : 'Unknown error';
                     return Padding(
                       padding: const EdgeInsets.only(left: 8.0, top: 4.0),
@@ -1558,8 +1551,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             Padding(
                               padding: const EdgeInsets.only(left: 8.0, top: 2.0),
                               child: Text(
-                                errorMsg.length > 50 
-                                    ? '${errorMsg.substring(0, 50)}...' 
+                                errorMsg.length > 50
+                                    ? '${errorMsg.substring(0, 50)}...'
                                     : errorMsg,
                                 style: const TextStyle(
                                   color: Colors.redAccent,
@@ -1664,7 +1657,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     String email, {
     bool skipRefresh = false,
   }) async {
-    // Split name into first and last name
+
     final nameParts = fullName.trim().split(' ');
     final firstName = nameParts.isNotEmpty ? nameParts[0] : '';
     final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
@@ -1672,13 +1665,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
 
     try {
-      // Step 1: Register the user via auth endpoint
+
       final registerResponse = await http.post(
         Uri.parse(ApiConfig.authRegisterEndpoint),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'email': email,
-          'password': 'password', // Default password
+          'password': 'password',
           'name': fullName,
           'firstName': firstName,
           'lastName': lastName,
@@ -1701,7 +1694,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         throw Exception('User created but no ID returned');
       }
 
-      // Step 2: Prepare user data and onboarding data
+
       final Map<String, dynamic> userData = {
         'email': email,
         'password': 'password',
@@ -1734,25 +1727,25 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         if (adminEmail.isNotEmpty) 'admin': {'approved': adminEmail},
       };
 
-      // Step 3: Sync to PDH
+
       try {
         await syncUserToPDH(userData, onboardingData, uid);
       } catch (e) {
         debugPrint('PDH sync failed for new user: $e');
-        // Continue even if PDH sync fails
+
       }
 
-      // Step 4: Sync to Skills Heatmap
+
       try {
         await syncUserToSkillsHeatmap(userData, onboardingData, uid);
       } catch (e) {
         debugPrint('Skills Heatmap sync failed for new user: $e');
-        // Continue even if Skills Heatmap sync fails
+
       }
 
-      // Step 5: Refresh user list (skip during batch processing)
+
       if (!skipRefresh) {
-        // ignore: use_build_context_synchronously
+
         final userProvider = Provider.of<UserProvider>(context, listen: false);
         await userProvider.fetchUsers();
 
@@ -1898,7 +1891,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       _isSelectionMode = false;
     });
 
-    // Show loading indicator
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1916,7 +1909,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final List<String> failedUserIds = [];
     final List<String> errorMessages = [];
 
-    // Delete users in batches
+
     const int batchSize = 10;
     for (int i = 0; i < userIds.length; i += batchSize) {
       final batch = userIds.skip(i).take(batchSize).toList();
@@ -1948,23 +1941,22 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         }
       }
 
-      // Small delay between batches
+
       if (i + batchSize < userIds.length) {
         await Future.delayed(const Duration(milliseconds: 100));
       }
     }
 
-    // Refresh user list
-    // ignore: use_build_context_synchronously
+
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     await userProvider.fetchUsers(forceRefresh: true);
 
-    // Clear selection
+
     setState(() {
       _selectedUserIds.clear();
     });
 
-    // Show result
+
     if (mounted) {
       if (failureCount == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1999,7 +1991,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Future<void> _deleteUser(String userId) async {
     try {
-      // Delete from users collection
+
       final response = await http.delete(
         Uri.parse(ApiConfig.deleteUserEndpoint(userId)),
         headers: {'Content-Type': 'application/json'},
@@ -2012,7 +2004,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         );
       }
 
-      // The backend should handle deletion from both users and onboarding collections
+
       debugPrint('Successfully deleted user $userId');
     } catch (e) {
       debugPrint('Error deleting user $userId: $e');

@@ -1,0 +1,239 @@
+================================================================================
+CODE CLEANUP SCRIPTS - USAGE GUIDE
+================================================================================
+
+This folder contains scripts to automatically remove comments from Dart and 
+Python source code files.
+
+SCRIPTS INCLUDED:
+-----------------
+1. cleanup_dart_comments.py    - Removes comments from Dart (.dart) files
+2. cleanup_python_comments.py  - Removes comments from Python (.py) files
+3. cleanup_all.ps1             - PowerShell script to clean all files at once
+4. cleanup_all.sh               - Bash script to clean all files at once (Linux/Mac)
+
+WHAT GETS REMOVED:
+------------------
+Dart Files:
+  - Single-line comments: // comment text
+  - Multi-line comments: /* comment text */
+  - Inline comments: code // comment
+  - Empty comment lines
+
+Python Files:
+  - Single-line comments: # comment text
+  - Inline comments: code # comment
+  - Empty comment lines
+  - NOTE: Docstrings (triple-quoted strings) are PRESERVED
+  - NOTE: Shebang lines (#!) and encoding declarations are PRESERVED
+
+WHAT IS PRESERVED:
+------------------
+  - All code functionality
+  - String literals (comments inside strings are not removed)
+  - Python docstrings (""" ... """)
+  - Shebang lines (#!/usr/bin/env python)
+  - Encoding declarations (# -*- coding: utf-8 -*-)
+  - Code structure and formatting
+
+================================================================================
+HOW TO RUN THE SCRIPTS
+================================================================================
+
+PREREQUISITES:
+--------------
+- Python 3.x must be installed on your system
+- You must be in the project root directory when running these scripts
+
+CURRENT DIRECTORY PATH:
+-----------------------
+C:\apps\pdh\Personal-Development-Hub-Android_Build
+
+METHOD 1: Clean Individual Files
+---------------------------------
+Navigate to the project root directory, then run:
+
+For Dart files:
+  python code_cleanup\cleanup_dart_comments.py lib\screens\analytics_screen.dart
+
+For Python files:
+  python code_cleanup\cleanup_python_comments.py backend\app.py
+
+METHOD 2: Clean Multiple Files at Once
+---------------------------------------
+For Dart files (list all files):
+  python code_cleanup\cleanup_dart_comments.py lib\screens\analytics_screen.dart lib\screens\auth_screen.dart lib\screens\dashboard_screen.dart
+
+For Python files (list all files):
+  python code_cleanup\cleanup_python_comments.py backend\fastapi_app.py backend\app.py backend\token_utils.py
+
+METHOD 3: Use the Batch Script (Recommended)
+---------------------------------------------
+PowerShell (Windows):
+  cd C:\apps\pdh\Personal-Development-Hub-Android_Build
+  .\code_cleanup\cleanup_all.ps1
+
+Bash (Linux/Mac):
+  cd /path/to/Personal-Development-Hub-Android_Build
+  bash code_cleanup/cleanup_all.sh
+
+METHOD 4: Clean All Screen Files
+---------------------------------
+To clean all Dart screen files at once:
+
+  python code_cleanup\cleanup_dart_comments.py ^
+    lib\screens\analytics_screen.dart ^
+    lib\screens\assets_screen.dart ^
+    lib\screens\auth_screen.dart ^
+    lib\screens\dashboard_screen.dart ^
+    lib\screens\entity_management_screen.dart ^
+    lib\screens\home_screen.dart ^
+    lib\screens\manual_login_screen.dart ^
+    lib\screens\khono_bot.dart ^
+    lib\screens\landing_screen.dart ^
+    lib\screens\lobby_screen.dart ^
+    lib\screens\module_access_screen.dart ^
+    lib\screens\module_screen.dart ^
+    lib\screens\onboarding_screen.dart ^
+    lib\screens\profile_screen.dart ^
+    lib\screens\project_data_screen.dart ^
+    lib\screens\projects_screen.dart ^
+    lib\screens\reference_data_screen.dart ^
+    lib\screens\welcome_screen.dart ^
+    lib\screens\resource_allocation_screen.dart ^
+    lib\screens\time_keeping_screen.dart ^
+    lib\screens\user_management_screen.dart
+
+To clean all Python backend files at once:
+
+  python code_cleanup\cleanup_python_comments.py ^
+    backend\fastapi_app.py ^
+    backend\format_credentials_for_render.py ^
+    backend\app.py ^
+    backend\token_utils.py ^
+    backend\test_config.py ^
+    backend\config.py
+
+================================================================================
+DIRECTORY STRUCTURE
+================================================================================
+
+Project Root:
+  C:\apps\pdh\Personal-Development-Hub-Android_Build\
+    ├── code_cleanup\              (this folder)
+    │   ├── cleanup_dart_comments.py
+    │   ├── cleanup_python_comments.py
+    │   ├── cleanup_all.ps1
+    │   ├── cleanup_all.sh
+    │   └── cleanup.txt            (this file)
+    ├── lib\
+    │   └── screens\               (Dart files to clean)
+    │       ├── analytics_screen.dart
+    │       ├── assets_screen.dart
+    │       ├── auth_screen.dart
+    │       └── ... (other screen files)
+    └── backend\                   (Python files to clean)
+        ├── fastapi_app.py
+        ├── app.py
+        ├── token_utils.py
+        └── ... (other Python files)
+
+================================================================================
+EXAMPLES
+================================================================================
+
+Example 1: Clean a single Dart file
+------------------------------------
+  cd C:\apps\pdh\Personal-Development-Hub-Android_Build
+  python code_cleanup\cleanup_dart_comments.py lib\screens\auth_screen.dart
+
+  Output:
+    Cleaned: lib\screens\auth_screen.dart
+    Total files cleaned: 1
+
+Example 2: Clean a single Python file
+--------------------------------------
+  cd C:\apps\pdh\Personal-Development-Hub-Android_Build
+  python code_cleanup\cleanup_python_comments.py backend\app.py
+
+  Output:
+    Cleaned: backend\app.py
+    Total files cleaned: 1
+
+Example 3: Clean multiple files
+---------------------------------
+  cd C:\apps\pdh\Personal-Development-Hub-Android_Build
+  python code_cleanup\cleanup_dart_comments.py lib\screens\auth_screen.dart lib\screens\dashboard_screen.dart
+
+  Output:
+    Cleaned: lib\screens\auth_screen.dart
+    Cleaned: lib\screens\dashboard_screen.dart
+    Total files cleaned: 2
+
+Example 4: Use the batch script (PowerShell)
+---------------------------------------------
+  cd C:\apps\pdh\Personal-Development-Hub-Android_Build
+  .\code_cleanup\cleanup_all.ps1
+
+  Output:
+    Cleaning Dart screen files...
+    Cleaned: lib\screens\analytics_screen.dart
+    ...
+    Cleaning Python backend files...
+    Cleaned: backend\fastapi_app.py
+    ...
+    Cleanup complete!
+
+================================================================================
+IMPORTANT NOTES
+================================================================================
+
+1. BACKUP YOUR FILES: Always commit your changes to version control before
+   running cleanup scripts, or create a backup of your files.
+
+2. SAFE TO RUN MULTIPLE TIMES: The scripts only write files if changes are
+   detected. Running them multiple times is safe.
+
+3. PRESERVES FUNCTIONALITY: The scripts are designed to only remove comments
+   and preserve all code functionality, strings, and docstrings.
+
+4. EXCESSIVE BLANK LINES: The scripts normalize excessive blank lines (more
+   than 2 consecutive blank lines are reduced to 2).
+
+5. FILE PATHS: Always use relative paths from the project root directory.
+   The scripts expect to be run from the project root.
+
+6. WINDOWS VS LINUX: Use backslashes (\) for Windows paths and forward
+   slashes (/) for Linux/Mac paths in the command line.
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Problem: "python: command not found"
+Solution: Make sure Python 3.x is installed and added to your PATH.
+
+Problem: "No such file or directory"
+Solution: Make sure you're in the project root directory:
+  C:\apps\pdh\Personal-Development-Hub-Android_Build
+
+Problem: "Permission denied"
+Solution: Make sure the files are not open in another program or locked
+  by your IDE.
+
+Problem: Script runs but shows "No changes"
+Solution: The files may already be clean, or the comments were not
+  detected (e.g., comments inside strings are preserved).
+
+================================================================================
+SUPPORT
+================================================================================
+
+If you encounter any issues:
+1. Check that you're in the correct directory
+2. Verify Python is installed: python --version
+3. Ensure file paths are correct and files exist
+4. Check that files are not locked by other programs
+
+================================================================================
+
