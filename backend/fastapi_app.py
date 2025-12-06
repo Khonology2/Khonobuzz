@@ -739,23 +739,38 @@ async def register_user(user: UserRegister):
         print(f"[DEBUG] Department (from Pydantic): {department}")
         print(f"[DEBUG] Designation (from Pydantic): {designation}")
 
+        # Validate email domain - only allow @khonology.com
+        email_stripped = email.strip() if email else ''
+        if email_stripped and not email_stripped.lower().endswith('@khonology.com'):
+            return JSONResponse(
+                status_code=400, 
+                content={"error": "Only Khonology work emails (@khonology.com) are allowed"}
+            )
+
         if not email or not password or not full_name:
             # FastAPI handles validation automatically based on Pydantic model, but an explicit check for empty strings might still be useful if fields are optional in model but required in logic
             return JSONResponse(status_code=400, content={"error": "Email, password, and name required"})
 
+        # Normalize email to lowercase for consistent storage
+        normalized_email = email.lower().strip()
+        
         users_ref = db.collection('users')
-        query = users_ref.where('email', '==', email).limit(1)
-        existing_users = query.get() # Synchronous call
-
-        if existing_users:
-            return JSONResponse(status_code=409, content={"error": "User already exists"})
+        
+        # Check for existing user with case-insensitive email matching
+        all_users = users_ref.stream()
+        for user_doc in all_users:
+            doc_data = user_doc.to_dict()
+            doc_email = doc_data.get('email', '').strip() if doc_data.get('email') else ''
+            # Case-insensitive comparison
+            if doc_email.lower() == normalized_email:
+                return JSONResponse(status_code=409, content={"error": "User already exists"})
 
         # Ensure entity is always present, defaulting to empty string
         entity_value = user.entity if user.entity is not None else ''
         print(f"[DEBUG] Entity value for new user: '{entity_value}' (type: {type(entity_value)})")
         
         user_data = {
-            'email': email,
+            'email': normalized_email,  # Store normalized (lowercase) email
             'password': password,
             'name': full_name,
             'role': role,
@@ -786,7 +801,7 @@ async def register_user(user: UserRegister):
         try:
             encrypted_token = generate_and_encrypt_token(
                 user_id=user_id,
-                email=email,
+                email=normalized_email,
                 full_name=full_name,
                 roles=roles,
             )
@@ -797,18 +812,18 @@ async def register_user(user: UserRegister):
 
         onboarding_data = {
             'user_id': user_id,
-            'email': email,
+            'email': normalized_email,  # Store normalized (lowercase) email
             'name': first_name,
             'surname': last_name,
             'fullName': full_name.strip(),  # Add fullName field combining first_name and last_name
             'department': department,
             'designation': designation,
             'first_valid': datetime(2025, 9, 25, 0, 0, 0), # Specific date from user
-            'inserted_by': email,
+            'inserted_by': normalized_email,
             'last_valid': datetime(2039, 12, 31, 0, 0, 0), # Specific date from user
             'onboarding_id': user_id, # Using user_id as onboarding_id
             'status_id': "",
-            'updated_by': email,
+            'updated_by': normalized_email,
             'created_at': datetime.utcnow(),
             'updated_at': datetime.utcnow(),
             'entity': entity_value,  # Always include entity field, same as users collection
@@ -830,7 +845,7 @@ async def register_user(user: UserRegister):
             "message": "User created successfully",
             "user": {
                 "id": user_id,
-                "email": email,
+                "email": normalized_email,
                 "name": full_name,
                 "role": role
             }
@@ -1298,35 +1313,49 @@ async def login_user(user_login: UserLogin):
                 content={"error": "Email is required"}
             )
         
-        # Normalize email (lowercase and strip whitespace)
+        # Validate email domain - only allow @khonology.com
+        email_input = user_login.email.strip()
+        if not email_input.lower().endswith('@khonology.com'):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "Only Khonology work emails (@khonology.com) are allowed"}
+            )
+        
+        # Normalize email (lowercase and strip whitespace) for comparison
         normalized_email = user_login.email.lower().strip()
         info_log(f"Login attempt for email: {normalized_email}")
 
         users_ref = db.collection('users')
-        query = users_ref.where('email', '==', normalized_email).limit(1)
         
+        # Fetch all users and do case-insensitive email matching
+        # Firestore queries are case-sensitive, so we need to fetch and compare manually
         try:
-            users = query.get()
+            all_users = users_ref.stream()
+            user_data = None
+            user_id = None
+            stored_email = None
+            
+            # Find user with case-insensitive email match
+            for user_doc in all_users:
+                doc_data = user_doc.to_dict()
+                doc_email = doc_data.get('email', '').strip() if doc_data.get('email') else ''
+                # Case-insensitive comparison
+                if doc_email.lower() == normalized_email:
+                    user_data = doc_data
+                    user_id = user_doc.id
+                    stored_email = doc_email
+                    break
+            
+            if not user_data or not user_id:
+                print(f"[DEBUG] User not found: {normalized_email}")
+                return JSONResponse(status_code=404, content={"error": "User not found"})
+                
         except Exception as query_error:
             error_log(f"Firestore query error during login: {query_error}")
             return JSONResponse(
                 status_code=500,
                 content={"error": f"Database query failed: {str(query_error)}"}
             )
-
-        # Check if query returned any results
-        if not users or len(users) == 0:
-            print(f"[DEBUG] User not found: {normalized_email}")
-            return JSONResponse(status_code=404, content={"error": "User not found"})
-
-        user_data = users[0].to_dict()
-        user_id = users[0].id
-        
-        # Verify email matches (case-insensitive check)
-        stored_email = user_data.get('email', '').lower().strip() if user_data.get('email') else ''
-        if stored_email != normalized_email:
-            print(f"[DEBUG] Email mismatch: stored={stored_email}, requested={normalized_email}")
-            return JSONResponse(status_code=404, content={"error": "User not found"})
         # Authenticate user (e.g., check password) - REMOVED PASSWORD CHECK
         # if user_data['password'] != user_login.password:
         #     raise HTTPException(status_code=401, detail="Invalid credentials")

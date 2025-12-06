@@ -1,5 +1,6 @@
 // ignore_for_file: use_build_context_synchronously, dead_code
 
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart'; // Import for AAD OAuth
 import 'package:provider/provider.dart'; // Import for AuthProvider
@@ -485,8 +486,95 @@ class OnboardingScreenState extends State<OnboardingScreen>
                       });
                     },
                     onPressed: () async {
+                      // Validate email domain
+                      final email = _emailController.text.trim();
+                      if (email.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter your email address.'),
+                          ),
+                        );
+                        return;
+                      }
+                      
+                      // Check if email ends with @khonology.com (case-insensitive)
+                      if (!email.toLowerCase().endsWith('@khonology.com')) {
+                        // Show popup dialog for invalid email domain
+                        showDialog(
+                          context: context,
+                          barrierColor: Colors.black54,
+                          builder: (BuildContext context) {
+                            return Dialog(
+                              backgroundColor: Colors.transparent,
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF2C3E50).withOpacity(0.85),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24.0),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Text(
+                                          'Please use your correct work email',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontFamily: 'Poppins',
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        const Text(
+                                          'Only Khonology work emails (@khonology.com) are allowed.',
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                            fontFamily: 'Poppins',
+                                            fontSize: 14,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(height: 24),
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.of(context).pop();
+                                          },
+                                          style: TextButton.styleFrom(
+                                            backgroundColor: const Color(0xFFC10D00),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 32,
+                                              vertical: 12,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'OK',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontFamily: 'Poppins',
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                        return;
+                      }
+
                       final success = await context.read<AuthProvider>().login(
-                        _emailController.text,
+                        email,
                         firstName: _firstNameController.text,
                         lastName: _lastNameController.text,
                         department: _selectedDepartment ?? '',
