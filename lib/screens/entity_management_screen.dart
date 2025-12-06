@@ -94,7 +94,6 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       _updatingUserId = user.id;
     });
 
-
     final sanitizedEntity =
         (newEntity != null &&
             newEntity.trim().isNotEmpty &&
@@ -120,7 +119,6 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         );
       }
 
-
       final backendUser = decodedResp['user'] as Map<String, dynamic>?;
       final updatedEntity = backendUser != null
           ? (backendUser['entity'] as String?)?.isNotEmpty == true
@@ -132,9 +130,10 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         user.entity = updatedEntity;
       });
 
-
-      final userProvider = Provider.of<UserProvider>(context, listen: false);
-      userProvider.updateUser(user);
+      if (mounted) {
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+        userProvider.updateUser(user);
+      }
 
       final adminField = adminEmail.isNotEmpty
           ? {
@@ -143,7 +142,6 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           : null;
 
       try {
-
         await updatePDHUserPartial(
           user.id,
           {'entity': updatedEntity, if (adminField != null) ...adminField},
@@ -168,7 +166,6 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       }
 
       try {
-
         await updateSkillsHeatmapUserPartial(
           user.id,
           {'entity': updatedEntity, if (adminField != null) ...adminField},
@@ -179,7 +176,6 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         );
       } catch (e) {
         debugPrint('Skills Heatmap sync failed for entity update: $e');
-
       }
 
       if (mounted) {
@@ -367,23 +363,24 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         padding: const EdgeInsets.all(16.0),
         child: LayoutBuilder(
           builder: (context, constraints) {
-
             final availableWidth = constraints.maxWidth;
             final spacingWidth = 8.0 * 2;
             final columnWidth = (availableWidth - spacingWidth) / 3;
             final leftPadding = columnWidth * 0.12;
 
-
             final secondColumnWidth = columnWidth - leftPadding;
 
             return Row(
               children: [
-
                 SizedBox(
                   width: columnWidth,
                   child: Row(
                     children: [
-                      const Icon(Icons.person, size: 40.0, color: Colors.white54),
+                      const Icon(
+                        Icons.person,
+                        size: 40.0,
+                        color: Colors.white54,
+                      ),
                       const SizedBox(width: 12.0),
                       Flexible(
                         child: Column(
@@ -458,9 +455,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Flexible(
-                        child: _buildEntityChip(user.entity),
-                      ),
+                      Flexible(child: _buildEntityChip(user.entity)),
                       const SizedBox(width: 8.0),
                       Transform.rotate(
                         angle: isExpanded ? 3.14 : 0,
@@ -504,7 +499,6 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   }
 
   Widget _buildEntityPanel(ManagedUser user) {
-
     String? selectedEntity = (user.entity == null || user.entity!.isEmpty)
         ? _notAssignedValue
         : user.entity;
@@ -549,7 +543,6 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                 ),
                 onChanged: (value) {
                   setState(() {
-
                     if (value == _notAssignedValue) {
                       selectedEntity = _notAssignedValue;
                       user.entity = null;

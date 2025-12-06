@@ -1,9 +1,4 @@
-
-
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'dart:io' show Platform;
-import 'package:flutter_aad_oauth/model/config.dart';
 import 'auth_screen.dart';
 
 class LandingScreen extends StatefulWidget {
@@ -17,18 +12,15 @@ class _LandingScreenState extends State<LandingScreen>
     with TickerProviderStateMixin {
   double _logoOpacity = 0.0;
   late AnimationController _btnController;
-  Animation<Offset> _btnOffset =
-      const AlwaysStoppedAnimation<Offset>(Offset.zero);
+  Animation<Offset> _btnOffset = const AlwaysStoppedAnimation<Offset>(
+    Offset.zero,
+  );
   late AnimationController _pulseController;
-  Animation<double> _pulseScale =
-      const AlwaysStoppedAnimation<double>(1.0);
-  Animation<double> _ringRadius =
-      const AlwaysStoppedAnimation<double>(0.0);
-  Animation<double> _ringOpacity =
-      const AlwaysStoppedAnimation<double>(0.0);
+  Animation<double> _pulseScale = const AlwaysStoppedAnimation<double>(1.0);
+  Animation<double> _ringRadius = const AlwaysStoppedAnimation<double>(0.0);
+  Animation<double> _ringOpacity = const AlwaysStoppedAnimation<double>(0.0);
   late AnimationController _clickController;
-  Animation<double> _clickProgress =
-      const AlwaysStoppedAnimation<double>(0.0);
+  Animation<double> _clickProgress = const AlwaysStoppedAnimation<double>(0.0);
 
   @override
   void initState() {
@@ -40,12 +32,7 @@ class _LandingScreenState extends State<LandingScreen>
     _btnOffset = Tween<Offset>(
       begin: const Offset(0, 1.0),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _btnController,
-        curve: Curves.bounceOut,
-      ),
-    );
+    ).animate(CurvedAnimation(parent: _btnController, curve: Curves.bounceOut));
 
     _pulseController = AnimationController(
       vsync: this,
@@ -53,19 +40,29 @@ class _LandingScreenState extends State<LandingScreen>
     );
     _pulseScale = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.9, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween<double>(
+          begin: 0.9,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeOut)),   
         weight: 70,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.9)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 0.9,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 30,
       ),
     ]).animate(_pulseController);
     _ringRadius = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween<double>(begin: 0.0, end: 50.0), weight: 70),
-      TweenSequenceItem(tween: Tween<double>(begin: 50.0, end: 0.0), weight: 30),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 50.0),
+        weight: 70,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 50.0, end: 0.0),
+        weight: 30,
+      ),
     ]).animate(_pulseController);
     _ringOpacity = TweenSequence<double>([
       TweenSequenceItem(tween: Tween<double>(begin: 0.5, end: 0.0), weight: 70),
@@ -85,7 +82,6 @@ class _LandingScreenState extends State<LandingScreen>
       }
     });
 
-
     Future.delayed(const Duration(milliseconds: 500), () {
       setState(() {
         _logoOpacity = 1.0;
@@ -97,24 +93,10 @@ class _LandingScreenState extends State<LandingScreen>
     });
   }
 
-
-  static const String _tenantId =
-      'aacabed7-5b1f-403b-81ec-c4fbec6948d2';
-  static const String _clientId =
-      '3592de85-8d67-43ee-a2c6-66e3f92d8e3e';
-  static const String _redirectPath = '/auth.html';
-
-
-  static const String _androidRedirectUri =
-      'msauth://com.example.khonology_app/REPLACE_WITH_SIGNATURE_HASH';
-  static const String _iosRedirectUri =
-      'msauth.com.example.khonology-app://auth';
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          Colors.transparent,
+      backgroundColor: Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
@@ -128,15 +110,10 @@ class _LandingScreenState extends State<LandingScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-
-
               AnimatedOpacity(
                 opacity: _logoOpacity,
                 duration: const Duration(milliseconds: 1000),
-                child: Image.asset(
-                  'assets/images/khono.png',
-                  height: 150,
-                ),
+                child: Image.asset('assets/images/khono.png', height: 150),
               ),
               const SizedBox(height: 50),
               const Text(
@@ -164,64 +141,15 @@ class _LandingScreenState extends State<LandingScreen>
                 child: ScaleTransition(
                   scale: _pulseScale,
                   child: _buildLoginButton(
-                  text: 'GET STARTED',
-                  color: const Color(0xFFC10D00),
-                  onPressed: () {
-                    String redirectUri;
-
-                    if (kIsWeb) {
-                      final current = Uri.base;
-                      redirectUri = Uri(
-                        host: current.host,
-                        scheme: current.scheme,
-                        port: current.port,
-                        path: _redirectPath,
-                      ).toString();
-                    } else if (Platform.isAndroid) {
-                      if (_androidRedirectUri.contains(
-                        'REPLACE_WITH_SIGNATURE_HASH',
-                      )) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Android redirect URI not configured. Please set signature hash.',
-                            ),
-                          ),
-                        );
-                        return;
-                      }
-                      redirectUri = _androidRedirectUri;
-                    } else if (Platform.isIOS) {
-                      redirectUri = _iosRedirectUri;
-                    } else {
-
-                      final current = Uri.base;
-                      redirectUri = Uri(
-                        host: current.host,
-                        scheme: current.scheme,
-                        port: current.port,
-                        path: _redirectPath,
-                      ).toString();
-                    }
-
-
-                    final scope = 'openid profile email offline_access';
-                    final responseType = 'code';
-
-                    final Config aadConfig = Config(
-                      azureTenantId: _tenantId,
-                      clientId: _clientId,
-                      scope: scope,
-                      redirectUri: redirectUri,
-                      responseType: responseType,
-                    );
-
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const AuthScreen(),
-                      ),
-                    );
-                  },
+                    text: 'GET STARTED',
+                    color: const Color(0xFFC10D00),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const AuthScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -322,14 +250,22 @@ class _BubblesPainter extends CustomPainter {
       final y = (0.0 - size.height * (0.8 * p));
       final r = (size.height * 0.12) * (1.0 - p);
       paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
-      canvas.drawCircle(Offset(x * size.width, y + size.height * 0.1), r, paint);
+      canvas.drawCircle(
+        Offset(x * size.width, y + size.height * 0.1),
+        r,
+        paint,
+      );
     }
     for (final x in bottomXs) {
       final p = progress;
       final y = size.height + size.height * (0.8 * p);
       final r = (size.height * 0.12) * (1.0 - p);
       paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
-      canvas.drawCircle(Offset(x * size.width, y - size.height * 0.1), r, paint);
+      canvas.drawCircle(
+        Offset(x * size.width, y - size.height * 0.1),
+        r,
+        paint,
+      );
     }
   }
 

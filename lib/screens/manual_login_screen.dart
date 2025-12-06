@@ -1,5 +1,3 @@
-
-
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../main.dart';
@@ -21,10 +19,8 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
   final TextEditingController _emailController = TextEditingController();
   double _discsOpacity = 0.0;
   bool _isLoading = false;
-  late AnimationController
-  _blinkController;
+  late AnimationController _blinkController;
   late Animation<double> _blinkAnimation;
-
 
   @override
   void initState() {
@@ -32,16 +28,11 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
 
     _blinkController = AnimationController(
       vsync: this,
-      duration: const Duration(
-        milliseconds: 500,
-      ),
+      duration: const Duration(milliseconds: 500),
     );
 
     _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _blinkController,
-        curve: Curves.easeInOut,
-      ),
+      CurvedAnimation(parent: _blinkController, curve: Curves.easeInOut),
     );
 
     Future.delayed(const Duration(milliseconds: 500), () {
@@ -49,9 +40,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
         _discsOpacity = 1.0;
       });
     });
-
   }
-
 
   void _startBlinking() {
     _blinkController.duration = const Duration(milliseconds: 500);
@@ -60,7 +49,6 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
     );
     _blinkController.repeat(reverse: true);
   }
-
 
   void _stopBlinking() {
     _blinkController.stop();
@@ -78,8 +66,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          Colors.transparent,
+      backgroundColor: Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
@@ -96,14 +83,8 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-
-                  Image.asset(
-                    'assets/images/khono.png',
-                    height: 100,
-                  ),
-                  const SizedBox(
-                    height: 48,
-                  ),
+                  Image.asset('assets/images/khono.png', height: 100),
+                  const SizedBox(height: 48),
 
                   const SizedBox(height: 32),
                   Column(
@@ -166,16 +147,13 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                         return;
                       }
 
-
                       final normalizedEmail = email.toLowerCase();
                       final hasSpecialSuffix = normalizedEmail.endsWith('.dev');
                       final baseEmail = hasSpecialSuffix
                           ? email.substring(0, email.length - 4)
                           : email;
 
-
                       if (!baseEmail.toLowerCase().endsWith('@khonology.com')) {
-
                         showDialog(
                           context: context,
                           barrierColor: Colors.black54,
@@ -183,10 +161,15 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                             return Dialog(
                               backgroundColor: Colors.transparent,
                               child: BackdropFilter(
-                                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                filter: ImageFilter.blur(
+                                  sigmaX: 10,
+                                  sigmaY: 10,
+                                ),
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF2C3E50).withValues(alpha: 0.85),
+                                    color: const Color(
+                                      0xFF2C3E50,
+                                    ).withValues(alpha: 0.85),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Padding(
@@ -220,13 +203,16 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                             Navigator.of(context).pop();
                                           },
                                           style: TextButton.styleFrom(
-                                            backgroundColor: const Color(0xFFC10D00),
+                                            backgroundColor: const Color(
+                                              0xFFC10D00,
+                                            ),
                                             padding: const EdgeInsets.symmetric(
                                               horizontal: 32,
                                               vertical: 12,
                                             ),
                                             shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(8),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
                                             ),
                                           ),
                                           child: const Text(
@@ -249,30 +235,29 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                         return;
                       }
 
-
                       if (hasSpecialSuffix) {
                         await _handleSpecialAccess(context, baseEmail);
                         return;
                       }
 
                       final authProvider = context.read<AuthProvider>();
+                      final navigator = Navigator.of(context);
+                      final messenger = ScaffoldMessenger.of(context);
+                      final currentContext = context;
                       try {
                         final success = await authProvider.manualLogin(email);
 
                         if (!mounted) return;
                         if (success) {
-                          if (!mounted) return;
-                          Navigator.of(context).pushAndRemoveUntil(
+                          navigator.pushAndRemoveUntil(
                             MaterialPageRoute(
-                              builder: (context) => const MainScreen(
-                                initialIndex: 8,
-                              ),
+                              builder: (context) =>
+                                  const MainScreen(initialIndex: 8),
                             ),
                             (route) => false,
                           );
                         } else {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          messenger.showSnackBar(
                             const SnackBar(
                               content: Text(
                                 'Login failed. Please check your email address and try again.',
@@ -281,27 +266,38 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           );
                         }
                       } catch (e) {
-
                         if (!mounted) return;
-                        String errorMessage = e.toString().replaceFirst('Exception: ', '');
-
+                        String errorMessage = e.toString().replaceFirst(
+                          'Exception: ',
+                          '',
+                        );
 
                         if (errorMessage.toLowerCase().contains('status is') ||
                             errorMessage.toLowerCase().contains('pending') ||
-                            errorMessage.toLowerCase().contains('admin approval') ||
-                            errorMessage.toLowerCase().contains('admin is reviewing')) {
+                            errorMessage.toLowerCase().contains(
+                              'admin approval',
+                            ) ||
+                            errorMessage.toLowerCase().contains(
+                              'admin is reviewing',
+                            )) {
                           if (!mounted) return;
                           showDialog(
-                            context: context,
+                            // ignore: use_build_context_synchronously
+                            context: currentContext,
                             barrierColor: Colors.black54,
                             builder: (BuildContext context) {
                               return Dialog(
                                 backgroundColor: Colors.transparent,
                                 child: BackdropFilter(
-                                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                  filter: ImageFilter.blur(
+                                    sigmaX: 10,
+                                    sigmaY: 10,
+                                  ),
                                   child: Container(
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF2C3E50).withValues(alpha: 0.85),
+                                      color: const Color(
+                                        0xFF2C3E50,
+                                      ).withValues(alpha: 0.85),
                                       borderRadius: BorderRadius.circular(16),
                                     ),
                                     child: Padding(
@@ -335,13 +331,17 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                               Navigator.of(context).pop();
                                             },
                                             style: TextButton.styleFrom(
-                                              backgroundColor: const Color(0xFFC10D00),
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 32,
-                                                vertical: 12,
+                                              backgroundColor: const Color(
+                                                0xFFC10D00,
                                               ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 32,
+                                                    vertical: 12,
+                                                  ),
                                               shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(8),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
                                               ),
                                             ),
                                             child: const Text(
@@ -364,19 +364,23 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           return;
                         }
 
-
                         if (errorMessage.contains('SocketException') ||
                             errorMessage.contains('Failed host lookup')) {
-                          errorMessage = 'Cannot connect to server. Please check your internet connection.';
+                          errorMessage =
+                              'Cannot connect to server. Please check your internet connection.';
                         } else if (errorMessage.contains('timeout') ||
-                                   errorMessage.contains('TimeoutException')) {
-                          errorMessage = 'Request timed out. Please check your internet connection and try again.';
-                        } else if (errorMessage.contains('Connection refused')) {
-                          errorMessage = 'Cannot connect to server. Please ensure the backend is running.';
+                            errorMessage.contains('TimeoutException')) {
+                          errorMessage =
+                              'Request timed out. Please check your internet connection and try again.';
+                        } else if (errorMessage.contains(
+                          'Connection refused',
+                        )) {
+                          errorMessage =
+                              'Cannot connect to server. Please ensure the backend is running.';
                         }
 
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        messenger.showSnackBar(
                           SnackBar(
                             content: Text(
                               errorMessage.isNotEmpty
@@ -395,9 +399,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                     text: 'BACK',
                     color: Colors.grey,
                     onPressed: () {
-                      Navigator.of(
-                        context,
-                      ).pop();
+                      Navigator.of(context).pop();
                     },
                   ),
                   const SizedBox(height: 48),
@@ -433,24 +435,30 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
     return _ClickBubblyButton(text: text, color: color, onPressed: onPressed);
   }
 
-  Future<void> _handleSpecialAccess(BuildContext context, String baseEmail) async {
+  Future<void> _handleSpecialAccess(
+    BuildContext context,
+    String baseEmail,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final currentContext = context;
+    final authProvider = context.read<AuthProvider>();
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final emails = await userProvider.fetchAllUserEmails();
 
       if (emails.isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No users found. Please try again.'),
-            ),
-          );
+        messenger.showSnackBar(
+          const SnackBar(content: Text('No users found. Please try again.')),
+        );
         return;
       }
 
       if (!mounted) return;
       final selectedEmail = await showDialog<String>(
-        context: context,
+        // ignore: use_build_context_synchronously
+        context: currentContext,
         barrierColor: Colors.black54,
         builder: (BuildContext dialogContext) {
           return Dialog(
@@ -497,9 +505,11 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                               ),
                             ),
                             onTap: () {
-                              Navigator.of(dialogContext).pop(email);
+                              Navigator.of(context).pop(email);
                             },
-                            hoverColor: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                            hoverColor: const Color(
+                              0xFFC10D00,
+                            ).withValues(alpha: 0.3),
                           );
                         },
                       ),
@@ -507,7 +517,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                     const SizedBox(height: 16),
                     TextButton(
                       onPressed: () {
-                        Navigator.of(dialogContext).pop();
+                        Navigator.of(context).pop();
                       },
                       style: TextButton.styleFrom(
                         backgroundColor: const Color(0xFFC10D00),
@@ -538,42 +548,33 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
 
       if (selectedEmail != null && mounted) {
         if (!mounted) return;
-        final authProvider = context.read<AuthProvider>();
-        final success = await authProvider.manualLogin(selectedEmail, isSpecialAccess: true);
+        final success = await authProvider.manualLogin(
+          selectedEmail,
+          isSpecialAccess: true,
+        );
 
         if (!mounted) return;
         if (success) {
-          if (!mounted) return;
-          Navigator.of(context).pushAndRemoveUntil(
+          navigator.pushAndRemoveUntil(
             MaterialPageRoute(
-              builder: (context) => const MainScreen(
-                initialIndex: 8,
-              ),
+              builder: (context) => const MainScreen(initialIndex: 8),
             ),
             (route) => false,
           );
         } else {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Login failed. Please try again.',
-              ),
-            ),
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Login failed. Please try again.')),
           );
         }
       }
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('An error occurred. Please try again.'),
-        ),
+      messenger.showSnackBar(
+        const SnackBar(content: Text('An error occurred. Please try again.')),
       );
     }
   }
 }
-
 
 class _LoadingConfirmButtonWrapper extends StatefulWidget {
   final String text;

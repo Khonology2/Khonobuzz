@@ -1,5 +1,3 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
@@ -30,7 +28,6 @@ class AuthScreenState extends State<AuthScreen> {
       });
     });
 
-
     if (kIsWeb) {
       Future.delayed(const Duration(milliseconds: 100), () {
         _handleRedirectResult();
@@ -55,22 +52,19 @@ class AuthScreenState extends State<AuthScreen> {
             _isCheckingRedirect = false;
             return;
           }
-          final success = await context.read<AuthProvider>().login(
-            email,
-            role: null,
-          );
+          final authProvider = context.read<AuthProvider>();
+          final navigator = Navigator.of(context);
+          final messenger = ScaffoldMessenger.of(context);
+          final success = await authProvider.login(email, role: null);
           if (!mounted) {
             _isCheckingRedirect = false;
             return;
           }
 
           if (success) {
-
-            Navigator.of(context).pushAndRemoveUntil(
+            navigator.pushAndRemoveUntil(
               MaterialPageRoute(
-                builder: (context) => const MainScreen(
-                  initialIndex: 8,
-                ),
+                builder: (context) => const MainScreen(initialIndex: 8),
               ),
               (route) => false,
             );
@@ -80,7 +74,7 @@ class AuthScreenState extends State<AuthScreen> {
               _isCheckingRedirect = false;
               return;
             }
-            ScaffoldMessenger.of(context).showSnackBar(
+            messenger.showSnackBar(
               const SnackBar(
                 content: Text('Login failed. Please try again later.'),
               ),
@@ -92,7 +86,8 @@ class AuthScreenState extends State<AuthScreen> {
             _isCheckingRedirect = false;
             return;
           }
-          ScaffoldMessenger.of(context).showSnackBar(
+          final messenger = ScaffoldMessenger.of(context);
+          messenger.showSnackBar(
             const SnackBar(
               content: Text('Only khonology.com accounts are allowed'),
             ),
@@ -102,11 +97,11 @@ class AuthScreenState extends State<AuthScreen> {
         debugPrint('No redirect result found');
       }
     } catch (e, stackTrace) {
-
       debugPrint('Redirect result error: $e');
       debugPrint('Stack trace: $stackTrace');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Authentication error: ${e.toString()}'),
             duration: const Duration(seconds: 5),
@@ -121,8 +116,7 @@ class AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          Colors.transparent,
+      backgroundColor: Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
@@ -139,11 +133,7 @@ class AuthScreenState extends State<AuthScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-
-                  Image.asset(
-                    'assets/images/khono.png',
-                    height: 100,
-                  ),
+                  Image.asset('assets/images/khono.png', height: 100),
                   const SizedBox(height: 48),
 
                   const SizedBox(height: 32),
@@ -160,13 +150,14 @@ class AuthScreenState extends State<AuthScreen> {
                     text: 'MICROSOFT LOGIN',
                     color: const Color(0xFFC10D00),
                     onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(context);
+                      final authProvider = context.read<AuthProvider>();
                       try {
-
                         final provider = fb_auth.OAuthProvider('microsoft.com');
 
                         fb_auth.UserCredential credential;
                         if (kIsWeb) {
-
                           debugPrint(
                             'Initiating Microsoft sign-in redirect...',
                           );
@@ -184,27 +175,25 @@ class AuthScreenState extends State<AuthScreen> {
                             !email.toLowerCase().endsWith('@khonology.com')) {
                           await fb_auth.FirebaseAuth.instance.signOut();
                           if (!mounted) return;
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Only khonology.com accounts are allowed',
-                                ),
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Only khonology.com accounts are allowed',
                               ),
-                            );
-                          }
+                            ),
+                          );
                           return;
                         }
 
                         if (!mounted) return;
-                        final success = await context
-                            .read<AuthProvider>()
-                            .login(email, role: null);
+                        final success = await authProvider.login(
+                          email,
+                          role: null,
+                        );
                         if (!mounted) return;
 
                         if (!success) {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          messenger.showSnackBar(
                             const SnackBar(
                               content: Text(
                                 'Login failed. Please try again later.',
@@ -215,17 +204,16 @@ class AuthScreenState extends State<AuthScreen> {
                         }
 
                         if (!mounted) return;
-                        Navigator.of(context).pushAndRemoveUntil(
+                        navigator.pushAndRemoveUntil(
                           MaterialPageRoute(
-                            builder: (context) => const MainScreen(
-                              initialIndex: 8,
-                            ),
+                            builder: (context) =>
+                                const MainScreen(initialIndex: 8),
                           ),
                           (route) => false,
                         );
                       } catch (e) {
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        messenger.showSnackBar(
                           SnackBar(
                             content: Text('Microsoft sign-in failed: $e'),
                           ),
@@ -262,12 +250,8 @@ class AuthScreenState extends State<AuthScreen> {
                   AnimatedOpacity(
                     opacity: _discsOpacity,
                     duration: const Duration(milliseconds: 1000),
-                    child: Image.asset(
-                      'assets/images/discs.png',
-                      height: 80,
-                    ),
+                    child: Image.asset('assets/images/discs.png', height: 80),
                   ),
-
                 ],
               ),
             ),

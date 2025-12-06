@@ -29,7 +29,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 def debug_log(message: str):
-    """Log debug messages only if DEBUG mode is enabled"
+    """Log debug messages only if DEBUG mode is enabled"""
     if DEBUG_MODE:
         logger.debug(message)
         print(f"[DEBUG] {message}")
@@ -38,11 +38,11 @@ def error_log(message: str):
     logger.error(message)
     print(f"[ERROR] {message}")
 def info_log(message: str):
-    """Log info messages (always shown)"
+    """Log info messages (always shown)"""
     logger.info(message)
     print(f"[INFO] {message}")
 def derive_module_access_from_role(module_access: Optional[str], module_access_role: Optional[str]) -> Optional[str]:
-    """Derives moduleAccess from moduleAccessRole if moduleAccess is empty or incomplete"
+    """Derives moduleAccess from moduleAccessRole if moduleAccess is empty or incomplete"""
     if module_access and module_access.strip():
         return module_access
     if not module_access_role or not module_access_role.strip():
@@ -77,7 +77,7 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
         default_path: Default file path if no env var is set
     Returns:
         credentials.Certificate object
-    "
+    """
     json_env_var = f"{env_var_name}_JSON"
     json_str = os.environ.get(json_env_var)
     if json_str:
@@ -309,7 +309,7 @@ app.add_middleware(BrotliMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 @app.middleware("http")
 async def log_requests(request, call_next):
-    """Log all incoming requests"
+    """Log all incoming requests"""
     start_time = datetime.utcnow()
     info_log(f"→ {request.method} {request.url.path} from {request.client.host if request.client else 'unknown'}")
     if DEBUG_MODE and request.query_params:
@@ -320,7 +320,7 @@ async def log_requests(request, call_next):
     return response
 @app.get("/")
 async def root():
-    """Health check endpoint"
+    """Health check endpoint"""
     return {
         "status": "ok",
         "message": "Khonology Backend API is running",
@@ -329,7 +329,7 @@ async def root():
     }
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for monitoring"
+    """Health check endpoint for monitoring"""
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -1170,7 +1170,7 @@ async def get_user_token(email: str = Query(..., description="User email address
     Generate a fresh encrypted token for a user by email.
     This endpoint ALWAYS generates a new token to ensure it's fresh and not expired.
     The token is then synced to all relevant collections (main, PDH, Skills Heatmap).
-    "
+    """
     try:
         info_log(f"Token generation request for email: {email}")
         users_ref = db.collection('users')

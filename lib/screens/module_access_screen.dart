@@ -349,8 +349,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       });
 
 
-      final userProvider = Provider.of<UserProvider>(context, listen: false);
-      userProvider.updateUser(user);
+      if (mounted) {
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+        userProvider.updateUser(user);
+      }
 
       final adminField = adminEmail.isNotEmpty
           ? {

@@ -544,35 +544,6 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
       ),
     );
   }
-
-
-  Widget _buildLaunchButton({
-    required BuildContext context,
-    required String text,
-    required String url,
-  }) {
-    return ElevatedButton(
-      onPressed: () => _launchUrl(context, url),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: primaryAccent,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 16.0),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(50.0),
-        ),
-        textStyle: const TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-        elevation: 10,
-        shadowColor: primaryAccent.withValues(alpha: 0.5),
-      ),
-      child: Text(text),
-    );
-  }
-
-  Future<void> _launchUrl(BuildContext context, String url) async {
-
-
-    await _launchUrlFromContext(context, url, 'unknown');
-  }
 }
 
 

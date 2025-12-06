@@ -254,15 +254,29 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
 
 
-      final userProvider = Provider.of<UserProvider>(context, listen: false);
-      try {
-        final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
-        final backendUser = decoded?['user'] as Map<String, dynamic>?;
-        if (backendUser != null) {
+      if (mounted) {
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+        try {
+          final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
+          final backendUser = decoded?['user'] as Map<String, dynamic>?;
+          if (backendUser != null) {
 
-          final updatedUser = ManagedUser.fromApi(backendUser);
-          userProvider.updateUser(updatedUser);
-        } else {
+            final updatedUser = ManagedUser.fromApi(backendUser);
+            userProvider.updateUser(updatedUser);
+          } else {
+
+            final users = userProvider.users;
+            final index = users.indexWhere((u) => u.id == userId);
+            if (index != -1) {
+              users[index].role = newRole;
+              users[index].status = newStatus;
+              if (entity != null) {
+                users[index].entity = entity;
+              }
+              userProvider.updateUser(users[index]);
+            }
+          }
+        } catch (_) {
 
           final users = userProvider.users;
           final index = users.indexWhere((u) => u.id == userId);
@@ -275,21 +289,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             userProvider.updateUser(users[index]);
           }
         }
-      } catch (_) {
-
-        final users = userProvider.users;
-        final index = users.indexWhere((u) => u.id == userId);
-        if (index != -1) {
-          users[index].role = newRole;
-          users[index].status = newStatus;
-          if (entity != null) {
-            users[index].entity = entity;
-          }
-          userProvider.updateUser(users[index]);
-        }
       }
-    } catch (e) {
-
     } finally {
       setState(() {
         _updatingUserId = null;
@@ -881,7 +881,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       padding: const EdgeInsets.all(16.0),
       decoration: const BoxDecoration(
 
-        color: Color(0x801a1a1a1a),
+        color: Color(0x801A1A1A),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(16.0),
           bottomRight: Radius.circular(16.0),
@@ -1414,8 +1414,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     if (successCount > 0) {
       onProgress('Refreshing user list...');
 
-      final userProvider = Provider.of<UserProvider>(context, listen: false);
-      await userProvider.fetchUsers();
+      if (mounted) {
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+        await userProvider.fetchUsers();
+      }
     }
 
     return {
@@ -1744,7 +1746,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
 
 
-      if (!skipRefresh) {
+      if (!skipRefresh && mounted) {
 
         final userProvider = Provider.of<UserProvider>(context, listen: false);
         await userProvider.fetchUsers();
@@ -1948,13 +1950,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
 
 
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    await userProvider.fetchUsers(forceRefresh: true);
+    if (mounted) {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      await userProvider.fetchUsers(forceRefresh: true);
 
-
-    setState(() {
-      _selectedUserIds.clear();
-    });
+      setState(() {
+        _selectedUserIds.clear();
+      });
+    }
 
 
     if (mounted) {
