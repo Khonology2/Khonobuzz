@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi import status # Import status for HTTP status codes
 from fastapi import HTTPException # Import HTTPException for authentication errors
 from typing import Optional
+from pathlib import Path
 # Import token utilities
 # Note: PyDev may show "Unresolved import" warnings - these are false positives.
 # The functions exist in token_utils.py and work correctly at runtime.
@@ -198,17 +199,32 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
     
     if file_path:
         debug_log(f"Checking if file exists: {file_path}")
+        # Try absolute path first, then relative to script directory
+        script_dir = Path(__file__).parent.absolute()
+        env_file_path = script_dir / file_path if not os.path.isabs(file_path) else Path(file_path)
+        
         if os.path.exists(file_path):
             debug_log(f"Successfully loaded credentials from file: {file_path}")
             return credentials.Certificate(file_path)
+        elif env_file_path.exists():
+            debug_log(f"Successfully loaded credentials from file (script dir): {env_file_path}")
+            return credentials.Certificate(str(env_file_path))
         else:
-            error_log(f"File path specified in {path_env_var} does not exist: {file_path}")
+            error_log(f"File path specified in {path_env_var} does not exist: {file_path} (also tried: {env_file_path})")
     
-    # Third, try default file path
+    # Third, try default file path (resolve relative to script directory)
+    # Get the directory where this script is located
+    script_dir = Path(__file__).parent.absolute()
+    default_file_path = script_dir / default_path
+    
+    # Also try relative to current working directory (for backwards compatibility)
     debug_log(f"Checking default file path: {default_path}")
     if os.path.exists(default_path):
-        debug_log(f"Successfully loaded credentials from default file: {default_path}")
+        debug_log(f"Successfully loaded credentials from default file (relative path): {default_path}")
         return credentials.Certificate(default_path)
+    elif default_file_path.exists():
+        debug_log(f"Successfully loaded credentials from default file (script dir): {default_file_path}")
+        return credentials.Certificate(str(default_file_path))
     
     # If nothing works, raise an error with helpful message
     # List all environment variables that might be related (for debugging)
