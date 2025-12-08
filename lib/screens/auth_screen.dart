@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import 'manual_login_screen.dart';
 import '../main.dart';
 import 'onboarding_screen.dart';
+import '../widgets/floating_circles_particle_animation.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -17,6 +18,8 @@ class AuthScreen extends StatefulWidget {
 class AuthScreenState extends State<AuthScreen> {
   double _discsOpacity = 0.0;
   bool _isCheckingRedirect = false;
+  final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
+      GlobalKey();
 
   @override
   void initState() {
@@ -126,136 +129,148 @@ class AuthScreenState extends State<AuthScreen> {
             fit: BoxFit.cover,
           ),
         ),
-        child: Center(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset('assets/images/khono.png', height: 100),
-                  const SizedBox(height: 48),
+        child: Stack(
+          children: [
+            FloatingCirclesParticleAnimation(key: _animationKey),
+            Center(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Image.asset('assets/images/khono.png', height: 100),
+                      const SizedBox(height: 48),
 
-                  const SizedBox(height: 32),
-                  const Text(
-                    'Select Login Preference',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white,
-                      fontSize: 20,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  _buildLoginButton(
-                    text: 'MICROSOFT LOGIN',
-                    color: const Color(0xFFC10D00),
-                    onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final navigator = Navigator.of(context);
-                      final authProvider = context.read<AuthProvider>();
-                      try {
-                        final provider = fb_auth.OAuthProvider('microsoft.com');
+                      const SizedBox(height: 32),
+                      const Text(
+                        'Select Login Preference',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      _buildLoginButton(
+                        text: 'MICROSOFT LOGIN',
+                        color: const Color(0xFFC10D00),
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          final navigator = Navigator.of(context);
+                          final authProvider = context.read<AuthProvider>();
+                          try {
+                            final provider = fb_auth.OAuthProvider(
+                              'microsoft.com',
+                            );
 
-                        fb_auth.UserCredential credential;
-                        if (kIsWeb) {
-                          debugPrint(
-                            'Initiating Microsoft sign-in redirect...',
-                          );
-                          await fb_auth.FirebaseAuth.instance
-                              .signInWithRedirect(provider);
+                            fb_auth.UserCredential credential;
+                            if (kIsWeb) {
+                              debugPrint(
+                                'Initiating Microsoft sign-in redirect...',
+                              );
+                              await fb_auth.FirebaseAuth.instance
+                                  .signInWithRedirect(provider);
 
-                          return;
-                        } else {
-                          credential = await fb_auth.FirebaseAuth.instance
-                              .signInWithProvider(provider);
-                        }
+                              return;
+                            } else {
+                              credential = await fb_auth.FirebaseAuth.instance
+                                  .signInWithProvider(provider);
+                            }
 
-                        final email = credential.user?.email;
-                        if (email == null ||
-                            !email.toLowerCase().endsWith('@khonology.com')) {
-                          await fb_auth.FirebaseAuth.instance.signOut();
-                          if (!mounted) return;
-                          messenger.showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Only khonology.com accounts are allowed',
+                            final email = credential.user?.email;
+                            if (email == null ||
+                                !email.toLowerCase().endsWith(
+                                  '@khonology.com',
+                                )) {
+                              await fb_auth.FirebaseAuth.instance.signOut();
+                              if (!mounted) return;
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Only khonology.com accounts are allowed',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+
+                            if (!mounted) return;
+                            final success = await authProvider.login(
+                              email,
+                              role: null,
+                            );
+                            if (!mounted) return;
+
+                            if (!success) {
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Login failed. Please try again later.',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+
+                            if (!mounted) return;
+                            navigator.pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const MainScreen(initialIndex: 8),
                               ),
+                              (route) => false,
+                            );
+                          } catch (e) {
+                            if (!mounted) return;
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text('Microsoft sign-in failed: $e'),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      _buildLoginButton(
+                        text: 'MANUAL LOGIN',
+                        color: const Color(0xFFC10D00),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const ManualLoginScreen(),
                             ),
                           );
-                          return;
-                        }
-
-                        if (!mounted) return;
-                        final success = await authProvider.login(
-                          email,
-                          role: null,
-                        );
-                        if (!mounted) return;
-
-                        if (!success) {
-                          messenger.showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Login failed. Please try again later.',
-                              ),
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      _buildLoginButton(
+                        text: 'ONBOARD WITH US',
+                        color: Colors.grey,
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const OnboardingScreen(),
                             ),
                           );
-                          return;
-                        }
+                        },
+                      ),
+                      const SizedBox(height: 48),
 
-                        if (!mounted) return;
-                        navigator.pushAndRemoveUntil(
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                const MainScreen(initialIndex: 8),
-                          ),
-                          (route) => false,
-                        );
-                      } catch (e) {
-                        if (!mounted) return;
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text('Microsoft sign-in failed: $e'),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  _buildLoginButton(
-                    text: 'MANUAL LOGIN',
-                    color: const Color(0xFFC10D00),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const ManualLoginScreen(),
+                      AnimatedOpacity(
+                        opacity: _discsOpacity,
+                        duration: const Duration(milliseconds: 1000),
+                        child: Image.asset(
+                          'assets/images/discs.png',
+                          height: 80,
                         ),
-                      );
-                    },
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  _buildLoginButton(
-                    text: 'ONBOARD WITH US',
-                    color: Colors.grey,
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const OnboardingScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 48),
-
-                  AnimatedOpacity(
-                    opacity: _discsOpacity,
-                    duration: const Duration(milliseconds: 1000),
-                    child: Image.asset('assets/images/discs.png', height: 80),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -266,7 +281,12 @@ class AuthScreenState extends State<AuthScreen> {
     required Color color,
     VoidCallback? onPressed,
   }) {
-    return _ClickBubblyButton(text: text, color: color, onPressed: onPressed);
+    return _ClickBubblyButton(
+      text: text,
+      color: color,
+      onPressed: onPressed,
+      animationKey: _animationKey,
+    );
   }
 }
 
@@ -493,10 +513,12 @@ class _ClickBubblyButton extends StatefulWidget {
   final String text;
   final Color color;
   final VoidCallback? onPressed;
+  final GlobalKey<FloatingCirclesParticleAnimationState>? animationKey;
   const _ClickBubblyButton({
     required this.text,
     required this.color,
     required this.onPressed,
+    this.animationKey,
   });
 
   @override
@@ -542,9 +564,12 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
           child: MaterialButton(
             onPressed: () {
               _clickController.forward(from: 0);
+              if (widget.animationKey?.currentState != null) {
+                widget.animationKey!.currentState!.triggerParticleExplosion();
+              }
               if (widget.onPressed != null) {
                 Future.delayed(
-                  const Duration(milliseconds: 200),
+                  const Duration(milliseconds: 1200),
                   widget.onPressed!,
                 );
               }

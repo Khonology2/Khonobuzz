@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import 'package:provider/provider.dart';
 import '../widgets/animations/loading_button.dart';
+import '../widgets/floating_circles_particle_animation.dart';
 
 class ManualLoginScreen extends StatefulWidget {
   const ManualLoginScreen({super.key});
@@ -21,6 +22,8 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
   bool _isLoading = false;
   late AnimationController _blinkController;
   late Animation<double> _blinkAnimation;
+  final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
+      GlobalKey();
 
   @override
   void initState() {
@@ -76,352 +79,377 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
             fit: BoxFit.cover,
           ),
         ),
-        child: Center(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset('assets/images/khono.png', height: 100),
-                  const SizedBox(height: 48),
-
-                  const SizedBox(height: 32),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+        child: Stack(
+          children: [
+            FloatingCirclesParticleAnimation(key: _animationKey),
+            Center(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text(
-                        'Email Address',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white, fontSize: 16),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: 590,
-                        child: TextField(
-                          controller: _emailController,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontFamily: 'Poppins',
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'example@khonology.com',
-                            hintStyle: TextStyle(color: Colors.grey[600]),
-                            filled: true,
-                            fillColor: Colors.grey[800]!.withValues(alpha: 0.5),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(25.0),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16.0,
-                              vertical: 12.0,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-                  _LoadingConfirmButtonWrapper(
-                    text: 'CONFIRM',
-                    color: const Color(0xFFC10D00),
-                    onLoadingChanged: (isLoading) {
-                      setState(() {
-                        _isLoading = isLoading;
-                        if (isLoading) {
-                          _startBlinking();
-                        } else {
-                          _stopBlinking();
-                        }
-                      });
-                    },
-                    onPressed: () async {
-                      final email = _emailController.text.trim();
-                      if (email.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Please enter your email address.'),
-                          ),
-                        );
-                        return;
-                      }
+                      Image.asset('assets/images/khono.png', height: 100),
+                      const SizedBox(height: 48),
 
-                      final normalizedEmail = email.toLowerCase();
-                      final hasSpecialSuffix = normalizedEmail.endsWith('.dev');
-                      final baseEmail = hasSpecialSuffix
-                          ? email.substring(0, email.length - 4)
-                          : email;
-
-                      if (!baseEmail.toLowerCase().endsWith('@khonology.com')) {
-                        showDialog(
-                          context: context,
-                          barrierColor: Colors.black54,
-                          builder: (BuildContext context) {
-                            return Dialog(
-                              backgroundColor: Colors.transparent,
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 10,
-                                  sigmaY: 10,
+                      const SizedBox(height: 32),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'Email Address',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white, fontSize: 16),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: 590,
+                            child: TextField(
+                              controller: _emailController,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Poppins',
+                              ),
+                              decoration: InputDecoration(
+                                hintText: 'example@khonology.com',
+                                hintStyle: TextStyle(color: Colors.grey[600]),
+                                filled: true,
+                                fillColor: Colors.grey[800]!.withValues(
+                                  alpha: 0.5,
                                 ),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF2C3E50,
-                                    ).withValues(alpha: 0.85),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(24.0),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Text(
-                                          'Please use your correct work email',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontFamily: 'Poppins',
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                        const SizedBox(height: 16),
-                                        const Text(
-                                          'Only Khonology work emails (@khonology.com) are allowed.',
-                                          style: TextStyle(
-                                            color: Colors.white70,
-                                            fontFamily: 'Poppins',
-                                            fontSize: 14,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                        const SizedBox(height: 24),
-                                        TextButton(
-                                          onPressed: () {
-                                            Navigator.of(context).pop();
-                                          },
-                                          style: TextButton.styleFrom(
-                                            backgroundColor: const Color(
-                                              0xFFC10D00,
-                                            ),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 32,
-                                              vertical: 12,
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            'OK',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontFamily: 'Poppins',
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(25.0),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16.0,
+                                  vertical: 12.0,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
+                      _LoadingConfirmButtonWrapper(
+                        text: 'CONFIRM',
+                        color: const Color(0xFFC10D00),
+                        animationKey: _animationKey,
+                        onLoadingChanged: (isLoading) {
+                          setState(() {
+                            _isLoading = isLoading;
+                            if (isLoading) {
+                              _startBlinking();
+                            } else {
+                              _stopBlinking();
+                            }
+                          });
+                        },
+                        onPressed: () async {
+                          final email = _emailController.text.trim();
+                          if (email.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Please enter your email address.',
                                 ),
                               ),
                             );
-                          },
-                        );
-                        return;
-                      }
+                            return;
+                          }
 
-                      if (hasSpecialSuffix) {
-                        await _handleSpecialAccess(context, baseEmail);
-                        return;
-                      }
-
-                      final authProvider = context.read<AuthProvider>();
-                      final navigator = Navigator.of(context);
-                      final messenger = ScaffoldMessenger.of(context);
-                      final currentContext = context;
-                      try {
-                        final success = await authProvider.manualLogin(email);
-
-                        if (!mounted) return;
-                        if (success) {
-                          navigator.pushAndRemoveUntil(
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const MainScreen(initialIndex: 8),
-                            ),
-                            (route) => false,
+                          final normalizedEmail = email.toLowerCase();
+                          final hasSpecialSuffix = normalizedEmail.endsWith(
+                            '.dev',
                           );
-                        } else {
-                          messenger.showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Login failed. Please check your email address and try again.',
-                              ),
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        if (!mounted) return;
-                        String errorMessage = e.toString().replaceFirst(
-                          'Exception: ',
-                          '',
-                        );
+                          final baseEmail = hasSpecialSuffix
+                              ? email.substring(0, email.length - 4)
+                              : email;
 
-                        if (errorMessage.toLowerCase().contains('status is') ||
-                            errorMessage.toLowerCase().contains('pending') ||
-                            errorMessage.toLowerCase().contains(
-                              'admin approval',
-                            ) ||
-                            errorMessage.toLowerCase().contains(
-                              'admin is reviewing',
-                            )) {
-                          if (!mounted) return;
-                          showDialog(
-                            // ignore: use_build_context_synchronously
-                            context: currentContext,
-                            barrierColor: Colors.black54,
-                            builder: (BuildContext context) {
-                              return Dialog(
-                                backgroundColor: Colors.transparent,
-                                child: BackdropFilter(
-                                  filter: ImageFilter.blur(
-                                    sigmaX: 10,
-                                    sigmaY: 10,
-                                  ),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: const Color(
-                                        0xFF2C3E50,
-                                      ).withValues(alpha: 0.85),
-                                      borderRadius: BorderRadius.circular(16),
+                          if (!baseEmail.toLowerCase().endsWith(
+                            '@khonology.com',
+                          )) {
+                            showDialog(
+                              context: context,
+                              barrierColor: Colors.black54,
+                              builder: (BuildContext context) {
+                                return Dialog(
+                                  backgroundColor: Colors.transparent,
+                                  child: BackdropFilter(
+                                    filter: ImageFilter.blur(
+                                      sigmaX: 10,
+                                      sigmaY: 10,
                                     ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(24.0),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Text(
-                                            'Account Pending Approval',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontFamily: 'Poppins',
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                          const SizedBox(height: 16),
-                                          const Text(
-                                            'Your account is pending approval. The admin is reviewing your onboarding process. Please wait until your account is activated.',
-                                            style: TextStyle(
-                                              color: Colors.white70,
-                                              fontFamily: 'Poppins',
-                                              fontSize: 14,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                          const SizedBox(height: 24),
-                                          TextButton(
-                                            onPressed: () {
-                                              Navigator.of(context).pop();
-                                            },
-                                            style: TextButton.styleFrom(
-                                              backgroundColor: const Color(
-                                                0xFFC10D00,
-                                              ),
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 32,
-                                                    vertical: 12,
-                                                  ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                            ),
-                                            child: const Text(
-                                              'OK',
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0xFF2C3E50,
+                                        ).withValues(alpha: 0.85),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(24.0),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Text(
+                                              'Please use your correct work email',
                                               style: TextStyle(
                                                 color: Colors.white,
                                                 fontFamily: 'Poppins',
+                                                fontSize: 18,
                                                 fontWeight: FontWeight.bold,
                                               ),
+                                              textAlign: TextAlign.center,
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(height: 16),
+                                            const Text(
+                                              'Only Khonology work emails (@khonology.com) are allowed.',
+                                              style: TextStyle(
+                                                color: Colors.white70,
+                                                fontFamily: 'Poppins',
+                                                fontSize: 14,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                            const SizedBox(height: 24),
+                                            TextButton(
+                                              onPressed: () {
+                                                Navigator.of(context).pop();
+                                              },
+                                              style: TextButton.styleFrom(
+                                                backgroundColor: const Color(
+                                                  0xFFC10D00,
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 32,
+                                                      vertical: 12,
+                                                    ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                              ),
+                                              child: const Text(
+                                                'OK',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontFamily: 'Poppins',
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
+                                );
+                              },
+                            );
+                            return;
+                          }
+
+                          if (hasSpecialSuffix) {
+                            await _handleSpecialAccess(context, baseEmail);
+                            return;
+                          }
+
+                          final authProvider = context.read<AuthProvider>();
+                          final navigator = Navigator.of(context);
+                          final messenger = ScaffoldMessenger.of(context);
+                          final currentContext = context;
+                          try {
+                            final success = await authProvider.manualLogin(
+                              email,
+                            );
+
+                            if (!mounted) return;
+                            if (success) {
+                              navigator.pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const MainScreen(initialIndex: 8),
+                                ),
+                                (route) => false,
+                              );
+                            } else {
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Login failed. Please check your email address and try again.',
+                                  ),
                                 ),
                               );
-                            },
-                          );
-                          return;
-                        }
+                            }
+                          } catch (e) {
+                            if (!mounted) return;
+                            String errorMessage = e.toString().replaceFirst(
+                              'Exception: ',
+                              '',
+                            );
 
-                        if (errorMessage.contains('SocketException') ||
-                            errorMessage.contains('Failed host lookup')) {
-                          errorMessage =
-                              'Cannot connect to server. Please check your internet connection.';
-                        } else if (errorMessage.contains('timeout') ||
-                            errorMessage.contains('TimeoutException')) {
-                          errorMessage =
-                              'Request timed out. Please check your internet connection and try again.';
-                        } else if (errorMessage.contains(
-                          'Connection refused',
-                        )) {
-                          errorMessage =
-                              'Cannot connect to server. Please ensure the backend is running.';
-                        }
+                            if (errorMessage.toLowerCase().contains(
+                                  'status is',
+                                ) ||
+                                errorMessage.toLowerCase().contains(
+                                  'pending',
+                                ) ||
+                                errorMessage.toLowerCase().contains(
+                                  'admin approval',
+                                ) ||
+                                errorMessage.toLowerCase().contains(
+                                  'admin is reviewing',
+                                )) {
+                              if (!mounted) return;
+                              showDialog(
+                                // ignore: use_build_context_synchronously
+                                context: currentContext,
+                                barrierColor: Colors.black54,
+                                builder: (BuildContext context) {
+                                  return Dialog(
+                                    backgroundColor: Colors.transparent,
+                                    child: BackdropFilter(
+                                      filter: ImageFilter.blur(
+                                        sigmaX: 10,
+                                        sigmaY: 10,
+                                      ),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: const Color(
+                                            0xFF2C3E50,
+                                          ).withValues(alpha: 0.85),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                        ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(24.0),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Text(
+                                                'Account Pending Approval',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                              const SizedBox(height: 16),
+                                              const Text(
+                                                'Your account is pending approval. The admin is reviewing your onboarding process. Please wait until your account is activated.',
+                                                style: TextStyle(
+                                                  color: Colors.white70,
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 14,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                              const SizedBox(height: 24),
+                                              TextButton(
+                                                onPressed: () {
+                                                  Navigator.of(context).pop();
+                                                },
+                                                style: TextButton.styleFrom(
+                                                  backgroundColor: const Color(
+                                                    0xFFC10D00,
+                                                  ),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 32,
+                                                        vertical: 12,
+                                                      ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
+                                                        ),
+                                                  ),
+                                                ),
+                                                child: const Text(
+                                                  'OK',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontFamily: 'Poppins',
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                              return;
+                            }
 
-                        if (!mounted) return;
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              errorMessage.isNotEmpty
-                                  ? errorMessage
-                                  : 'Login failed. Please check your email address and try again.',
+                            if (errorMessage.contains('SocketException') ||
+                                errorMessage.contains('Failed host lookup')) {
+                              errorMessage =
+                                  'Cannot connect to server. Please check your internet connection.';
+                            } else if (errorMessage.contains('timeout') ||
+                                errorMessage.contains('TimeoutException')) {
+                              errorMessage =
+                                  'Request timed out. Please check your internet connection and try again.';
+                            } else if (errorMessage.contains(
+                              'Connection refused',
+                            )) {
+                              errorMessage =
+                                  'Cannot connect to server. Please ensure the backend is running.';
+                            }
+
+                            if (!mounted) return;
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  errorMessage.isNotEmpty
+                                      ? errorMessage
+                                      : 'Login failed. Please check your email address and try again.',
+                                ),
+                                backgroundColor: Colors.orange,
+                                duration: const Duration(seconds: 4),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      _buildButton(
+                        text: 'BACK',
+                        color: Colors.grey,
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                      const SizedBox(height: 48),
+
+                      AnimatedBuilder(
+                        animation: _blinkAnimation,
+                        builder: (context, child) {
+                          return Opacity(
+                            opacity: _isLoading
+                                ? _blinkAnimation.value * _discsOpacity
+                                : _discsOpacity,
+                            child: Image.asset(
+                              'assets/images/discs.png',
+                              height: 80,
                             ),
-                            backgroundColor: Colors.orange,
-                            duration: const Duration(seconds: 4),
-                          ),
-                        );
-                      }
-                    },
+                          );
+                        },
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  _buildButton(
-                    text: 'BACK',
-                    color: Colors.grey,
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                  ),
-                  const SizedBox(height: 48),
-
-                  AnimatedBuilder(
-                    animation: _blinkAnimation,
-                    builder: (context, child) {
-                      return Opacity(
-                        opacity: _isLoading
-                            ? _blinkAnimation.value * _discsOpacity
-                            : _discsOpacity,
-                        child: Image.asset(
-                          'assets/images/discs.png',
-                          height: 80,
-                        ),
-                      );
-                    },
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -432,7 +460,12 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
     required Color color,
     required VoidCallback onPressed,
   }) {
-    return _ClickBubblyButton(text: text, color: color, onPressed: onPressed);
+    return _ClickBubblyButton(
+      text: text,
+      color: color,
+      onPressed: onPressed,
+      animationKey: _animationKey,
+    );
   }
 
   Future<void> _handleSpecialAccess(
@@ -581,12 +614,14 @@ class _LoadingConfirmButtonWrapper extends StatefulWidget {
   final Color color;
   final Future<void> Function() onPressed;
   final ValueChanged<bool> onLoadingChanged;
+  final GlobalKey<FloatingCirclesParticleAnimationState>? animationKey;
 
   const _LoadingConfirmButtonWrapper({
     required this.text,
     required this.color,
     required this.onPressed,
     required this.onLoadingChanged,
+    this.animationKey,
   });
 
   @override
@@ -602,6 +637,10 @@ class _LoadingConfirmButtonWrapperState
       text: widget.text,
       color: widget.color,
       onPressed: () async {
+        if (widget.animationKey?.currentState != null) {
+          widget.animationKey!.currentState!.triggerParticleExplosion();
+        }
+        await Future.delayed(const Duration(milliseconds: 1200));
         widget.onLoadingChanged(true);
         try {
           await widget.onPressed();
@@ -619,10 +658,12 @@ class _ClickBubblyButton extends StatefulWidget {
   final String text;
   final Color color;
   final VoidCallback onPressed;
+  final GlobalKey<FloatingCirclesParticleAnimationState>? animationKey;
   const _ClickBubblyButton({
     required this.text,
     required this.color,
     required this.onPressed,
+    this.animationKey,
   });
 
   @override
@@ -668,8 +709,11 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
           child: MaterialButton(
             onPressed: () {
               _clickController.forward(from: 0);
+              if (widget.animationKey?.currentState != null) {
+                widget.animationKey!.currentState!.triggerParticleExplosion();
+              }
               Future.delayed(
-                const Duration(milliseconds: 200),
+                const Duration(milliseconds: 1200),
                 widget.onPressed,
               );
             },
