@@ -38,11 +38,9 @@ def error_log(message: str):
     logger.error(message)
     print(f"[ERROR] {message}")
 def info_log(message: str):
-    """Log info messages (always shown)"""
     logger.info(message)
     print(f"[INFO] {message}")
 def derive_module_access_from_role(module_access: Optional[str], module_access_role: Optional[str]) -> Optional[str]:
-    """Derives moduleAccess from moduleAccessRole if moduleAccess is empty or incomplete"""
     if module_access and module_access.strip():
         return module_access
     if not module_access_role or not module_access_role.strip():
