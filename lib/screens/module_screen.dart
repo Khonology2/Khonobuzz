@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 
-
 const Color primaryDark = Color(0xFF1F2937);
 const Color primaryAccent = Color(0xFFC10D00);
 
@@ -34,19 +33,16 @@ class _ModuleScreenState extends State<ModuleScreen> {
     final authProvider = context.read<AuthProvider>();
     final userProvider = context.read<UserProvider>();
 
-
     if (authProvider.userModuleAccess != null &&
         authProvider.userModuleAccess!.isNotEmpty) {
       return;
     }
-
 
     if (mounted) {
       setState(() {
         _isLoadingModuleAccess = true;
       });
     }
-
 
     String? cachedModuleAccess;
     if (userProvider.users.isNotEmpty && authProvider.userEmail != null) {
@@ -57,7 +53,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
         cachedModuleAccess = currentUser.moduleAccess;
         if (cachedModuleAccess == null || cachedModuleAccess.isEmpty) {
-
           final moduleAccessRole = currentUser.moduleAccessRole;
           if (moduleAccessRole != null && moduleAccessRole.isNotEmpty) {
             final parts = moduleAccessRole.split(',');
@@ -69,41 +64,41 @@ class _ModuleScreenState extends State<ModuleScreen> {
                   moduleNames.add('Personal Development Hub');
                 }
               } else if (trimmed.startsWith('Skills Heatmap')) {
-                if (!moduleNames.contains('Resource & Capacity Skills Heatmap')) {
+                if (!moduleNames.contains(
+                  'Resource & Capacity Skills Heatmap',
+                )) {
                   moduleNames.add('Resource & Capacity Skills Heatmap');
                 }
               } else if (trimmed.startsWith('Automated Recruitment Workflow')) {
                 if (!moduleNames.contains('Automated Recruitment Workflow')) {
                   moduleNames.add('Automated Recruitment Workflow');
                 }
-              } else if (trimmed.startsWith('Proposal & SOW Builder') || trimmed.startsWith('SOW Builder')) {
+              } else if (trimmed.startsWith('Proposal & SOW Builder') ||
+                  trimmed.startsWith('SOW Builder')) {
                 if (!moduleNames.contains('Proposal & SOW Builder')) {
                   moduleNames.add('Proposal & SOW Builder');
                 }
               }
             }
-            cachedModuleAccess = moduleNames.isEmpty ? null : moduleNames.join(',');
+            cachedModuleAccess = moduleNames.isEmpty
+                ? null
+                : moduleNames.join(',');
           }
         }
         if (cachedModuleAccess != null && cachedModuleAccess.isNotEmpty) {
-
           authProvider.setModuleAccess(cachedModuleAccess);
           debugPrint(
             '[ModuleScreen] Module access loaded from UserProvider cache',
           );
         }
-      } catch (_) {
-
-      }
+      } catch (_) {}
     }
-
 
     if (cachedModuleAccess == null || cachedModuleAccess.isEmpty) {
       await authProvider.fetchCurrentUserModuleAccess(
         preFetchedModuleAccess: cachedModuleAccess,
       );
     }
-
 
     if (authProvider.userToken == null) {
       authProvider.fetchUserToken();
@@ -137,7 +132,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 builder: (context, constraints) {
                   return Consumer<AuthProvider>(
                     builder: (context, authProvider, child) {
-
                       if (_isLoadingModuleAccess &&
                           authProvider.userModuleAccess == null) {
                         return const Center(
@@ -151,20 +145,26 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
                       final isAdmin =
                           authProvider.userRole?.toLowerCase() == 'admin';
-                      final hasPDHAccess = authProvider.hasModuleAccess('PDH') ||
-                          authProvider.hasModuleAccess('Personal Development Hub');
-                      final hasSkillsHeatmapAccess = authProvider
-                          .hasModuleAccess('Skills Heatmap') ||
-                          authProvider.hasModuleAccess('Resource & Capacity Skills Heatmap');
+                      final hasPDHAccess =
+                          authProvider.hasModuleAccess('PDH') ||
+                          authProvider.hasModuleAccess(
+                            'Personal Development Hub',
+                          );
+                      final hasSkillsHeatmapAccess =
+                          authProvider.hasModuleAccess('Skills Heatmap') ||
+                          authProvider.hasModuleAccess(
+                            'Resource & Capacity Skills Heatmap',
+                          );
                       final hasRecruitmentAccess =
                           authProvider.hasModuleAccess(
                             'Automated Recruitment Workflow',
                           ) ||
                           authProvider.hasModuleAccess('Recruitment');
                       final hasSOWBuilderAccess =
-                          authProvider.hasModuleAccess('Proposal & SOW Builder') ||
+                          authProvider.hasModuleAccess(
+                            'Proposal & SOW Builder',
+                          ) ||
                           authProvider.hasModuleAccess('SOW Builder');
-
 
                       final showPDH = isAdmin || hasPDHAccess;
                       final showSkillsHeatmap =
@@ -172,8 +172,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
                       final showRecruitment = isAdmin || hasRecruitmentAccess;
                       final showSOWBuilder = isAdmin || hasSOWBuilderAccess;
 
-
-                      if (!showPDH && !showSkillsHeatmap && !showRecruitment && !showSOWBuilder) {
+                      if (!showPDH &&
+                          !showSkillsHeatmap &&
+                          !showRecruitment &&
+                          !showSOWBuilder) {
                         return const Center(
                           child: Text(
                             'No module access assigned. Please contact your administrator.',
@@ -188,7 +190,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                       }
 
                       final List<Widget> cards = [];
-
 
                       final double calculatedCardWidth =
                           (constraints.maxWidth > 500
@@ -209,30 +210,61 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         );
                       }
 
-                      if (showSkillsHeatmap) {
+                      if (showSkillsHeatmap || showSOWBuilder) {
                         if (cards.isNotEmpty) {
-                          cards.add(const SizedBox(height: 18.0));
+                          cards.add(const SizedBox(width: 18.0));
+                        }
+
+                        final List<Widget> skillsHeatmapColumn = [];
+
+                        if (showSkillsHeatmap) {
+                          skillsHeatmapColumn.add(
+                            _buildModuleCard(
+                              context: context,
+                              cardWidth: calculatedCardWidth,
+                              titleLines: [
+                                'Resource',
+                                'Capacity &',
+                                'Skills heatmap',
+                              ],
+                              buttonText: 'Launch',
+                              url: 'https://resource-capacity.netlify.app/',
+                              moduleKey: 'skills_heatmap',
+                            ),
+                          );
+                        }
+
+                        if (showSOWBuilder) {
+                          if (showSkillsHeatmap) {
+                            skillsHeatmapColumn.add(
+                              const SizedBox(height: 18.0),
+                            );
+                          }
+
+                          skillsHeatmapColumn.add(
+                            _buildModuleCard(
+                              context: context,
+                              cardWidth: calculatedCardWidth,
+                              titleLines: ['Proposal &', 'SOW Builder'],
+                              buttonText: 'Launch',
+                              url: 'https://lukens-frontend.onrender.com',
+                              moduleKey: 'sow_builder',
+                            ),
+                          );
                         }
 
                         cards.add(
-                          _buildModuleCard(
-                            context: context,
-                            cardWidth: calculatedCardWidth,
-                            titleLines: [
-                              'Resource',
-                              'Capacity &',
-                              'Skills heatmap',
-                            ],
-                            buttonText: 'Launch',
-                            url: 'https://resource-capacity.netlify.app/',
-                            moduleKey: 'skills_heatmap',
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: skillsHeatmapColumn,
                           ),
                         );
                       }
 
                       if (showRecruitment) {
                         if (cards.isNotEmpty) {
-                          cards.add(const SizedBox(height: 18.0));
+                          cards.add(const SizedBox(width: 18.0));
                         }
 
                         cards.add(
@@ -251,30 +283,14 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         );
                       }
 
-                      if (showSOWBuilder) {
-                        if (cards.isNotEmpty) {
-                          cards.add(const SizedBox(height: 18.0));
-                        }
-
-                        cards.add(
-                          _buildModuleCard(
-                            context: context,
-                            cardWidth: calculatedCardWidth,
-                            titleLines: [
-                              'Proposal &',
-                              'SOW Builder',
-                            ],
-                            buttonText: 'Launch',
-                            url: 'https://lukens-frontend.onrender.com',
-                            moduleKey: 'sow_builder',
-                          ),
-                        );
-                      }
-
-
-                      return Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: cards,
+                      return SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: cards,
+                        ),
                       );
                     },
                   );
@@ -421,9 +437,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                             mainAxisSize: MainAxisSize.min,
                             children: widget.titleLines.map((line) {
                               return Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: 3.6,
-                                ),
+                                padding: const EdgeInsets.only(bottom: 3.6),
                                 child: Text(
                                   line,
                                   textAlign: TextAlign.center,
@@ -497,9 +511,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                 vertical: 14.4,
                               ),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  45.0,
-                                ),
+                                borderRadius: BorderRadius.circular(45.0),
                               ),
                               textStyle: const TextStyle(
                                 fontSize: 16.2,
@@ -545,7 +557,6 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
     );
   }
 }
-
 
 class _BouncingRedSpinner extends StatefulWidget {
   @override
@@ -593,7 +604,6 @@ class _BouncingRedSpinnerState extends State<_BouncingRedSpinner>
   }
 }
 
-
 Future<void> _saveLastAccessedTime(String moduleKey) async {
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -615,22 +625,17 @@ Future<String?> _getLastAccessedTime(String moduleKey) async {
     final difference = now.difference(lastAccessed);
 
     if (difference.inDays > 7) {
-
       return 'Last accessed: ${DateFormat('MMM d, yyyy').format(lastAccessed)}';
     } else if (difference.inDays > 0) {
-
       final days = difference.inDays;
       return 'Last accessed: $days ${days == 1 ? 'day' : 'days'} ago';
     } else if (difference.inHours > 0) {
-
       final hours = difference.inHours;
       return 'Last accessed: $hours ${hours == 1 ? 'hour' : 'hours'} ago';
     } else if (difference.inMinutes > 0) {
-
       final minutes = difference.inMinutes;
       return 'Last accessed: $minutes ${minutes == 1 ? 'minute' : 'minutes'} ago';
     } else {
-
       return 'Last accessed: Just now';
     }
   } catch (e) {
@@ -639,14 +644,12 @@ Future<String?> _getLastAccessedTime(String moduleKey) async {
   }
 }
 
-
 Future<void> _launchUrlFromContext(
   BuildContext context,
   String url,
   String moduleKey,
 ) async {
   try {
-
     String secureUrl = url.trim();
     if (secureUrl.startsWith('http://')) {
       secureUrl = secureUrl.replaceFirst('http://', 'https://');
@@ -654,23 +657,18 @@ Future<void> _launchUrlFromContext(
       secureUrl = 'https://$secureUrl';
     }
 
-
     final bool isPDHUrl =
         secureUrl.contains('pdh-web-app.onrender.com') ||
         secureUrl.contains('pdh');
-
 
     String? token;
     if (isPDHUrl) {
       final authProvider = context.read<AuthProvider>();
 
-
       if (authProvider.userEmail != null) {
         token = authProvider.userToken;
 
-
         if (token == null || token.isEmpty) {
-
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -682,7 +680,6 @@ Future<void> _launchUrlFromContext(
               ),
             );
           }
-
 
           await authProvider.fetchUserToken();
           token = authProvider.userToken;
@@ -703,13 +700,10 @@ Future<void> _launchUrlFromContext(
       }
     }
 
-
     Uri uri = Uri.parse(secureUrl);
     if (isPDHUrl && token != null && token.isNotEmpty) {
-
       uri = uri.replace(queryParameters: {'token': token});
     }
-
 
     debugPrint('[ModuleLaunch] Launching URL for $moduleKey: $uri');
 
@@ -720,7 +714,6 @@ Future<void> _launchUrlFromContext(
     );
     if (!context.mounted) return;
     if (launched) {
-
       await _saveLastAccessedTime(moduleKey);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
