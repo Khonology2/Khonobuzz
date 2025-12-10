@@ -5,7 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../utils/pdh_firebase.dart'
-    show updatePDHUserPartial, updateSkillsHeatmapUserPartial, syncUserToPDH, syncUserToSkillsHeatmap;
+    show
+        updatePDHUserPartial,
+        updateSkillsHeatmapUserPartial,
+        syncUserToPDH,
+        syncUserToSkillsHeatmap;
 import '../models/managed_user.dart';
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
@@ -22,7 +26,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   String? _updatingUserId;
   Timer? _debounceTimer;
   String _searchQuery = '';
-
 
   String? expandedUserId;
   bool _isSelectionMode = false;
@@ -74,7 +77,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     List<ManagedUser> users = userProvider.users;
     final query = _searchQuery.toLowerCase();
 
-
     if (query.isNotEmpty) {
       users = users.where((user) {
         return user.name.toLowerCase().contains(query) ||
@@ -83,18 +85,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }).toList();
     }
 
-
     if (_selectedStatus != null) {
       users = users.where((user) => user.status == _selectedStatus).toList();
     }
-
 
     if (_selectedDepartment != null) {
       users = users
           .where((user) => user.department == _selectedDepartment)
           .toList();
     }
-
 
     if (_selectedDesignation != null) {
       users = users
@@ -155,9 +154,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final isSpecialSession = authProvider.isSpecialSession;
 
     try {
-      final headers = <String, String>{
-        'Content-Type': 'application/json',
-      };
+      final headers = <String, String>{'Content-Type': 'application/json'};
       if (isSpecialSession) {
         headers['X-Session-Type'] = 'special';
       }
@@ -169,7 +166,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'role': newRole,
           'status': newStatus,
           'entity': entity,
-          if (adminEmail.isNotEmpty && !isSpecialSession) 'adminApproved': adminEmail,
+          if (adminEmail.isNotEmpty && !isSpecialSession)
+            'adminApproved': adminEmail,
         }),
       );
       if (response.statusCode != 200) {
@@ -200,7 +198,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           : null;
 
       try {
-
         await updatePDHUserPartial(
           userId,
           {
@@ -232,7 +229,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
 
       try {
-
         await updateSkillsHeatmapUserPartial(
           userId,
           {
@@ -250,9 +246,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         );
       } catch (e) {
         debugPrint('Skills Heatmap sync failed for user update: $e');
-
       }
-
 
       if (mounted) {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
@@ -260,11 +254,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
           final backendUser = decoded?['user'] as Map<String, dynamic>?;
           if (backendUser != null) {
-
             final updatedUser = ManagedUser.fromApi(backendUser);
             userProvider.updateUser(updatedUser);
           } else {
-
             final users = userProvider.users;
             final index = users.indexWhere((u) => u.id == userId);
             if (index != -1) {
@@ -277,7 +269,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             }
           }
         } catch (_) {
-
           final users = userProvider.users;
           final index = users.indexWhere((u) => u.id == userId);
           if (index != -1) {
@@ -372,7 +363,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           : null,
       body: Stack(
         children: [
-
           Positioned.fill(
             child: Image.asset(
               'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
@@ -683,9 +673,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0x80C10D00)
-              : const Color(0x801F2840),
+          color: isSelected ? const Color(0x80C10D00) : const Color(0x801F2840),
           borderRadius: BorderRadius.circular(16.0),
           border: isSelected
               ? Border.all(color: const Color(0xFFC10D00), width: 2.0)
@@ -694,20 +682,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         padding: const EdgeInsets.all(16.0),
         child: LayoutBuilder(
           builder: (context, constraints) {
-
-
             final availableWidth = constraints.maxWidth;
             final checkboxWidth = _isSelectionMode ? 48.0 : 0.0;
             final spacingWidth = 8.0 * 2;
-            final columnWidth = ((availableWidth - checkboxWidth) - spacingWidth) / 3;
+            final columnWidth =
+                ((availableWidth - checkboxWidth) - spacingWidth) / 3;
             final leftPadding = columnWidth * 0.12;
-
 
             final secondColumnWidth = columnWidth - leftPadding;
 
             return Row(
               children: [
-
                 if (_isSelectionMode) ...[
                   Checkbox(
                     value: isSelected,
@@ -880,7 +865,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: const BoxDecoration(
-
         color: Color(0x801A1A1A),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(16.0),
@@ -892,7 +876,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1114,19 +1097,31 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       controller: emailsController,
                       maxLines: 10,
                       minLines: 5,
-                      style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                      ),
                       decoration: InputDecoration(
                         labelText: 'Emails',
-                        labelStyle: const TextStyle(color: Colors.white70, fontFamily: 'Poppins'),
-                        hintText: 'email: user.name@khonology.com\nemail: another.user@khonology.com',
-                        hintStyle: const TextStyle(color: Colors.white54, fontFamily: 'Poppins'),
+                        labelStyle: const TextStyle(
+                          color: Colors.white70,
+                          fontFamily: 'Poppins',
+                        ),
+                        hintText:
+                            'email: user.name@khonology.com\nemail: another.user@khonology.com',
+                        hintStyle: const TextStyle(
+                          color: Colors.white54,
+                          fontFamily: 'Poppins',
+                        ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8.0),
                           borderSide: const BorderSide(color: Colors.white54),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8.0),
-                          borderSide: const BorderSide(color: Color(0xFFC10D00)),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFC10D00),
+                          ),
                         ),
                       ),
                     ),
@@ -1178,7 +1173,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             return;
                           }
 
-
                           final emails = _parseEmails(emailsText);
 
                           if (emails.isEmpty) {
@@ -1196,11 +1190,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
                           setDialogState(() {
                             isCreating = true;
-                            progressMessage = 'Creating ${emails.length} user(s)...';
+                            progressMessage =
+                                'Creating ${emails.length} user(s)...';
                           });
 
                           try {
-                            final result = await _createMultipleUsers(emails, (message) {
+                            final result = await _createMultipleUsers(emails, (
+                              message,
+                            ) {
                               if (dialogContext.mounted) {
                                 setDialogState(() {
                                   progressMessage = message;
@@ -1218,7 +1215,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 SnackBar(
                                   content: Text(
                                     'Error creating users: ${e.toString()}',
-                                    style: const TextStyle(fontFamily: 'Poppins'),
+                                    style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                    ),
                                   ),
                                   backgroundColor: Colors.red,
                                 ),
@@ -1243,7 +1242,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : const Text(
@@ -1267,14 +1268,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       line = line.trim();
       if (line.isEmpty) continue;
 
-
       if (line.toLowerCase().startsWith('email:')) {
         final email = line.substring(6).trim();
         if (email.isNotEmpty && email.contains('@')) {
           emails.add(email);
         }
       } else if (line.contains('@')) {
-
         emails.add(line);
       }
     }
@@ -1283,7 +1282,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   String _extractNameFromEmail(String email) {
-
     final emailParts = email.split('@');
     if (emailParts.isEmpty) return email;
 
@@ -1299,7 +1297,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   bool _userExists(String email) {
-
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     return userProvider.users.any(
       (user) => user.email.toLowerCase() == email.toLowerCase(),
@@ -1318,13 +1315,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final List<String> skippedEmails = [];
     final List<String> errorMessages = [];
 
-
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     if (userProvider.users.isEmpty) {
       onProgress('Loading existing users...');
       await userProvider.fetchUsers();
     }
-
 
     final validEmails = <String>[];
     for (final email in emails) {
@@ -1353,7 +1348,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       };
     }
 
-
     const int batchSize = 10;
     int processedCount = 0;
     final totalEmails = validEmails.length;
@@ -1367,7 +1361,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         'Processing batch $batchNumber of $totalBatches (${processedCount + batch.length}/$totalEmails users)...',
       );
 
-
       final results = await Future.wait(
         batch.map((email) async {
           try {
@@ -1376,16 +1369,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             return {'success': true, 'email': email, 'error': null};
           } catch (e) {
             debugPrint('Failed to create user $email: $e');
-            return {
-              'success': false,
-              'email': email,
-              'error': e.toString(),
-            };
+            return {'success': false, 'email': email, 'error': e.toString()};
           }
         }),
         eagerError: false,
       );
-
 
       for (final result in results) {
         if (result['success'] as bool) {
@@ -1399,17 +1387,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         processedCount++;
       }
 
-
       onProgress(
         'Progress: $processedCount/$totalEmails users processed ($successCount created, $failureCount failed, $skippedCount skipped)',
       );
-
 
       if (i + batchSize < validEmails.length) {
         await Future.delayed(const Duration(milliseconds: 100));
       }
     }
-
 
     if (successCount > 0) {
       onProgress('Refreshing user list...');
@@ -1498,17 +1483,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       fontSize: 12.0,
                     ),
                   ),
-                  ...successEmails.take(10).map((email) => Padding(
-                        padding: const EdgeInsets.only(left: 8.0, top: 4.0),
-                        child: Text(
-                          '• $email',
-                          style: const TextStyle(
-                            color: Colors.green,
-                            fontFamily: 'Poppins',
-                            fontSize: 11.0,
+                  ...successEmails
+                      .take(10)
+                      .map(
+                        (email) => Padding(
+                          padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                          child: Text(
+                            '• $email',
+                            style: const TextStyle(
+                              color: Colors.green,
+                              fontFamily: 'Poppins',
+                              fontSize: 11.0,
+                            ),
                           ),
                         ),
-                      )),
+                      ),
                   if (successEmails.length > 10)
                     Text(
                       '... and ${successEmails.length - 10} more',
@@ -1551,7 +1540,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           ),
                           if (errorMsg.isNotEmpty)
                             Padding(
-                              padding: const EdgeInsets.only(left: 8.0, top: 2.0),
+                              padding: const EdgeInsets.only(
+                                left: 8.0,
+                                top: 2.0,
+                              ),
                               child: Text(
                                 errorMsg.length > 50
                                     ? '${errorMsg.substring(0, 50)}...'
@@ -1643,10 +1635,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 backgroundColor: const Color(0xFFC10D00),
                 foregroundColor: Colors.white,
               ),
-              child: const Text(
-                'OK',
-                style: TextStyle(fontFamily: 'Poppins'),
-              ),
+              child: const Text('OK', style: TextStyle(fontFamily: 'Poppins')),
             ),
           ],
         );
@@ -1659,7 +1648,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     String email, {
     bool skipRefresh = false,
   }) async {
-
     final nameParts = fullName.trim().split(' ');
     final firstName = nameParts.isNotEmpty ? nameParts[0] : '';
     final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
@@ -1667,7 +1655,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
 
     try {
-
       final registerResponse = await http.post(
         Uri.parse(ApiConfig.authRegisterEndpoint),
         headers: {'Content-Type': 'application/json'},
@@ -1685,7 +1672,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
       if (registerResponse.statusCode != 201) {
         final errorBody = registerResponse.body;
-        throw Exception('Failed to create user: ${registerResponse.statusCode} - $errorBody');
+        throw Exception(
+          'Failed to create user: ${registerResponse.statusCode} - $errorBody',
+        );
       }
 
       final responseData = json.decode(registerResponse.body);
@@ -1695,7 +1684,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       if (uid.isEmpty) {
         throw Exception('User created but no ID returned');
       }
-
 
       final Map<String, dynamic> userData = {
         'email': email,
@@ -1729,25 +1717,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         if (adminEmail.isNotEmpty) 'admin': {'approved': adminEmail},
       };
 
-
       try {
         await syncUserToPDH(userData, onboardingData, uid);
       } catch (e) {
         debugPrint('PDH sync failed for new user: $e');
-
       }
-
 
       try {
         await syncUserToSkillsHeatmap(userData, onboardingData, uid);
       } catch (e) {
         debugPrint('Skills Heatmap sync failed for new user: $e');
-
       }
 
-
       if (!skipRefresh && mounted) {
-
         final userProvider = Provider.of<UserProvider>(context, listen: false);
         await userProvider.fetchUsers();
 
@@ -1840,17 +1822,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       fontSize: 12.0,
                     ),
                   ),
-                  ...selectedUsers.map((user) => Padding(
-                        padding: const EdgeInsets.only(left: 8.0, top: 4.0),
-                        child: Text(
-                          '• ${user.name} (${user.email})',
-                          style: const TextStyle(
-                            color: Colors.redAccent,
-                            fontFamily: 'Poppins',
-                            fontSize: 11.0,
-                          ),
+                  ...selectedUsers.map(
+                    (user) => Padding(
+                      padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                      child: Text(
+                        '• ${user.name} (${user.email})',
+                        style: const TextStyle(
+                          color: Colors.redAccent,
+                          fontFamily: 'Poppins',
+                          fontSize: 11.0,
                         ),
-                      )),
+                      ),
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -1860,10 +1844,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               onPressed: () => Navigator.of(context).pop(),
               child: const Text(
                 'Cancel',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontFamily: 'Poppins',
-                ),
+                style: TextStyle(color: Colors.white70, fontFamily: 'Poppins'),
               ),
             ),
             ElevatedButton(
@@ -1893,7 +1874,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       _isSelectionMode = false;
     });
 
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1909,8 +1889,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     int successCount = 0;
     int failureCount = 0;
     final List<String> failedUserIds = [];
+    final List<String> successfulUserIds = [];
     final List<String> errorMessages = [];
-
 
     const int batchSize = 10;
     for (int i = 0; i < userIds.length; i += batchSize) {
@@ -1923,11 +1903,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             return {'success': true, 'userId': userId, 'error': null};
           } catch (e) {
             debugPrint('Failed to delete user $userId: $e');
-            return {
-              'success': false,
-              'userId': userId,
-              'error': e.toString(),
-            };
+            return {'success': false, 'userId': userId, 'error': e.toString()};
           }
         }),
         eagerError: false,
@@ -1936,6 +1912,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       for (final result in results) {
         if (result['success'] as bool) {
           successCount++;
+          successfulUserIds.add(result['userId'] as String);
         } else {
           failureCount++;
           failedUserIds.add(result['userId'] as String);
@@ -1943,22 +1920,34 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         }
       }
 
-
       if (i + batchSize < userIds.length) {
         await Future.delayed(const Duration(milliseconds: 100));
       }
     }
 
+    // Immediately remove successfully deleted users from provider
+    if (successfulUserIds.isNotEmpty && mounted) {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      userProvider.removeUsers(successfulUserIds);
+    }
 
     if (mounted) {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
-      await userProvider.fetchUsers(forceRefresh: true);
 
+      // Clear local state if expanded user was deleted
+      final deletedUserIds = userIds
+          .where((id) => !failedUserIds.contains(id))
+          .toList();
       setState(() {
+        if (expandedUserId != null && deletedUserIds.contains(expandedUserId)) {
+          expandedUserId = null;
+        }
         _selectedUserIds.clear();
       });
-    }
 
+      // Refresh provider to ensure all screens have updated data
+      await userProvider.fetchUsers(forceRefresh: true);
+    }
 
     if (mounted) {
       if (failureCount == 0) {
@@ -1994,7 +1983,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Future<void> _deleteUser(String userId) async {
     try {
-
       final response = await http.delete(
         Uri.parse(ApiConfig.deleteUserEndpoint(userId)),
         headers: {'Content-Type': 'application/json'},
@@ -2006,7 +1994,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'Failed to delete user: ${response.statusCode} - $errorBody',
         );
       }
-
 
       debugPrint('Successfully deleted user $userId');
     } catch (e) {

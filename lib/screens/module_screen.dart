@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:ui' show ImageFilter;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,6 +48,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
       try {
         final currentUser = userProvider.users.firstWhere(
           (u) => u.email.toLowerCase() == authProvider.userEmail!.toLowerCase(),
+          orElse: () => throw StateError('Current user not found'),
         );
 
         cachedModuleAccess = currentUser.moduleAccess;
@@ -189,16 +189,21 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         );
                       }
 
-                      final List<Widget> cards = [];
-
+                      // Calculate card width to fit 3 widgets in top row with spacing
+                      // Account for: side padding (32), spacing between cards (36 for 2 gaps), and outer container padding (1.1x)
+                      final double availableWidth =
+                          constraints.maxWidth - 32 - 36;
+                      // Each card has outer container of cardWidth * 1.1, so: (cardWidth * 1.1 * 3) + 36 = availableWidth
                       final double calculatedCardWidth =
-                          (constraints.maxWidth > 500
-                              ? 500
-                              : constraints.maxWidth * 0.9) *
-                          0.9;
+                          ((availableWidth - 36) / (3 * 1.1)).clamp(
+                            200.0,
+                            400.0,
+                          );
 
+                      // Top row: 3 widgets
+                      final List<Widget> topRow = [];
                       if (showPDH) {
-                        cards.add(
+                        topRow.add(
                           _buildModuleCard(
                             context: context,
                             cardWidth: calculatedCardWidth,
@@ -209,65 +214,30 @@ class _ModuleScreenState extends State<ModuleScreen> {
                           ),
                         );
                       }
-
-                      if (showSkillsHeatmap || showSOWBuilder) {
-                        if (cards.isNotEmpty) {
-                          cards.add(const SizedBox(width: 18.0));
+                      if (showSkillsHeatmap) {
+                        if (topRow.isNotEmpty) {
+                          topRow.add(const SizedBox(width: 18.0));
                         }
-
-                        final List<Widget> skillsHeatmapColumn = [];
-
-                        if (showSkillsHeatmap) {
-                          skillsHeatmapColumn.add(
-                            _buildModuleCard(
-                              context: context,
-                              cardWidth: calculatedCardWidth,
-                              titleLines: [
-                                'Resource',
-                                'Capacity &',
-                                'Skills heatmap',
-                              ],
-                              buttonText: 'Launch',
-                              url: 'https://resource-capacity.netlify.app/',
-                              moduleKey: 'skills_heatmap',
-                            ),
-                          );
-                        }
-
-                        if (showSOWBuilder) {
-                          if (showSkillsHeatmap) {
-                            skillsHeatmapColumn.add(
-                              const SizedBox(height: 18.0),
-                            );
-                          }
-
-                          skillsHeatmapColumn.add(
-                            _buildModuleCard(
-                              context: context,
-                              cardWidth: calculatedCardWidth,
-                              titleLines: ['Proposal &', 'SOW Builder'],
-                              buttonText: 'Launch',
-                              url: 'https://lukens-frontend.onrender.com',
-                              moduleKey: 'sow_builder',
-                            ),
-                          );
-                        }
-
-                        cards.add(
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: skillsHeatmapColumn,
+                        topRow.add(
+                          _buildModuleCard(
+                            context: context,
+                            cardWidth: calculatedCardWidth,
+                            titleLines: [
+                              'Resource',
+                              'Capacity &',
+                              'Skills heatmap',
+                            ],
+                            buttonText: 'Launch',
+                            url: 'https://resource-capacity.netlify.app/',
+                            moduleKey: 'skills_heatmap',
                           ),
                         );
                       }
-
                       if (showRecruitment) {
-                        if (cards.isNotEmpty) {
-                          cards.add(const SizedBox(width: 18.0));
+                        if (topRow.isNotEmpty) {
+                          topRow.add(const SizedBox(width: 18.0));
                         }
-
-                        cards.add(
+                        topRow.add(
                           _buildModuleCard(
                             context: context,
                             cardWidth: calculatedCardWidth,
@@ -283,13 +253,62 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         );
                       }
 
-                      return SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Row(
+                      // Bottom row: 2 widgets (centered under gaps)
+                      final List<Widget> bottomRow = [];
+                      if (showSOWBuilder) {
+                        bottomRow.add(
+                          _buildModuleCard(
+                            context: context,
+                            cardWidth: calculatedCardWidth,
+                            titleLines: ['Proposal &', 'SOW Builder'],
+                            buttonText: 'Launch',
+                            url: 'https://lukens-frontend.onrender.com',
+                            moduleKey: 'sow_builder',
+                          ),
+                        );
+                      }
+                      // Always add Deliverable & Sprint Sign Off Hub
+                      if (bottomRow.isNotEmpty) {
+                        bottomRow.add(const SizedBox(width: 18.0));
+                      }
+                      bottomRow.add(
+                        _buildModuleCard(
+                          context: context,
+                          cardWidth: calculatedCardWidth,
+                          titleLines: [
+                            'Deliverables & Sprint',
+                            'Sign Off Hub',
+                          ],
+                          buttonText: 'Coming Soon',
+                          url: '',
+                          moduleKey: 'deliverable_sprint',
+                          isComingSoon: true,
+                        ),
+                      );
+
+                      return Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.center,
-                          children: cards,
+                          children: [
+                            if (topRow.isNotEmpty)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: topRow,
+                              ),
+                            if (topRow.isNotEmpty && bottomRow.isNotEmpty)
+                              const SizedBox(height: 18.0),
+                            if (bottomRow.isNotEmpty)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: bottomRow,
+                              ),
+                          ],
                         ),
                       );
                     },
@@ -311,6 +330,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
     required String buttonText,
     required String url,
     required String moduleKey,
+    bool isComingSoon = false,
   }) {
     return _HoverableModuleCard(
       context: context,
@@ -320,6 +340,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
       buttonText: buttonText,
       url: url,
       moduleKey: moduleKey,
+      isComingSoon: isComingSoon,
     );
   }
 }
@@ -332,6 +353,7 @@ class _HoverableModuleCard extends StatefulWidget {
   final String buttonText;
   final String url;
   final String moduleKey;
+  final bool isComingSoon;
 
   const _HoverableModuleCard({
     required this.context,
@@ -341,6 +363,7 @@ class _HoverableModuleCard extends StatefulWidget {
     required this.buttonText,
     required this.url,
     required this.moduleKey,
+    this.isComingSoon = false,
   });
 
   @override
@@ -385,23 +408,26 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) {
-        setState(() => _isHovered = true);
-        _animationController.forward();
-      },
-      onExit: (_) {
-        setState(() => _isHovered = false);
-        _animationController.reverse();
-      },
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: SizedBox(
-          width: widget.cardWidth,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16.0),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
+    return Container(
+      width: widget.cardWidth * 1.1,
+      height: 400,
+      padding: EdgeInsets.all(widget.cardWidth * 0.05),
+      child: MouseRegion(
+        onEnter: (_) {
+          setState(() => _isHovered = true);
+          _animationController.forward();
+        },
+        onExit: (_) {
+          setState(() => _isHovered = false);
+          _animationController.reverse();
+        },
+        child: ScaleTransition(
+          scale: _scaleAnimation,
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: widget.cardWidth,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16.0),
               child: Stack(
                 children: [
                   AnimatedContainer(
@@ -485,26 +511,32 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                           ],
                           const SizedBox(height: 28.8),
                           ElevatedButton(
-                            onPressed: _isLoading
+                            onPressed: widget.isComingSoon
                                 ? null
-                                : () async {
-                                    setState(() => _isLoading = true);
-                                    try {
-                                      await _launchUrlFromContext(
-                                        widget.context,
-                                        widget.url,
-                                        widget.moduleKey,
-                                      );
+                                : (_isLoading
+                                      ? null
+                                      : () async {
+                                          setState(() => _isLoading = true);
+                                          try {
+                                            await _launchUrlFromContext(
+                                              widget.context,
+                                              widget.url,
+                                              widget.moduleKey,
+                                            );
 
-                                      await _loadLastAccessed();
-                                    } finally {
-                                      if (mounted) {
-                                        setState(() => _isLoading = false);
-                                      }
-                                    }
-                                  },
+                                            await _loadLastAccessed();
+                                          } finally {
+                                            if (mounted) {
+                                              setState(
+                                                () => _isLoading = false,
+                                              );
+                                            }
+                                          }
+                                        }),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryAccent,
+                              backgroundColor: widget.isComingSoon
+                                  ? Colors.grey.shade600
+                                  : primaryAccent,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 36.0,
@@ -517,8 +549,10 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                 fontSize: 16.2,
                                 fontWeight: FontWeight.bold,
                               ),
-                              elevation: 10,
-                              shadowColor: primaryAccent.withValues(alpha: 0.5),
+                              elevation: widget.isComingSoon ? 0 : 10,
+                              shadowColor: widget.isComingSoon
+                                  ? Colors.transparent
+                                  : primaryAccent.withValues(alpha: 0.5),
                             ),
                             child: _isLoading
                                 ? SizedBox(

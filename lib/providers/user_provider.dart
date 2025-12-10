@@ -123,6 +123,24 @@ class UserProvider extends ChangeNotifier {
     }
   }
 
+  // Remove a single user from the cache
+  void removeUser(String userId) {
+    final initialLength = _users.length;
+    _users.removeWhere((u) => u.id == userId);
+    if (_users.length < initialLength) {
+      notifyListeners();
+    }
+  }
+
+  // Remove multiple users from the cache
+  void removeUsers(List<String> userIds) {
+    final initialLength = _users.length;
+    _users.removeWhere((u) => userIds.contains(u.id));
+    if (_users.length < initialLength) {
+      notifyListeners();
+    }
+  }
+
   // Refresh users in background (silent refresh)
   Future<void> refreshUsersInBackground() async {
     if (_isLoading) return;
@@ -181,7 +199,7 @@ class UserProvider extends ChangeNotifier {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>;
         final usersData = (decoded['users'] as List<dynamic>? ?? [])
             .cast<Map<String, dynamic>>();
-        
+
         return usersData
             .map((user) => (user['email'] as String? ?? '').trim())
             .where((email) => email.isNotEmpty)

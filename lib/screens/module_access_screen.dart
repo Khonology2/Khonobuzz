@@ -22,7 +22,11 @@ class ModuleAccessScreen extends StatefulWidget {
 class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   final TextEditingController _searchController = TextEditingController();
   final List<String> _moduleRoleOptionsPDH = ['Employee', 'Manager'];
-  final List<String> _moduleRoleOptionsRecruitment = ['Admin', 'Hiring Manager', 'Candidate'];
+  final List<String> _moduleRoleOptionsRecruitment = [
+    'Admin',
+    'Hiring Manager',
+    'Candidate',
+  ];
   final List<String> _moduleRoleOptionsSOWBuilder = ['Admin', 'Manager'];
   static const String _notAssignedValue = 'Not Assigned';
 
@@ -94,13 +98,14 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   }
 
   void _refreshRecruitmentRoleCache(ManagedUser user) {
-
     if (user.moduleAccessRole != null && user.moduleAccessRole!.isNotEmpty) {
       final parts = user.moduleAccessRole!.split(', ');
       for (var part in parts) {
         final trimmedPart = part.trim();
         if (trimmedPart.startsWith('Automated Recruitment Workflow - ')) {
-          final extractedRole = trimmedPart.replaceFirst('Automated Recruitment Workflow - ', '').trim();
+          final extractedRole = trimmedPart
+              .replaceFirst('Automated Recruitment Workflow - ', '')
+              .trim();
 
           final roleLower = extractedRole.toLowerCase();
           for (var option in _moduleRoleOptionsRecruitment) {
@@ -122,13 +127,14 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   }
 
   void _refreshSOWBuilderRoleCache(ManagedUser user) {
-
     if (user.moduleAccessRole != null && user.moduleAccessRole!.isNotEmpty) {
       final parts = user.moduleAccessRole!.split(', ');
       for (var part in parts) {
         final trimmedPart = part.trim();
         if (trimmedPart.startsWith('Proposal & SOW Builder - ')) {
-          final extractedRole = trimmedPart.replaceFirst('Proposal & SOW Builder - ', '').trim();
+          final extractedRole = trimmedPart
+              .replaceFirst('Proposal & SOW Builder - ', '')
+              .trim();
 
           final roleLower = extractedRole.toLowerCase();
           for (var option in _moduleRoleOptionsSOWBuilder) {
@@ -165,7 +171,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   ) {
     List<String> accessList = [];
     if (pdhSelected) accessList.add('Personal Development Hub');
-    if (skillsHeatmapSelected) accessList.add('Resource & Capacity Skills Heatmap');
+    if (skillsHeatmapSelected) {
+      accessList.add('Resource & Capacity Skills Heatmap');
+    }
     if (recruitmentSelected) accessList.add('Automated Recruitment Workflow');
     if (sowBuilderSelected) accessList.add('Proposal & SOW Builder');
 
@@ -189,14 +197,15 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
     List<String> accessList = [];
     if (pdhSelected) accessList.add('Personal Development Hub');
-    if (skillsHeatmapSelected) accessList.add('Resource & Capacity Skills Heatmap');
+    if (skillsHeatmapSelected) {
+      accessList.add('Resource & Capacity Skills Heatmap');
+    }
     if (recruitmentSelected) accessList.add('Automated Recruitment Workflow');
     if (sowBuilderSelected) accessList.add('Proposal & SOW Builder');
 
     final sanitizedModuleAccess = accessList.isEmpty
         ? ''
         : accessList.join(',');
-
 
     String sanitizedModuleRole = '';
     String sanitizedRecruitmentRole = '';
@@ -229,7 +238,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           : '';
     }
 
-
     List<String> combinedParts = [];
     if (pdhSelected && sanitizedModuleRole.isNotEmpty) {
       combinedParts.add('PDH - $sanitizedModuleRole');
@@ -240,7 +248,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       combinedParts.add('Skills Heatmap - Manager');
     }
     if (recruitmentSelected && sanitizedRecruitmentRole.isNotEmpty) {
-      combinedParts.add('Automated Recruitment Workflow - $sanitizedRecruitmentRole');
+      combinedParts.add(
+        'Automated Recruitment Workflow - $sanitizedRecruitmentRole',
+      );
     } else if (recruitmentSelected) {
       combinedParts.add('Automated Recruitment Workflow');
     }
@@ -275,7 +285,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         );
       }
 
-
       final backendUser = decodedResp['user'] as Map<String, dynamic>?;
       final updatedModuleAccess = backendUser != null
           ? (backendUser['moduleAccess'] as String?)?.isNotEmpty == true
@@ -295,19 +304,20 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                 : null
           : (combinedModuleAccess.isEmpty ? null : combinedModuleAccess);
 
-
       setState(() {
         user.moduleAccess = updatedModuleAccess;
         user.moduleRole = updatedModuleRole;
         user.moduleAccessRole = updatedModuleAccessRole;
 
-
-        if (updatedModuleAccessRole != null && updatedModuleAccessRole.isNotEmpty) {
+        if (updatedModuleAccessRole != null &&
+            updatedModuleAccessRole.isNotEmpty) {
           final parts = updatedModuleAccessRole.split(', ');
           for (var part in parts) {
             final trimmedPart = part.trim();
             if (trimmedPart.startsWith('Automated Recruitment Workflow - ')) {
-              final extractedRole = trimmedPart.replaceFirst('Automated Recruitment Workflow - ', '').trim();
+              final extractedRole = trimmedPart
+                  .replaceFirst('Automated Recruitment Workflow - ', '')
+                  .trim();
 
               final roleLower = extractedRole.toLowerCase();
               for (var option in _moduleRoleOptionsRecruitment) {
@@ -320,17 +330,18 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             }
           }
         } else if (!recruitmentSelected) {
-
           _selectedRecruitmentRoles[user.id] = _notAssignedValue;
         }
 
-
-        if (updatedModuleAccessRole != null && updatedModuleAccessRole.isNotEmpty) {
+        if (updatedModuleAccessRole != null &&
+            updatedModuleAccessRole.isNotEmpty) {
           final parts = updatedModuleAccessRole.split(', ');
           for (var part in parts) {
             final trimmedPart = part.trim();
             if (trimmedPart.startsWith('Proposal & SOW Builder - ')) {
-              final extractedRole = trimmedPart.replaceFirst('Proposal & SOW Builder - ', '').trim();
+              final extractedRole = trimmedPart
+                  .replaceFirst('Proposal & SOW Builder - ', '')
+                  .trim();
 
               final roleLower = extractedRole.toLowerCase();
               for (var option in _moduleRoleOptionsSOWBuilder) {
@@ -343,11 +354,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             }
           }
         } else if (!sowBuilderSelected) {
-
           _selectedSOWBuilderRoles[user.id] = _notAssignedValue;
         }
       });
-
 
       if (mounted) {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
@@ -361,7 +370,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           : null;
 
       try {
-
         await updatePDHUserPartial(
           user.id,
           {
@@ -393,7 +401,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       }
 
       try {
-
         await updateSkillsHeatmapUserPartial(
           user.id,
           {
@@ -411,7 +418,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         );
       } catch (e) {
         debugPrint('Skills Heatmap sync failed for module access update: $e');
-
       }
 
       if (mounted) {
@@ -539,6 +545,20 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   Widget _buildUserList() {
     final userProvider = Provider.of<UserProvider>(context);
 
+    // Clear expandedUserId if the expanded user no longer exists
+    if (expandedUserId != null && mounted) {
+      final userExists = userProvider.users.any((u) => u.id == expandedUserId);
+      if (!userExists) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              expandedUserId = null;
+            });
+          }
+        });
+      }
+    }
+
     if (userProvider.isLoading && userProvider.users.isEmpty) {
       return Center(
         child: Column(
@@ -590,7 +610,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       onTap: () {
         setState(() {
           if (!isExpanded) {
-
             expandedUserId = user.id;
             _refreshRecruitmentRoleCache(user);
             _refreshSOWBuilderRoleCache(user);
@@ -607,23 +626,24 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         padding: const EdgeInsets.all(16.0),
         child: LayoutBuilder(
           builder: (context, constraints) {
-
             final availableWidth = constraints.maxWidth;
             final spacingWidth = 8.0 * 2;
             final columnWidth = (availableWidth - spacingWidth) / 3;
             final leftPadding = columnWidth * 0.12;
 
-
             final secondColumnWidth = columnWidth - leftPadding;
 
             return Row(
               children: [
-
                 SizedBox(
                   width: columnWidth,
                   child: Row(
                     children: [
-                      const Icon(Icons.person, size: 40.0, color: Colors.white54),
+                      const Icon(
+                        Icons.person,
+                        size: 40.0,
+                        color: Colors.white54,
+                      ),
                       const SizedBox(width: 12.0),
                       Flexible(
                         child: Column(
@@ -815,7 +835,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   }
 
   Widget _buildModuleAccessPanel(ManagedUser user) {
-
     List<String> selectedModuleAccessList = [];
     if (user.moduleAccess != null && user.moduleAccess!.isNotEmpty) {
       selectedModuleAccessList = user.moduleAccess!
@@ -825,28 +844,27 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           .toList();
     }
 
-
-    bool pdhSelected = selectedModuleAccessList.contains('Personal Development Hub') ||
+    bool pdhSelected =
+        selectedModuleAccessList.contains('Personal Development Hub') ||
         selectedModuleAccessList.contains('PDH');
-    bool skillsHeatmapSelected = selectedModuleAccessList.contains(
-      'Resource & Capacity Skills Heatmap',
-    ) || selectedModuleAccessList.contains('Skills Heatmap');
+    bool skillsHeatmapSelected =
+        selectedModuleAccessList.contains(
+          'Resource & Capacity Skills Heatmap',
+        ) ||
+        selectedModuleAccessList.contains('Skills Heatmap');
     bool recruitmentSelected = selectedModuleAccessList.contains(
       'Automated Recruitment Workflow',
     );
-    bool sowBuilderSelected = selectedModuleAccessList.contains(
-      'Proposal & SOW Builder',
-    ) || selectedModuleAccessList.contains('SOW Builder');
-
+    bool sowBuilderSelected =
+        selectedModuleAccessList.contains('Proposal & SOW Builder') ||
+        selectedModuleAccessList.contains('SOW Builder');
 
     String? selectedModuleRole =
         (user.moduleRole == null || user.moduleRole!.isEmpty)
         ? _notAssignedValue
         : user.moduleRole;
 
-
     String? selectedRecruitmentRole = _selectedRecruitmentRoles[user.id];
-
 
     if (selectedRecruitmentRole == null) {
       selectedRecruitmentRole = _notAssignedValue;
@@ -855,7 +873,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         for (var part in parts) {
           final trimmedPart = part.trim();
           if (trimmedPart.startsWith('Automated Recruitment Workflow - ')) {
-            final extractedRole = trimmedPart.replaceFirst('Automated Recruitment Workflow - ', '').trim();
+            final extractedRole = trimmedPart
+                .replaceFirst('Automated Recruitment Workflow - ', '')
+                .trim();
 
             final roleLower = extractedRole.toLowerCase();
             for (var option in _moduleRoleOptionsRecruitment) {
@@ -865,7 +885,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               }
             }
 
-            if (selectedRecruitmentRole == _notAssignedValue && extractedRole.isNotEmpty) {
+            if (selectedRecruitmentRole == _notAssignedValue &&
+                extractedRole.isNotEmpty) {
               selectedRecruitmentRole = extractedRole;
             }
             break;
@@ -876,9 +897,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       _selectedRecruitmentRoles[user.id] = selectedRecruitmentRole;
     }
 
-
     String? selectedSOWBuilderRole = _selectedSOWBuilderRoles[user.id];
-
 
     if (selectedSOWBuilderRole == null) {
       selectedSOWBuilderRole = _notAssignedValue;
@@ -887,7 +906,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         for (var part in parts) {
           final trimmedPart = part.trim();
           if (trimmedPart.startsWith('Proposal & SOW Builder - ')) {
-            final extractedRole = trimmedPart.replaceFirst('Proposal & SOW Builder - ', '').trim();
+            final extractedRole = trimmedPart
+                .replaceFirst('Proposal & SOW Builder - ', '')
+                .trim();
 
             final roleLower = extractedRole.toLowerCase();
             for (var option in _moduleRoleOptionsSOWBuilder) {
@@ -897,7 +918,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               }
             }
 
-            if (selectedSOWBuilderRole == _notAssignedValue && extractedRole.isNotEmpty) {
+            if (selectedSOWBuilderRole == _notAssignedValue &&
+                extractedRole.isNotEmpty) {
               selectedSOWBuilderRole = extractedRole;
             }
             break;
@@ -919,11 +941,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       ),
       child: Column(
         children: [
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -958,8 +978,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
                         if (!pdhSelected &&
                             selectedModuleRole != _notAssignedValue) {
-
-                          if (!skillsHeatmapSelected && !recruitmentSelected && !sowBuilderSelected) {
+                          if (!skillsHeatmapSelected &&
+                              !recruitmentSelected &&
+                              !sowBuilderSelected) {
                             selectedModuleRole = _notAssignedValue;
                             user.moduleRole = null;
                           }
@@ -971,9 +992,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   ),
                 ),
               ),
-              const SizedBox(
-                width: 16.0,
-              ),
+              const SizedBox(width: 16.0),
 
               Expanded(
                 child: Container(
@@ -1045,7 +1064,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -1084,9 +1102,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   ),
                 ),
               ),
-              const SizedBox(
-                width: 16.0,
-              ),
+              const SizedBox(width: 16.0),
 
               Expanded(
                 child: Container(
@@ -1126,10 +1142,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       ),
                       onChanged: skillsHeatmapSelected
                           ? (value) {
-
-                              setState(() {
-
-                              });
+                              setState(() {});
                             }
                           : null,
                       items: <DropdownMenuItem<String?>>[
@@ -1154,7 +1167,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -1193,9 +1205,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   ),
                 ),
               ),
-              const SizedBox(
-                width: 16.0,
-              ),
+              const SizedBox(width: 16.0),
 
               Expanded(
                 child: Container(
@@ -1212,7 +1222,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String?>(
                       value: recruitmentSelected
-                          ? (_selectedRecruitmentRoles[user.id] ?? selectedRecruitmentRole)
+                          ? (_selectedRecruitmentRoles[user.id] ??
+                                selectedRecruitmentRole)
                           : _notAssignedValue,
                       isExpanded: true,
                       dropdownColor: const Color(0xFF2C3E50),
@@ -1228,14 +1239,17 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         ),
                       ),
                       style: TextStyle(
-                        color: recruitmentSelected ? Colors.white : Colors.white54,
+                        color: recruitmentSelected
+                            ? Colors.white
+                            : Colors.white54,
                         fontFamily: 'Poppins',
                       ),
                       onChanged: recruitmentSelected
                           ? (value) {
                               setState(() {
                                 if (value == _notAssignedValue) {
-                                  _selectedRecruitmentRoles[user.id] = _notAssignedValue;
+                                  _selectedRecruitmentRoles[user.id] =
+                                      _notAssignedValue;
                                 } else {
                                   _selectedRecruitmentRoles[user.id] = value;
                                 }
@@ -1265,7 +1279,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -1321,7 +1334,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String?>(
                       value: sowBuilderSelected
-                          ? (_selectedSOWBuilderRoles[user.id] ?? selectedSOWBuilderRole)
+                          ? (_selectedSOWBuilderRoles[user.id] ??
+                                selectedSOWBuilderRole)
                           : _notAssignedValue,
                       isExpanded: true,
                       dropdownColor: const Color(0xFF2C3E50),
@@ -1337,14 +1351,17 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         ),
                       ),
                       style: TextStyle(
-                        color: sowBuilderSelected ? Colors.white : Colors.white54,
+                        color: sowBuilderSelected
+                            ? Colors.white
+                            : Colors.white54,
                         fontFamily: 'Poppins',
                       ),
                       onChanged: sowBuilderSelected
                           ? (value) {
                               setState(() {
                                 if (value == _notAssignedValue) {
-                                  _selectedSOWBuilderRoles[user.id] = _notAssignedValue;
+                                  _selectedSOWBuilderRoles[user.id] =
+                                      _notAssignedValue;
                                 } else {
                                   _selectedSOWBuilderRoles[user.id] = value;
                                 }

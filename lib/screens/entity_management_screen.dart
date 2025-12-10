@@ -303,6 +303,20 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   Widget _buildUserList() {
     final userProvider = Provider.of<UserProvider>(context);
 
+    // Clear expandedUserId if the expanded user no longer exists
+    if (expandedUserId != null && mounted) {
+      final userExists = userProvider.users.any((u) => u.id == expandedUserId);
+      if (!userExists) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              expandedUserId = null;
+            });
+          }
+        });
+      }
+    }
+
     if (userProvider.isLoading && userProvider.users.isEmpty) {
       return Center(
         child: Column(
