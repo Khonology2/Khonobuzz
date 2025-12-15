@@ -1,9 +1,10 @@
-tree 9d679d923bf6cdbf079cc32fed19c3125198aff3
-parent a7b0cd14eefcdc56004b4326ceea2c3ebb94cd0f
-author Nathi2266 <Nathiradebe71@gmail.com> 1761794739 +0200
-committer Nathi2266 <Nathiradebe71@gmail.com> 1761794739 +0200
+tree 36e9017022b4dca41a3f88b58e208d765419ad1a
+parent 6762d8e17ffbffa36922d79778f945c700a9956e
+author Nathi2266 <Nathiradebe71@gmail.com> 1763055599 +0200
+committer Nathi2266 <Nathiradebe71@gmail.com> 1763055599 +0200
 
-Add createdAt to User and enrich from Firestore users.created_at; sort descending so newest users appear at top on UserManagement screen.
-Create widgets/animations/loading_button.dart and use it on Onboarding and Manual Login confirm buttons to show a spinner during async actions.
-Rename onboarding widgets folder to animations and update imports.
-Add utils/pdh_firebase.dart for secondary PDH Firebase initialization and expose syncUserToPDH; call it after successful registration in providers/auth_provider.dart to write users and onboarding to PDH.
+chore: update dependencies and project configuration
+
+- Added new dependencies including convert, crypto, dart_service_protocol_shared, dtd, flutter_lints, google_fonts, json_rpc_2, lints, path_provider, path_provider_android, path_provider_foundation, unified_analytics, web_socket, and web_socket_channel to enhance functionality.
+- Updated pubspec.yaml to reflect new dependency overrides for khonology_app.
+- Modified package configuration files to include new packages and their respective versions for improved project management.
