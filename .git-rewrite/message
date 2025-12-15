@@ -1,5 +1,0 @@
-chore: update dependencies and project configuration
-
-- Added new dependencies including convert, crypto, dart_service_protocol_shared, dtd, flutter_lints, google_fonts, json_rpc_2, lints, path_provider, path_provider_android, path_provider_foundation, unified_analytics, web_socket, and web_socket_channel to enhance functionality.
-- Updated pubspec.yaml to reflect new dependency overrides for khonology_app.
-- Modified package configuration files to include new packages and their respective versions for improved project management.

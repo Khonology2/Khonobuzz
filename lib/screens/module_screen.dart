@@ -114,207 +114,230 @@ class _ModuleScreenState extends State<ModuleScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
               'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
+              fit: BoxFit.cover,
             ),
-            fit: BoxFit.cover,
           ),
-        ),
-        child: Center(
-          child: Transform.scale(
-            scale: 0.8,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return Consumer<AuthProvider>(
-                    builder: (context, authProvider, child) {
-                      if (_isLoadingModuleAccess &&
-                          authProvider.userModuleAccess == null) {
-                        return const Center(
-                          child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              primaryAccent,
-                            ),
-                          ),
-                        );
-                      }
-
-                      final isAdmin =
-                          authProvider.userRole?.toLowerCase() == 'admin';
-                      final hasPDHAccess =
-                          authProvider.hasModuleAccess('PDH') ||
-                          authProvider.hasModuleAccess(
-                            'Personal Development Hub',
-                          );
-                      final hasSkillsHeatmapAccess =
-                          authProvider.hasModuleAccess('Skills Heatmap') ||
-                          authProvider.hasModuleAccess(
-                            'Resource & Capacity Skills Heatmap',
-                          );
-                      final hasRecruitmentAccess =
-                          authProvider.hasModuleAccess(
-                            'Automated Recruitment Workflow',
-                          ) ||
-                          authProvider.hasModuleAccess('Recruitment');
-                      final hasSOWBuilderAccess =
-                          authProvider.hasModuleAccess(
-                            'Proposal & SOW Builder',
-                          ) ||
-                          authProvider.hasModuleAccess('SOW Builder');
-
-                      final showPDH = isAdmin || hasPDHAccess;
-                      final showSkillsHeatmap =
-                          isAdmin || hasSkillsHeatmapAccess;
-                      final showRecruitment = isAdmin || hasRecruitmentAccess;
-                      final showSOWBuilder = isAdmin || hasSOWBuilderAccess;
-
-                      if (!showPDH &&
-                          !showSkillsHeatmap &&
-                          !showRecruitment &&
-                          !showSOWBuilder) {
-                        return const Center(
-                          child: Text(
-                            'No module access assigned. Please contact your administrator.',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18.0,
-                              fontFamily: 'Poppins',
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        );
-                      }
-
-                      final double availableWidth =
-                          constraints.maxWidth - 32;
-                      final double calculatedCardWidth =
-                          ((availableWidth - 36) / (3 * 1.1)).clamp(
-                            140.0,
-                            400.0,
-                          );
-
-                      // Top row: 3 widgets
-                      final List<Widget> topRow = [];
-                      if (showPDH) {
-                        topRow.add(
-                          _buildModuleCard(
-                            context: context,
-                            cardWidth: calculatedCardWidth,
-                            titleLines: ['Personal', 'Development', 'Hub'],
-                            buttonText: 'Launch',
-                            url: 'https://pdh-web-app.onrender.com',
-                            moduleKey: 'pdh',
-                          ),
-                        );
-                      }
-                      if (showSkillsHeatmap) {
-                        if (topRow.isNotEmpty) {
-                          topRow.add(const SizedBox(width: 18.0));
-                        }
-                        topRow.add(
-                          _buildModuleCard(
-                            context: context,
-                            cardWidth: calculatedCardWidth,
-                            titleLines: [
-                              'Resource',
-                              'Capacity &',
-                              'Skills heatmap',
-                            ],
-                            buttonText: 'Launch',
-                            url: 'https://resource-capacity.netlify.app/',
-                            moduleKey: 'skills_heatmap',
-                          ),
-                        );
-                      }
-                      if (showRecruitment) {
-                        if (topRow.isNotEmpty) {
-                          topRow.add(const SizedBox(width: 18.0));
-                        }
-                        topRow.add(
-                          _buildModuleCard(
-                            context: context,
-                            cardWidth: calculatedCardWidth,
-                            titleLines: [
-                              'Automated',
-                              'Recruitment',
-                              'Workflow',
-                            ],
-                            buttonText: 'Launch',
-                            url: 'https://willowy-scone-c14f7c.netlify.app/',
-                            moduleKey: 'recruitment',
-                          ),
-                        );
-                      }
-
-                      // Bottom row: 2 widgets (centered under gaps)
-                      final List<Widget> bottomRow = [];
-                      if (showSOWBuilder) {
-                        bottomRow.add(
-                          _buildModuleCard(
-                            context: context,
-                            cardWidth: calculatedCardWidth,
-                            titleLines: ['Proposal &', 'SOW Builder'],
-                            buttonText: 'Launch',
-                            url: 'https://sowbuilders.netlify.app/',
-                            moduleKey: 'sow_builder',
-                          ),
-                        );
-                      }
-                      // Always add Deliverable & Sprint Sign Off Hub
-                      if (bottomRow.isNotEmpty) {
-                        bottomRow.add(const SizedBox(width: 18.0));
-                      }
-                      bottomRow.add(
-                        _buildModuleCard(
-                          context: context,
-                          cardWidth: calculatedCardWidth,
-                          titleLines: [
-                            'Deliverables & Sprint',
-                            'Sign Off Hub',
-                          ],
-                          buttonText: 'Coming Soon',
-                          url: '',
-                          moduleKey: 'deliverable_sprint',
-                          isComingSoon: true,
-                        ),
-                      );
-
-                      return Padding(
+          Positioned.fill(
+            child: ScrollbarTheme(
+              data: ScrollbarThemeData(
+                thumbColor: WidgetStatePropertyAll<Color>(Colors.white),
+              ),
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  child: Center(
+                    child: Transform.scale(
+                      scale: 0.8,
+                      child: Padding(
                         padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            if (topRow.isNotEmpty)
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.min,
-                                children: topRow,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final authProvider =
+                                context.watch<AuthProvider>();
+
+                            if (_isLoadingModuleAccess &&
+                                authProvider.userModuleAccess == null) {
+                              return const Center(
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    primaryAccent,
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final isAdmin =
+                                authProvider.userRole?.toLowerCase() ==
+                                    'admin';
+                            final hasPDHAccess =
+                                authProvider.hasModuleAccess('PDH') ||
+                                authProvider.hasModuleAccess(
+                                  'Personal Development Hub',
+                                );
+                            final hasSkillsHeatmapAccess =
+                                authProvider.hasModuleAccess('Skills Heatmap') ||
+                                authProvider.hasModuleAccess(
+                                  'Resource & Capacity Skills Heatmap',
+                                );
+                            final hasRecruitmentAccess =
+                                authProvider.hasModuleAccess(
+                                      'Automated Recruitment Workflow',
+                                    ) ||
+                                    authProvider.hasModuleAccess(
+                                      'Recruitment',
+                                    );
+                            final hasSOWBuilderAccess =
+                                authProvider.hasModuleAccess(
+                                      'Proposal & SOW Builder',
+                                    ) ||
+                                    authProvider.hasModuleAccess(
+                                      'SOW Builder',
+                                    );
+
+                            final showPDH = isAdmin || hasPDHAccess;
+                            final showSkillsHeatmap =
+                                isAdmin || hasSkillsHeatmapAccess;
+                            final showRecruitment =
+                                isAdmin || hasRecruitmentAccess;
+                            final showSOWBuilder =
+                                isAdmin || hasSOWBuilderAccess;
+
+                            if (!showPDH &&
+                                !showSkillsHeatmap &&
+                                !showRecruitment &&
+                                !showSOWBuilder) {
+                              return const Center(
+                                child: Text(
+                                  'No module access assigned. Please contact your administrator.',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18.0,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              );
+                            }
+
+                            final double availableWidth =
+                                constraints.maxWidth - 32;
+                            final double calculatedCardWidth =
+                                ((availableWidth - 36) / (3 * 1.1)).clamp(
+                              140.0,
+                              400.0,
+                            );
+
+                            final List<Widget> topRow = [];
+                            if (showPDH) {
+                              topRow.add(
+                                _buildModuleCard(
+                                  context: context,
+                                  cardWidth: calculatedCardWidth,
+                                  titleLines: [
+                                    'Personal',
+                                    'Development',
+                                    'Hub',
+                                  ],
+                                  buttonText: 'Launch',
+                                  url: 'https://pdh-web-app.onrender.com',
+                                  moduleKey: 'pdh',
+                                ),
+                              );
+                            }
+                            if (showSkillsHeatmap) {
+                              if (topRow.isNotEmpty) {
+                                topRow.add(const SizedBox(width: 18.0));
+                              }
+                              topRow.add(
+                                _buildModuleCard(
+                                  context: context,
+                                  cardWidth: calculatedCardWidth,
+                                  titleLines: [
+                                    'Resource',
+                                    'Capacity &',
+                                    'Skills heatmap',
+                                  ],
+                                  buttonText: 'Launch',
+                                  url:
+                                      'https://resource-capacity.netlify.app/',
+                                  moduleKey: 'skills_heatmap',
+                                ),
+                              );
+                            }
+                            if (showRecruitment) {
+                              if (topRow.isNotEmpty) {
+                                topRow.add(const SizedBox(width: 18.0));
+                              }
+                              topRow.add(
+                                _buildModuleCard(
+                                  context: context,
+                                  cardWidth: calculatedCardWidth,
+                                  titleLines: [
+                                    'Automated',
+                                    'Recruitment',
+                                    'Workflow',
+                                  ],
+                                  buttonText: 'Launch',
+                                  url:
+                                      'https://willowy-scone-c14f7c.netlify.app/',
+                                  moduleKey: 'recruitment',
+                                ),
+                              );
+                            }
+
+                            final List<Widget> bottomRow = [];
+                            if (showSOWBuilder) {
+                              bottomRow.add(
+                                _buildModuleCard(
+                                  context: context,
+                                  cardWidth: calculatedCardWidth,
+                                  titleLines: ['Proposal &', 'SOW Builder'],
+                                  buttonText: 'Launch',
+                                  url: 'https://sowbuilders.netlify.app/',
+                                  moduleKey: 'sow_builder',
+                                ),
+                              );
+                            }
+                            if (bottomRow.isNotEmpty) {
+                              bottomRow.add(const SizedBox(width: 18.0));
+                            }
+                            bottomRow.add(
+                              _buildModuleCard(
+                                context: context,
+                                cardWidth: calculatedCardWidth,
+                                titleLines: [
+                                  'Deliverables & Sprint',
+                                  'Sign Off Hub',
+                                ],
+                                buttonText: 'Coming Soon',
+                                url: '',
+                                moduleKey: 'deliverable_sprint',
+                                isComingSoon: true,
                               ),
-                            if (topRow.isNotEmpty && bottomRow.isNotEmpty)
-                              const SizedBox(height: 18.0),
-                            if (bottomRow.isNotEmpty)
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.min,
-                                children: bottomRow,
-                              ),
-                          ],
+                            );
+
+                            return Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (topRow.isNotEmpty)
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: topRow,
+                                  ),
+                                if (topRow.isNotEmpty && bottomRow.isNotEmpty)
+                                  const SizedBox(height: 18.0),
+                                if (bottomRow.isNotEmpty)
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: bottomRow,
+                                  ),
+                              ],
+                            );
+                          },
                         ),
-                      );
-                    },
-                  );
-                },
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

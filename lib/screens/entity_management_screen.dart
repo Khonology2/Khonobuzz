@@ -223,18 +223,26 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
             ),
           ),
           Positioned.fill(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 16.0),
-                    _buildSearch(),
-                    const SizedBox(height: 16.0),
-                    _buildUserList(),
-                  ],
+            child: ScrollbarTheme(
+              data: ScrollbarThemeData(
+                thumbColor: WidgetStatePropertyAll<Color>(Colors.white),
+              ),
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildHeader(),
+                        const SizedBox(height: 16.0),
+                        _buildSearch(),
+                        const SizedBox(height: 16.0),
+                        _buildUserList(),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
