@@ -259,7 +259,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                             cardWidth: calculatedCardWidth,
                             titleLines: ['Proposal &', 'SOW Builder'],
                             buttonText: 'Launch',
-                            url: 'https://lukens-frontend.onrender.com',
+                            url: 'https://sowbuilders.netlify.app/',
                             moduleKey: 'sow_builder',
                           ),
                         );
