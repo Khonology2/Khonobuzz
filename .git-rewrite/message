@@ -1,0 +1,4 @@
+Move loading_button.dart to lib/widgets/animations.
+Update import in onboarding_screen.dart.
+Previously added: PDH secondary Firebase (utils/pdh_firebase.dart) and post-registration sync in auth_provider.dart.
+Previously added: LoadingConfirmButton and replaced Onboarding CONFIRM button to show a spinner during registration and navigate on success.

@@ -1,0 +1,9 @@
+tree 9d679d923bf6cdbf079cc32fed19c3125198aff3
+parent a7b0cd14eefcdc56004b4326ceea2c3ebb94cd0f
+author Nathi2266 <Nathiradebe71@gmail.com> 1761794739 +0200
+committer Nathi2266 <Nathiradebe71@gmail.com> 1761794739 +0200
+
+Add createdAt to User and enrich from Firestore users.created_at; sort descending so newest users appear at top on UserManagement screen.
+Create widgets/animations/loading_button.dart and use it on Onboarding and Manual Login confirm buttons to show a spinner during async actions.
+Rename onboarding widgets folder to animations and update imports.
+Add utils/pdh_firebase.dart for secondary PDH Firebase initialization and expose syncUserToPDH; call it after successful registration in providers/auth_provider.dart to write users and onboarding to PDH.
