@@ -189,14 +189,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         );
                       }
 
-                      // Calculate card width to fit 3 widgets in top row with spacing
-                      // Account for: side padding (32), spacing between cards (36 for 2 gaps), and outer container padding (1.1x)
                       final double availableWidth =
-                          constraints.maxWidth - 32 - 36;
-                      // Each card has outer container of cardWidth * 1.1, so: (cardWidth * 1.1 * 3) + 36 = availableWidth
+                          constraints.maxWidth - 32;
                       final double calculatedCardWidth =
                           ((availableWidth - 36) / (3 * 1.1)).clamp(
-                            200.0,
+                            140.0,
                             400.0,
                           );
 
