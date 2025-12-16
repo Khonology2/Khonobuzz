@@ -205,6 +205,17 @@ try:
 except Exception as e:
     error_log(f"Failed to initialize Skills Heatmap Firebase: {e}")
     raise
+try:
+    sow_builder_cred = load_firebase_credentials(
+        'SOW_BUILDER_FIREBASE_CREDENTIALS',
+        'lukens-e17d6-firebase-adminsdk-fbsvc-ea49e5a350.json',
+    )
+    sow_builder_app = initialize_app(sow_builder_cred, name='sowBuilderApp')
+    sow_builder_db = firestore.client(app=sow_builder_app)
+    info_log("SOW Builder Firebase credentials loaded successfully")
+except Exception as e:
+    error_log(f"Failed to initialize SOW Builder Firebase: {e}")
+    raise
 from fastapi import Body
 class UserRegister(BaseModel):
     email: str
@@ -371,6 +382,11 @@ async def pdh_sync_user(data: dict):
                     print(f"[ERROR] Failed to generate token during PDH sync: {token_error}")
         pdh_db.collection('users').document(uid).set(user_data, merge=True)
         pdh_db.collection('onboarding').document(uid).set(onboarding_data, merge=True)
+        try:
+            sow_builder_db.collection('users').document(uid).set(user_data, merge=True)
+            sow_builder_db.collection('onboarding').document(uid).set(onboarding_data, merge=True)
+        except Exception as sow_error:
+            print(f"[ERROR] During SOW Builder sync (from PDH sync): {sow_error}")
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH sync successful"})
     except Exception as e:
         print(f"[ERROR] During PDH sync: {e}")
@@ -392,6 +408,10 @@ async def pdh_update_user(uid: str, data: dict):
             new_module_access_role = user_fields.get('moduleAccessRole', '')
         if user_fields:
             pdh_db.collection('users').document(uid).set(user_fields, merge=True)
+            try:
+                sow_builder_db.collection('users').document(uid).set(user_fields, merge=True)
+            except Exception as sow_error:
+                print(f"[ERROR] Failed to update SOW Builder users (PDH update): {sow_error}")
             user_email = user_fields.get('email', '')
         if onboarding_fields:
             if not user_email:
@@ -419,6 +439,10 @@ async def pdh_update_user(uid: str, data: dict):
                 except Exception as token_error:
                     print(f"[ERROR] Failed to regenerate token during PDH update: {token_error}")
             pdh_db.collection('onboarding').document(uid).set(onboarding_fields, merge=True)
+            try:
+                sow_builder_db.collection('onboarding').document(uid).set(onboarding_fields, merge=True)
+            except Exception as sow_error:
+                print(f"[ERROR] Failed to update SOW Builder onboarding (PDH update): {sow_error}")
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH update successful"})
     except Exception as e:
         print(f"[ERROR] During PDH update: {e}")
@@ -462,6 +486,11 @@ async def skills_heatmap_sync_user(data: dict):
                     print(f"[ERROR] Failed to generate token during Skills Heatmap sync: {token_error}")
         skills_heatmap_db.collection('users').document(uid).set(user_data, merge=True)
         skills_heatmap_db.collection('onboarding').document(uid).set(onboarding_data, merge=True)
+        try:
+            sow_builder_db.collection('users').document(uid).set(user_data, merge=True)
+            sow_builder_db.collection('onboarding').document(uid).set(onboarding_data, merge=True)
+        except Exception as sow_error:
+            print(f"[ERROR] During SOW Builder sync (from Skills Heatmap sync): {sow_error}")
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Skills Heatmap sync successful"})
     except Exception as e:
         print(f"[ERROR] During Skills Heatmap sync: {e}")
@@ -483,6 +512,10 @@ async def skills_heatmap_update_user(uid: str, data: dict):
             new_module_access_role = user_fields.get('moduleAccessRole', '')
         if user_fields:
             skills_heatmap_db.collection('users').document(uid).set(user_fields, merge=True)
+            try:
+                sow_builder_db.collection('users').document(uid).set(user_fields, merge=True)
+            except Exception as sow_error:
+                print(f"[ERROR] Failed to update SOW Builder users (Skills Heatmap update): {sow_error}")
             user_email = user_fields.get('email', '')
         if onboarding_fields:
             if not user_email:
@@ -510,6 +543,10 @@ async def skills_heatmap_update_user(uid: str, data: dict):
                 except Exception as token_error:
                     print(f"[ERROR] Failed to regenerate token during Skills Heatmap update: {token_error}")
             skills_heatmap_db.collection('onboarding').document(uid).set(onboarding_fields, merge=True)
+            try:
+                sow_builder_db.collection('onboarding').document(uid).set(onboarding_fields, merge=True)
+            except Exception as sow_error:
+                print(f"[ERROR] Failed to update SOW Builder onboarding (Skills Heatmap update): {sow_error}")
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Skills Heatmap update successful"})
     except Exception as e:
         print(f"[ERROR] During Skills Heatmap update: {e}")
@@ -904,6 +941,32 @@ async def delete_user(user_id: str):
                 break
         except Exception as sh_error:
             print(f"[WARNING] Failed to delete from Skills Heatmap onboarding collection: {sh_error}")
+        try:
+            sow_builder_user_ref = sow_builder_db.collection('users').document(user_id)
+            sow_builder_user_doc = sow_builder_user_ref.get()
+            if sow_builder_user_doc.exists:
+                sow_builder_user_ref.delete()
+                print(f"[DEBUG] Deleted user {user_id} from SOW Builder users collection")
+        except Exception as sow_error:
+            print(f"[WARNING] Failed to delete from SOW Builder users collection: {sow_error}")
+        try:
+            sow_builder_onboarding_ref = sow_builder_db.collection('onboarding').document(user_id)
+            sow_builder_onboarding_doc = sow_builder_onboarding_ref.get()
+            if sow_builder_onboarding_doc.exists:
+                sow_builder_onboarding_ref.delete()
+                print(f"[DEBUG] Deleted user {user_id} from SOW Builder onboarding collection")
+            sow_builder_onboarding_query = (
+                sow_builder_db.collection('onboarding')
+                .where('user_id', '==', user_id)
+                .limit(1)
+                .stream()
+            )
+            for sow_onboarding_doc in sow_builder_onboarding_query:
+                sow_onboarding_doc.reference.delete()
+                print(f"[DEBUG] Deleted user {user_id} from SOW Builder onboarding collection (by query)")
+                break
+        except Exception as sow_error:
+            print(f"[WARNING] Failed to delete from SOW Builder onboarding collection: {sow_error}")
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={'message': f'User {user_id} deleted successfully from all collections'},
@@ -1133,6 +1196,18 @@ async def login_user(user_login: UserLogin, request: Request):
                 skills_heatmap_onboarding_ref.set(skills_data, merge=True)
             except Exception:
                 pass
+            try:
+                sow_builder_onboarding_ref = sow_builder_db.collection('onboarding').document(user_id)
+                sow_data = {
+                    'token': encrypted_token,
+                    'fullName': full_name,
+                    'token_updated_at': datetime.utcnow(),
+                }
+                if not is_special_session:
+                    sow_data['updated_at'] = datetime.utcnow()
+                sow_builder_onboarding_ref.set(sow_data, merge=True)
+            except Exception:
+                pass
         module_access_raw = user_data.get('moduleAccess') or onboarding_data.get('moduleAccess', '')
         final_module_access = derive_module_access_from_role(module_access_raw, module_access_role)
         response_content = {
@@ -1248,6 +1323,18 @@ async def get_user_token(email: str = Query(..., description="User email address
                 print(f"[DEBUG] Token synced to Skills Heatmap onboarding collection for user_id: {user_id}")
             except Exception as skills_sync_error:
                 print(f"[ERROR] Failed to sync token to Skills Heatmap: {skills_sync_error}")
+            try:
+                sow_builder_onboarding_ref = sow_builder_db.collection('onboarding').document(user_id)
+                sow_builder_onboarding_ref.set({
+                    'email': user_data.get('email', ''),
+                    'token': encrypted_token,
+                    'fullName': full_name,
+                    'token_updated_at': datetime.utcnow(),
+                    'updated_at': datetime.utcnow(),
+                }, merge=True)
+                print(f"[DEBUG] Token synced to SOW Builder onboarding collection for user_id: {user_id}")
+            except Exception as sow_sync_error:
+                print(f"[ERROR] Failed to sync token to SOW Builder: {sow_sync_error}")
         except Exception as token_error:
             print(f"[ERROR] Failed to generate token: {token_error}")
             return JSONResponse(status_code=500, content={"error": "Failed to generate token"})
