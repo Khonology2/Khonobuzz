@@ -278,7 +278,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   cardWidth: calculatedCardWidth,
                                   titleLines: ['Proposal &', 'SOW Builder'],
                                   buttonText: 'Launch',
-                                  url: 'https://sowbuilders.netlify.app/',
+                                  url:
+                                      'https://proposal-and-sow-builder.onrender.com',
                                   moduleKey: 'sow_builder',
                                 ),
                               );
@@ -714,9 +715,14 @@ Future<void> _launchUrlFromContext(
     final bool isPDHUrl =
         secureUrl.contains('pdh-web-app.onrender.com') ||
         secureUrl.contains('pdh');
+    final bool isSOWBuilderUrl =
+        secureUrl.contains('proposal-and-sow-builder.onrender.com') ||
+        secureUrl.contains('sow_builder') ||
+        secureUrl.contains('sow-builder');
+    final bool requiresToken = isPDHUrl || isSOWBuilderUrl;
 
     String? token;
-    if (isPDHUrl) {
+    if (requiresToken) {
       final authProvider = context.read<AuthProvider>();
 
       if (authProvider.userEmail != null) {
@@ -755,7 +761,7 @@ Future<void> _launchUrlFromContext(
     }
 
     Uri uri = Uri.parse(secureUrl);
-    if (isPDHUrl && token != null && token.isNotEmpty) {
+    if (requiresToken && token != null && token.isNotEmpty) {
       uri = uri.replace(queryParameters: {'token': token});
     }
 
