@@ -19,12 +19,19 @@ class ModuleScreen extends StatefulWidget {
 
 class _ModuleScreenState extends State<ModuleScreen> {
   bool _isLoadingModuleAccess = false;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
 
     _loadModuleAccess();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadModuleAccess() async {
@@ -129,8 +136,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 thumbColor: WidgetStatePropertyAll<Color>(Colors.white),
               ),
               child: Scrollbar(
+                controller: _scrollController,
                 thumbVisibility: true,
+                interactive: true,
                 child: SingleChildScrollView(
+                  controller: _scrollController,
                   child: Center(
                     child: Transform.scale(
                       scale: 0.8,

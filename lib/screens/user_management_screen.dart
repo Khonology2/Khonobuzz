@@ -71,6 +71,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   final List<String> userRoles = ['Staff', 'Manager', 'Admin'];
 
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   List<ManagedUser> get _filteredUsers {
     final userProvider = Provider.of<UserProvider>(context);
@@ -108,6 +109,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   void dispose() {
     _debounceTimer?.cancel();
     _searchController.dispose();
+     _scrollController.dispose();
     super.dispose();
   }
 
@@ -401,8 +403,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 thumbColor: WidgetStatePropertyAll<Color>(Colors.white),
               ),
               child: Scrollbar(
+                controller: _scrollController,
                 thumbVisibility: true,
+                interactive: true,
                 child: SingleChildScrollView(
+                  controller: _scrollController,
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(

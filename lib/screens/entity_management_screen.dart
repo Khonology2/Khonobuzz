@@ -21,6 +21,7 @@ class EntityManagementScreen extends StatefulWidget {
 
 class _EntityManagementScreenState extends State<EntityManagementScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final List<String> _entityOptions = ['Khonology Internal'];
   static const String _notAssignedValue = 'Not Assigned';
 
@@ -85,6 +86,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   void dispose() {
     _debounceTimer?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -228,8 +230,11 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                 thumbColor: WidgetStatePropertyAll<Color>(Colors.white),
               ),
               child: Scrollbar(
+                controller: _scrollController,
                 thumbVisibility: true,
+                interactive: true,
                 child: SingleChildScrollView(
+                  controller: _scrollController,
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(

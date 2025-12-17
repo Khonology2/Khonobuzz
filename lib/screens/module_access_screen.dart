@@ -21,6 +21,7 @@ class ModuleAccessScreen extends StatefulWidget {
 
 class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final List<String> _moduleRoleOptionsPDH = ['Employee', 'Manager'];
   final List<String> _moduleRoleOptionsRecruitment = [
     'Admin',
@@ -162,6 +163,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   void dispose() {
     _debounceTimer?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -1021,6 +1023,31 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           ),
                         ),
                         const SizedBox(width: 8.0),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              final allIds =
+                                  _filteredUsers.map((u) => u.id).toSet();
+                              if (_selectedUserIds.length == allIds.length) {
+                                _selectedUserIds.clear();
+                                _isSelectionMode = false;
+                              } else {
+                                _selectedUserIds
+                                  ..clear()
+                                  ..addAll(allIds);
+                                _isSelectionMode = _selectedUserIds.isNotEmpty;
+                              }
+                            });
+                          },
+                          child: const Text(
+                            'Select all',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8.0),
                         ElevatedButton(
                           onPressed: _showBulkModuleAccessDialog,
                           style: ElevatedButton.styleFrom(
@@ -1053,8 +1080,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                 thumbColor: WidgetStatePropertyAll<Color>(Colors.white),
               ),
               child: Scrollbar(
+                controller: _scrollController,
                 thumbVisibility: true,
+                interactive: true,
                 child: SingleChildScrollView(
+                  controller: _scrollController,
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
