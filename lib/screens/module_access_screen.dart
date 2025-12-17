@@ -35,6 +35,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   Timer? _debounceTimer;
   String _searchQuery = '';
 
+  bool _isSelectionMode = false;
+  final Set<String> _selectedUserIds = <String>{};
+
   final Map<String, String?> _selectedRecruitmentRoles = {};
 
   final Map<String, String?> _selectedSOWBuilderRoles = {};
@@ -453,9 +456,589 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     }
   }
 
+  void _showBulkModuleAccessDialog() {
+    if (_selectedUserIds.isEmpty) return;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        bool pdhSelected = false;
+        bool skillsHeatmapSelected = false;
+        bool recruitmentSelected = false;
+        bool sowBuilderSelected = false;
+        String? selectedModuleRole = _notAssignedValue;
+        String? selectedRecruitmentRole = _notAssignedValue;
+        String? selectedSOWBuilderRole = _notAssignedValue;
+        bool isUpdating = false;
+
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF2C3E50),
+              title: const Text(
+                'Update Module Access',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                              vertical: 8.0,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2C3E50),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: CheckboxListTile(
+                              title: const Text(
+                                'Personal Development Hub',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              value: pdhSelected,
+                              activeColor: const Color(0xFFC10D00),
+                              checkColor: Colors.white,
+                              onChanged: (bool? value) {
+                                setStateDialog(() {
+                                  pdhSelected = value ?? false;
+                                  if (!pdhSelected) {
+                                    selectedModuleRole = _notAssignedValue;
+                                  }
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16.0),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                              vertical: 8.0,
+                            ),
+                            decoration: BoxDecoration(
+                              color: pdhSelected
+                                  ? const Color(0xFF2C3E50)
+                                  : const Color(0xFF1A1A1A),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String?>(
+                                value: pdhSelected
+                                    ? selectedModuleRole
+                                    : _notAssignedValue,
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF2C3E50),
+                                icon: const Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Colors.white70,
+                                ),
+                                hint: const Text(
+                                  'Module Role',
+                                  style: TextStyle(
+                                    color: Colors.white60,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                ),
+                                style: TextStyle(
+                                  color: pdhSelected
+                                      ? Colors.white
+                                      : Colors.white54,
+                                  fontFamily: 'Poppins',
+                                ),
+                                onChanged: pdhSelected
+                                    ? (value) {
+                                        setStateDialog(() {
+                                          selectedModuleRole = value;
+                                        });
+                                      }
+                                    : null,
+                                items: <DropdownMenuItem<String?>>[
+                                  DropdownMenuItem<String?>(
+                                    value: _notAssignedValue,
+                                    child: Text(_notAssignedValue),
+                                  ),
+                                  ..._moduleRoleOptionsPDH.map(
+                                    (option) => DropdownMenuItem<String?>(
+                                      value: option,
+                                      child: Text(option),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16.0),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                              vertical: 8.0,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2C3E50),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: CheckboxListTile(
+                              title: const Text(
+                                'Resource & Capacity Skills Heatmap',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              value: skillsHeatmapSelected,
+                              activeColor: const Color(0xFFC10D00),
+                              checkColor: Colors.white,
+                              onChanged: (bool? value) {
+                                setStateDialog(() {
+                                  skillsHeatmapSelected = value ?? false;
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16.0),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                              vertical: 8.0,
+                            ),
+                            decoration: BoxDecoration(
+                              color: skillsHeatmapSelected
+                                  ? const Color(0xFF2C3E50)
+                                  : const Color(0xFF1A1A1A),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String?>(
+                                value: skillsHeatmapSelected
+                                    ? 'Manager'
+                                    : _notAssignedValue,
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF2C3E50),
+                                icon: const Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Colors.white70,
+                                ),
+                                hint: const Text(
+                                  'Module Role',
+                                  style: TextStyle(
+                                    color: Colors.white60,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                ),
+                                style: TextStyle(
+                                  color: skillsHeatmapSelected
+                                      ? Colors.white
+                                      : Colors.white54,
+                                  fontFamily: 'Poppins',
+                                ),
+                                onChanged: skillsHeatmapSelected
+                                    ? (value) {
+                                        setStateDialog(() {});
+                                      }
+                                    : null,
+                                items: <DropdownMenuItem<String?>>[
+                                  if (!skillsHeatmapSelected)
+                                    DropdownMenuItem<String?>(
+                                      value: _notAssignedValue,
+                                      child: Text(_notAssignedValue),
+                                    ),
+                                  DropdownMenuItem<String?>(
+                                    value: 'Manager',
+                                    child: Text('Manager'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16.0),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                              vertical: 8.0,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2C3E50),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: CheckboxListTile(
+                              title: const Text(
+                                'Automated Recruitment Workflow',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              value: recruitmentSelected,
+                              activeColor: const Color(0xFFC10D00),
+                              checkColor: Colors.white,
+                              onChanged: (bool? value) {
+                                setStateDialog(() {
+                                  recruitmentSelected = value ?? false;
+                                  if (!recruitmentSelected) {
+                                    selectedRecruitmentRole = _notAssignedValue;
+                                  }
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16.0),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                              vertical: 8.0,
+                            ),
+                            decoration: BoxDecoration(
+                              color: recruitmentSelected
+                                  ? const Color(0xFF2C3E50)
+                                  : const Color(0xFF1A1A1A),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String?>(
+                                value: recruitmentSelected
+                                    ? selectedRecruitmentRole
+                                    : _notAssignedValue,
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF2C3E50),
+                                icon: const Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Colors.white70,
+                                ),
+                                hint: const Text(
+                                  'Module Role',
+                                  style: TextStyle(
+                                    color: Colors.white60,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                ),
+                                style: TextStyle(
+                                  color: recruitmentSelected
+                                      ? Colors.white
+                                      : Colors.white54,
+                                  fontFamily: 'Poppins',
+                                ),
+                                onChanged: recruitmentSelected
+                                    ? (value) {
+                                        setStateDialog(() {
+                                          selectedRecruitmentRole = value;
+                                        });
+                                      }
+                                    : null,
+                                items: <DropdownMenuItem<String?>>[
+                                  DropdownMenuItem<String?>(
+                                    value: _notAssignedValue,
+                                    child: Text(_notAssignedValue),
+                                  ),
+                                  ..._moduleRoleOptionsRecruitment.map(
+                                    (option) => DropdownMenuItem<String?>(
+                                      value: option,
+                                      child: Text(option),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16.0),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                              vertical: 8.0,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2C3E50),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: CheckboxListTile(
+                              title: const Text(
+                                'Proposal & SOW Builder',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              value: sowBuilderSelected,
+                              activeColor: const Color(0xFFC10D00),
+                              checkColor: Colors.white,
+                              onChanged: (bool? value) {
+                                setStateDialog(() {
+                                  sowBuilderSelected = value ?? false;
+                                  if (!sowBuilderSelected) {
+                                    selectedSOWBuilderRole = _notAssignedValue;
+                                  }
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16.0),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                              vertical: 8.0,
+                            ),
+                            decoration: BoxDecoration(
+                              color: sowBuilderSelected
+                                  ? const Color(0xFF2C3E50)
+                                  : const Color(0xFF1A1A1A),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String?>(
+                                value: sowBuilderSelected
+                                    ? selectedSOWBuilderRole
+                                    : _notAssignedValue,
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF2C3E50),
+                                icon: const Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Colors.white70,
+                                ),
+                                hint: const Text(
+                                  'Module Role',
+                                  style: TextStyle(
+                                    color: Colors.white60,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                ),
+                                style: TextStyle(
+                                  color: sowBuilderSelected
+                                      ? Colors.white
+                                      : Colors.white54,
+                                  fontFamily: 'Poppins',
+                                ),
+                                onChanged: sowBuilderSelected
+                                    ? (value) {
+                                        setStateDialog(() {
+                                          selectedSOWBuilderRole = value;
+                                        });
+                                      }
+                                    : null,
+                                items: <DropdownMenuItem<String?>>[
+                                  DropdownMenuItem<String?>(
+                                    value: _notAssignedValue,
+                                    child: Text(_notAssignedValue),
+                                  ),
+                                  ..._moduleRoleOptionsSOWBuilder.map(
+                                    (option) => DropdownMenuItem<String?>(
+                                      value: option,
+                                      child: Text(option),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isUpdating
+                      ? null
+                      : () {
+                          Navigator.of(dialogContext).pop();
+                        },
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: isUpdating
+                      ? null
+                      : () async {
+                          setStateDialog(() {
+                            isUpdating = true;
+                          });
+
+                          try {
+                            final userProvider =
+                                Provider.of<UserProvider>(context,
+                                    listen: false);
+                            final selectedUsers = userProvider.users
+                                .where((user) =>
+                                    _selectedUserIds.contains(user.id))
+                                .toList();
+
+                            for (final user in selectedUsers) {
+                              await _updateUserModuleAccess(
+                                user,
+                                pdhSelected,
+                                skillsHeatmapSelected,
+                                recruitmentSelected,
+                                sowBuilderSelected,
+                                selectedModuleRole,
+                                selectedRecruitmentRole,
+                                selectedSOWBuilderRole,
+                              );
+                            }
+
+                            if (mounted) {
+                              setState(() {
+                                _isSelectionMode = false;
+                                _selectedUserIds.clear();
+                              });
+                            }
+
+                            if (dialogContext.mounted) {
+                              Navigator.of(dialogContext).pop();
+                            }
+                          } finally {
+                            if (dialogContext.mounted) {
+                              setStateDialog(() {
+                                isUpdating = false;
+                              });
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC10D00),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: isUpdating
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : const Text(
+                          'Update Selected Users',
+                          style: TextStyle(fontFamily: 'Poppins'),
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      bottomNavigationBar: _isSelectionMode && _selectedUserIds.isNotEmpty
+          ? Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C3E50),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${_selectedUserIds.length} user(s) selected',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                        fontSize: 16.0,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _isSelectionMode = false;
+                              _selectedUserIds.clear();
+                            });
+                          },
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8.0),
+                        ElevatedButton(
+                          onPressed: _showBulkModuleAccessDialog,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFC10D00),
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text(
+                            'Update Access',
+                            style: TextStyle(fontFamily: 'Poppins'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
       body: Stack(
         children: [
           Positioned.fill(
@@ -614,35 +1197,83 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
     final moduleAccessChips = _buildModuleAccessChips(user.moduleAccess);
-    return InkWell(
-      onTap: () {
-        setState(() {
-          if (!isExpanded) {
-            expandedUserId = user.id;
-            _refreshRecruitmentRoleCache(user);
-            _refreshSOWBuilderRoleCache(user);
-          } else {
+    final isSelected = _selectedUserIds.contains(user.id);
+    return GestureDetector(
+      onLongPress: () {
+        if (!_isSelectionMode) {
+          setState(() {
+            _isSelectionMode = true;
+            _selectedUserIds.add(user.id);
             expandedUserId = null;
-          }
-        });
+          });
+        }
+      },
+      onTap: () {
+        if (_isSelectionMode) {
+          setState(() {
+            if (isSelected) {
+              _selectedUserIds.remove(user.id);
+              if (_selectedUserIds.isEmpty) {
+                _isSelectionMode = false;
+              }
+            } else {
+              _selectedUserIds.add(user.id);
+            }
+          });
+        } else {
+          setState(() {
+            if (!isExpanded) {
+              expandedUserId = user.id;
+              _refreshRecruitmentRoleCache(user);
+              _refreshSOWBuilderRoleCache(user);
+            } else {
+              expandedUserId = null;
+            }
+          });
+        }
       },
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0x801F2840),
+          color: isSelected ? const Color(0x80C10D00) : const Color(0x801F2840),
           borderRadius: BorderRadius.circular(16.0),
+          border: isSelected
+              ? Border.all(color: const Color(0xFFC10D00), width: 2.0)
+              : null,
         ),
         padding: const EdgeInsets.all(16.0),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final availableWidth = constraints.maxWidth;
+            final checkboxWidth = _isSelectionMode ? 48.0 : 0.0;
             final spacingWidth = 8.0 * 2;
-            final columnWidth = (availableWidth - spacingWidth) / 3;
+            final columnWidth =
+                ((availableWidth - checkboxWidth) - spacingWidth) / 3;
             final leftPadding = columnWidth * 0.12;
 
             final secondColumnWidth = columnWidth - leftPadding;
 
             return Row(
               children: [
+                if (_isSelectionMode) ...[
+                  Checkbox(
+                    value: isSelected,
+                    onChanged: (value) {
+                      setState(() {
+                        if (value == true) {
+                          _selectedUserIds.add(user.id);
+                        } else {
+                          _selectedUserIds.remove(user.id);
+                          if (_selectedUserIds.isEmpty) {
+                            _isSelectionMode = false;
+                          }
+                        }
+                      });
+                    },
+                    activeColor: const Color(0xFFC10D00),
+                    checkColor: Colors.white,
+                  ),
+                  const SizedBox(width: 8.0),
+                ],
                 SizedBox(
                   width: columnWidth,
                   child: Row(
@@ -685,7 +1316,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   ),
                 ),
                 const SizedBox(width: 8.0),
-
                 Padding(
                   padding: EdgeInsets.only(left: leftPadding),
                   child: SizedBox(
@@ -720,7 +1350,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   ),
                 ),
                 const SizedBox(width: 8.0),
-
                 SizedBox(
                   width: columnWidth,
                   child: Row(
@@ -737,13 +1366,14 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         ),
                       ),
                       const SizedBox(width: 8.0),
-                      Transform.rotate(
-                        angle: isExpanded ? 3.14 : 0,
-                        child: const Icon(
-                          Icons.keyboard_arrow_down,
-                          color: Colors.white54,
+                      if (!_isSelectionMode)
+                        Transform.rotate(
+                          angle: isExpanded ? 3.14 : 0,
+                          child: const Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Colors.white54,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),

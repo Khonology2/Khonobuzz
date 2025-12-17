@@ -343,6 +343,31 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           ),
                         ),
                         const SizedBox(width: 8.0),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              final allIds =
+                                  _filteredUsers.map((u) => u.id).toSet();
+                              if (_selectedUserIds.length == allIds.length) {
+                                _selectedUserIds.clear();
+                                _isSelectionMode = false;
+                              } else {
+                                _selectedUserIds
+                                  ..clear()
+                                  ..addAll(allIds);
+                                _isSelectionMode = _selectedUserIds.isNotEmpty;
+                              }
+                            });
+                          },
+                          child: const Text(
+                            'Select all',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8.0),
                         ElevatedButton(
                           onPressed: () => _showDeleteConfirmation(context),
                           style: ElevatedButton.styleFrom(
