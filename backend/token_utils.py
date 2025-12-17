@@ -137,10 +137,15 @@ def parse_module_access_role_to_roles(module_access_role: str) -> list:
         return []
     roles = [role.strip() for role in module_access_role.split(',') if role.strip()]
     return roles
-def generate_and_encrypt_token(user_id: str, email: str, full_name: str = "", roles: list = None, expiration_hours: int = None) -> str:
+def generate_and_encrypt_token(
+    user_id: str,
+    email: str,
+    full_name: str = "",
+    roles: list = None,
+    expiration_hours: int = None,
+) -> str:
     """
-    Generate a plain JWT token (no encryption).
-    This function is kept for backward compatibility but now returns plain JWT.
+    Generate a JWT token and encrypt it for secure storage/transport.
     Args:
         user_id: The user's unique identifier
         email: The user's email address
@@ -148,6 +153,11 @@ def generate_and_encrypt_token(user_id: str, email: str, full_name: str = "", ro
         roles: List of user roles (e.g., ["PDH - Employee", "PDH - Manager"])
         expiration_hours: Token expiration time in hours
     Returns:
-        A plain JWT token string ready for storage
+        An encrypted token string
     """
-    return generate_jwt_token(user_id, email, full_name, roles, expiration_hours)
+    plain_token = generate_jwt_token(user_id, email, full_name, roles, expiration_hours)
+    try:
+        return encrypt_token(plain_token)
+    except Exception as e:
+        print(f"[ERROR] Failed to encrypt token in generate_and_encrypt_token: {e}")
+        raise

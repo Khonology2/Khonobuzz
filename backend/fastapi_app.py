@@ -15,10 +15,19 @@ from fastapi import status
 from fastapi import HTTPException
 from typing import Optional
 from pathlib import Path
+import jwt
 try:
-    from .token_utils import generate_and_encrypt_token, parse_module_access_role_to_roles
+    from .token_utils import (
+        generate_and_encrypt_token,
+        parse_module_access_role_to_roles,
+        verify_token,
+    )
 except ImportError:
-    from token_utils import generate_and_encrypt_token, parse_module_access_role_to_roles
+    from token_utils import (
+        generate_and_encrypt_token,
+        parse_module_access_role_to_roles,
+        verify_token,
+    )
 load_dotenv()
 DEBUG_MODE = os.environ.get('DEBUG', 'True').lower() == 'true'
 LOG_LEVEL = logging.DEBUG if DEBUG_MODE else logging.INFO
@@ -270,6 +279,8 @@ app = FastAPI(
 cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
 PRODUCTION_FRONTEND_URLS = [
     'https://khonobuzz-web-app.onrender.com',
+    'https://pdh-web-app.onrender.com',
+    'https://proposal-and-sow-builder.onrender.com',
 ]
 is_production = (
     os.environ.get('RENDER') is not None
@@ -343,6 +354,55 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
+class TokenValidationRequest(BaseModel):
+    token: str
+
+
+def _validate_token_internal(token: str):
+    try:
+        payload = verify_token(token)
+        user_id = payload.get('user_id') or payload.get('uid', '')
+        user_data = None
+        if user_id:
+            try:
+                user_doc = db.collection('users').document(user_id).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict()
+            except Exception as e:
+                print(f"[WARNING] Failed to fetch user data during token validation: {e}")
+        return {
+            "valid": True,
+            "payload": payload,
+            "user": user_data,
+        }, 200
+    except jwt.ExpiredSignatureError:
+        return {
+            "valid": False,
+            "error": "Token has expired",
+        }, 401
+    except jwt.InvalidTokenError as e:
+        return {
+            "valid": False,
+            "error": f"Invalid token: {str(e)}",
+        }, 400
+    except Exception as e:
+        return {
+            "valid": False,
+            "error": f"Token validation failed: {str(e)}",
+        }, 500
+
+
+@app.post("/validate-token")
+async def validate_token(request: TokenValidationRequest):
+    result, status_code = _validate_token_internal(request.token)
+    return JSONResponse(status_code=status_code, content=result)
+
+
+@app.get("/validate-token")
+async def validate_token_get(token: str = Query(..., description="Token to validate")):
+    result, status_code = _validate_token_internal(token)
+    return JSONResponse(status_code=status_code, content=result)
+
 @app.post("/api/pdh/sync-user")
 async def pdh_sync_user(data: dict):
     try:
