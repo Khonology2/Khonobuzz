@@ -98,7 +98,7 @@ flutter:
     - assets/images/Concentration_Key_Focus/Concentration_Key_Focus_Red_Badge_White.png
     - assets/images/Concentration_Key_Focus/Concentration_Key_Focus_White_Badge_Red.png
     # - assets/images/Login_Lock/Lock_Red Badge_White.png # Removed old logout asset
-
+    - assets/images/khonology_white_logo.png
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
+import '../widgets/floating_circles_particle_animation.dart';
 
 const Color primaryDark = Color(0xFF1F2937);
 const Color primaryAccent = Color(0xFFC10D00);
@@ -396,6 +397,8 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
   bool _isHovered = false;
   bool _isLoading = false;
   String? _lastAccessedText;
+  final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
+      GlobalKey();
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
 
@@ -429,6 +432,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
 
   @override
   Widget build(BuildContext context) {
+    final String? description = _getModuleDescription(widget.moduleKey);
     return Container(
       width: widget.cardWidth * 1.1,
       height: 400,
@@ -451,6 +455,13 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
               borderRadius: BorderRadius.circular(16.0),
               child: Stack(
                 children: [
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: FloatingCirclesParticleAnimation(
+                        key: _animationKey,
+                      ),
+                    ),
+                  ),
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     width: widget.cardWidth,
@@ -480,6 +491,15 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                         mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          Align(
+                            alignment: Alignment.center,
+                            child: Image.asset(
+                              'assets/images/khonology_white_logo.png',
+                              height: 40,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                          const SizedBox(height: 16.0),
                           Column(
                             mainAxisSize: MainAxisSize.min,
                             children: widget.titleLines.map((line) {
@@ -530,34 +550,62 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                               ),
                             ),
                           ],
-                          const SizedBox(height: 28.8),
+                          const SizedBox(height: 18.0),
+                          if (description != null && description.isNotEmpty) ...[
+                            Text(
+                              description,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white70,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                            const SizedBox(height: 18.0),
+                          ],
                           ElevatedButton(
-                            onPressed: widget.isComingSoon
+                            onPressed: _isLoading
                                 ? null
-                                : (_isLoading
-                                      ? null
-                                      : () async {
-                                          setState(() => _isLoading = true);
-                                          try {
-                                            await _launchUrlFromContext(
-                                              widget.context,
-                                              widget.url,
-                                              widget.moduleKey,
-                                            );
+                                : () async {
+                                    _animationKey.currentState
+                                        ?.triggerParticleExplosion();
 
-                                            await _loadLastAccessed();
-                                          } finally {
-                                            if (mounted) {
-                                              setState(
-                                                () => _isLoading = false,
-                                              );
-                                            }
-                                          }
-                                        }),
+                                    if (widget.isComingSoon) {
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Deliverables & Sprint Sign-Off Hub is coming soon.',
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+
+                                    setState(() => _isLoading = true);
+                                    try {
+                                      await _launchUrlFromContext(
+                                        widget.context,
+                                        widget.url,
+                                        widget.moduleKey,
+                                      );
+
+                                      await _loadLastAccessed();
+                                    } finally {
+                                      if (mounted) {
+                                        setState(
+                                          () => _isLoading = false,
+                                        );
+                                      }
+                                    }
+                                  },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: widget.isComingSoon
-                                  ? Colors.grey.shade600
-                                  : primaryAccent,
+                              backgroundColor: primaryAccent,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 36.0,
@@ -610,6 +658,23 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
         ),
       ),
     );
+  }
+}
+
+String? _getModuleDescription(String moduleKey) {
+  switch (moduleKey) {
+    case 'pdh':
+      return 'A Single Place to Plan, Track and Celebrate Employee Growth with Progress Visuals, Alerts, and Gamification.';
+    case 'skills_heatmap':
+      return 'Visualising Availability vs Pipeline Demand for Proactive Staffing Decisions.';
+    case 'sow_builder':
+      return 'End-to-End Proposal Generation and Sign-Off in One Tool.';
+    case 'recruitment':
+      return 'Streamlining CV Screening, Initial Assessments, and Shortlisting in One Tool.';
+    case 'deliverable_sprint':
+      return 'Visualising Sprint Performance, and Capturing Client Approval.';
+    default:
+      return null;
   }
 }
 

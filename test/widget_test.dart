@@ -16,7 +16,7 @@ void main() {
     // Note: Firebase initialization is handled in main() but may require
     // additional setup for more complex widget tests
     await tester.pumpWidget(const MyApp());
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 3));
 
     // Verify that the app builds without errors
     expect(find.byType(MaterialApp), findsOneWidget);
