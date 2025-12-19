@@ -801,36 +801,32 @@ Future<void> _launchUrlFromContext(
       final authProvider = context.read<AuthProvider>();
 
       if (authProvider.userEmail != null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Generating authentication token...',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+
+        await authProvider.fetchUserToken();
         token = authProvider.userToken;
 
         if (token == null || token.isEmpty) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Generating authentication token...',
-                  style: TextStyle(fontFamily: 'Poppins'),
-                ),
-                duration: Duration(seconds: 2),
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Failed to generate authentication token. Please try again.',
+                style: TextStyle(fontFamily: 'Poppins'),
               ),
-            );
-          }
-
-          await authProvider.fetchUserToken();
-          token = authProvider.userToken;
-
-          if (token == null || token.isEmpty) {
-            if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Failed to generate authentication token. Please try again.',
-                  style: TextStyle(fontFamily: 'Poppins'),
-                ),
-              ),
-            );
-            return;
-          }
+            ),
+          );
+          return;
         }
       }
     }
