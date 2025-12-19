@@ -8,25 +8,18 @@ import os
 from dotenv import load_dotenv
 import base64
 load_dotenv()
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or os.urandom(32).hex()
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
+if not JWT_SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY environment variable is required for token signing and validation")
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = int(os.environ.get('JWT_EXPIRATION_HOURS', '24'))
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
 if not ENCRYPTION_KEY:
-    key = Fernet.generate_key()
-    ENCRYPTION_KEY = key.decode()
-    print(f"[WARNING] ENCRYPTION_KEY not set. Generated new key for this session: {ENCRYPTION_KEY}")
-    print("[WARNING] Set ENCRYPTION_KEY in environment variables for production!")
-    fernet = Fernet(key)
-else:
-    try:
-        fernet = Fernet(ENCRYPTION_KEY.encode())
-    except Exception as e:
-        print(f"[ERROR] Invalid ENCRYPTION_KEY: {e}")
-        key = Fernet.generate_key()
-        ENCRYPTION_KEY = key.decode()
-        fernet = Fernet(key)
-        print(f"[WARNING] Generated new encryption key: {ENCRYPTION_KEY}")
+    raise RuntimeError("ENCRYPTION_KEY environment variable is required for token encryption and decryption")
+try:
+    fernet = Fernet(ENCRYPTION_KEY.encode())
+except Exception as e:
+    raise RuntimeError(f"Invalid ENCRYPTION_KEY: {e}")
 def generate_jwt_token(user_id: str, email: str, full_name: str = "", roles: list = None, expiration_hours: int = None) -> str:
     """
     Generate a JWT token containing user information for PDH auto-login.
@@ -92,18 +85,24 @@ def verify_token(token: str) -> dict:
     Returns payload with standard field names.
     Supports both old and new token formats for backward compatibility.
     Args:
-        token: The JWT token string (plain JWT, no encryption)
+        token: The JWT token string, possibly Fernet-encrypted
     Returns:
         The decoded token payload as a dictionary
     Raises:
         jwt.ExpiredSignatureError: If the token has expired
-        jwt.InvalidTokenError: If the token is invalid
+        jwt.InvalidTokenError: If the token is invalid or cannot be decrypted
     """
+    original_token = token
     try:
+        is_probably_encrypted = original_token.startswith('gAAAA') or '.' not in original_token
         try:
-            token = decrypt_token(token)
-        except:
-            pass
+            token = decrypt_token(original_token)
+        except Exception as decrypt_error:
+            if is_probably_encrypted:
+                raise jwt.InvalidTokenError(
+                    f"Failed to decrypt encrypted token: {decrypt_error}"
+                )
+            token = original_token
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         if 'user_id' in payload or 'uid' in payload:
             expanded_payload = {
