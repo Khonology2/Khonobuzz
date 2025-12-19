@@ -8,6 +8,7 @@ import os
 import logging
 import json
 import base64
+import time
 from datetime import datetime
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
@@ -394,14 +395,36 @@ def _validate_token_internal(token: str):
 
 @app.post("/validate-token")
 async def validate_token(request: TokenValidationRequest):
-    result, status_code = _validate_token_internal(request.token)
-    return JSONResponse(status_code=status_code, content=result)
+    start_time = time.time()
+    try:
+        result, status_code = _validate_token_internal(request.token)
+        return JSONResponse(status_code=status_code, content=result)
+    except Exception as e:
+        error_log(f"Error during token validation (POST): {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"valid": False, "error": "Token validation failed"},
+        )
+    finally:
+        elapsed_time = time.time() - start_time
+        info_log(f"Token validation (POST) took {elapsed_time:.3f} seconds")
 
 
 @app.get("/validate-token")
 async def validate_token_get(token: str = Query(..., description="Token to validate")):
-    result, status_code = _validate_token_internal(token)
-    return JSONResponse(status_code=status_code, content=result)
+    start_time = time.time()
+    try:
+        result, status_code = _validate_token_internal(token)
+        return JSONResponse(status_code=status_code, content=result)
+    except Exception as e:
+        error_log(f"Error during token validation (GET): {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"valid": False, "error": "Token validation failed"},
+        )
+    finally:
+        elapsed_time = time.time() - start_time
+        info_log(f"Token validation (GET) took {elapsed_time:.3f} seconds")
 
 @app.post("/api/pdh/sync-user")
 async def pdh_sync_user(data: dict):
