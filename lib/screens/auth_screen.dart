@@ -20,6 +20,8 @@ class AuthScreenState extends State<AuthScreen> {
   bool _isCheckingRedirect = false;
   final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
       GlobalKey();
+  VoidCallback? _pendingNavigation;
+  bool _isAnimatingNavigation = false;
 
   @override
   void initState() {
@@ -131,7 +133,19 @@ class AuthScreenState extends State<AuthScreen> {
         ),
         child: Stack(
           children: [
-            FloatingCirclesParticleAnimation(key: _animationKey),
+            FloatingCirclesParticleAnimation(
+              key: _animationKey,
+              onAnimationComplete: () {
+                if (_pendingNavigation != null) {
+                  final nav = _pendingNavigation!;
+                  _pendingNavigation = null;
+                  _isAnimatingNavigation = false;
+                  if (mounted) {
+                    nav();
+                  }
+                }
+              },
+            ),
             Center(
               child: SingleChildScrollView(
                 child: Padding(
@@ -236,11 +250,18 @@ class AuthScreenState extends State<AuthScreen> {
                         text: 'MANUAL LOGIN',
                         color: const Color(0xFFC10D00),
                         onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const ManualLoginScreen(),
-                            ),
-                          );
+                          if (_isAnimatingNavigation) {
+                            return;
+                          }
+                          _isAnimatingNavigation = true;
+                          final navigator = Navigator.of(context);
+                          _pendingNavigation = () {
+                            navigator.push(
+                              MaterialPageRoute(
+                                builder: (context) => const ManualLoginScreen(),
+                              ),
+                            );
+                          };
                         },
                       ),
                       const SizedBox(height: 16),
@@ -248,11 +269,18 @@ class AuthScreenState extends State<AuthScreen> {
                         text: 'ONBOARD WITH US',
                         color: Colors.grey,
                         onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const OnboardingScreen(),
-                            ),
-                          );
+                          if (_isAnimatingNavigation) {
+                            return;
+                          }
+                          _isAnimatingNavigation = true;
+                          final navigator = Navigator.of(context);
+                          _pendingNavigation = () {
+                            navigator.push(
+                              MaterialPageRoute(
+                                builder: (context) => const OnboardingScreen(),
+                              ),
+                            );
+                          };
                         },
                       ),
                       const SizedBox(height: 48),

@@ -25,6 +25,8 @@ class _LandingScreenState extends State<LandingScreen>
   Animation<double> _clickProgress = const AlwaysStoppedAnimation<double>(0.0);
   final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
       GlobalKey();
+  VoidCallback? _pendingNavigation;
+  bool _isAnimatingNavigation = false;
 
   @override
   void initState() {
@@ -112,7 +114,17 @@ class _LandingScreenState extends State<LandingScreen>
         ),
         child: Stack(
           children: [
-            FloatingCirclesParticleAnimation(key: _animationKey),
+            FloatingCirclesParticleAnimation(
+              key: _animationKey,
+              onAnimationComplete: () {
+                if (_pendingNavigation != null) {
+                  final nav = _pendingNavigation!;
+                  _pendingNavigation = null;
+                  _isAnimatingNavigation = false;
+                  nav();
+                }
+              },
+            ),
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -218,12 +230,16 @@ class _LandingScreenState extends State<LandingScreen>
       },
       child: MaterialButton(
         onPressed: () {
+          if (_isAnimatingNavigation) {
+            return;
+          }
           _clickController.forward(from: 0);
           if (animationKey?.currentState != null) {
             animationKey!.currentState!.triggerParticleExplosion();
           }
           if (onPressed != null) {
-            Future.delayed(const Duration(milliseconds: 1200), onPressed);
+            _pendingNavigation = onPressed;
+            _isAnimatingNavigation = true;
           }
         },
         padding: const EdgeInsets.symmetric(vertical: 16.0),

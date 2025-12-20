@@ -24,6 +24,8 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
   late Animation<double> _blinkAnimation;
   final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
       GlobalKey();
+  VoidCallback? _pendingNavigation;
+  bool _isAnimatingNavigation = false;
 
   @override
   void initState() {
@@ -81,7 +83,19 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
         ),
         child: Stack(
           children: [
-            FloatingCirclesParticleAnimation(key: _animationKey),
+            FloatingCirclesParticleAnimation(
+              key: _animationKey,
+              onAnimationComplete: () {
+                if (_pendingNavigation != null) {
+                  final nav = _pendingNavigation!;
+                  _pendingNavigation = null;
+                  _isAnimatingNavigation = false;
+                  if (mounted) {
+                    nav();
+                  }
+                }
+              },
+            ),
             Center(
               child: SingleChildScrollView(
                 child: Padding(
@@ -463,8 +477,17 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
     return _ClickBubblyButton(
       text: text,
       color: color,
-      onPressed: onPressed,
-      animationKey: _animationKey,
+      onPressed: () {
+        if (_isAnimatingNavigation) {
+          return;
+        }
+        _isAnimatingNavigation = true;
+        _pendingNavigation = onPressed;
+        if (_animationKey.currentState != null) {
+          _animationKey.currentState!.triggerParticleExplosion();
+        }
+      },
+      animationKey: null,
     );
   }
 
@@ -709,13 +732,7 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
           child: MaterialButton(
             onPressed: () {
               _clickController.forward(from: 0);
-              if (widget.animationKey?.currentState != null) {
-                widget.animationKey!.currentState!.triggerParticleExplosion();
-              }
-              Future.delayed(
-                const Duration(milliseconds: 1200),
-                widget.onPressed,
-              );
+              widget.onPressed();
             },
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Text(

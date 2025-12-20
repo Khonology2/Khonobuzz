@@ -730,24 +730,32 @@ class _LoadingConfirmButtonWrapper extends StatefulWidget {
 
 class _LoadingConfirmButtonWrapperState
     extends State<_LoadingConfirmButtonWrapper> {
+  bool _isAnimating = false;
+
   @override
   Widget build(BuildContext context) {
     return LoadingConfirmButton(
       text: widget.text,
       color: widget.color,
       onPressed: () async {
+        if (_isAnimating) {
+          return;
+        }
+        _isAnimating = true;
+        if (widget.animationKey?.currentState != null &&
+            !_isAnimating) {
+          // Guard to avoid double trigger if state changed mid-frame
+          widget.animationKey!.currentState!.triggerParticleExplosion();
+        }
         if (widget.animationKey?.currentState != null) {
           widget.animationKey!.currentState!.triggerParticleExplosion();
         }
-        await Future.delayed(const Duration(milliseconds: 1200));
         widget.onLoadingChanged(true);
-        try {
-          await widget.onPressed();
-        } finally {
-          if (mounted) {
-            widget.onLoadingChanged(false);
-          }
+        await widget.onPressed();
+        if (mounted) {
+          widget.onLoadingChanged(false);
         }
+        _isAnimating = false;
       },
     );
   }
