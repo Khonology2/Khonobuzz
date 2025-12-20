@@ -306,10 +306,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   'Deliverables & Sprint',
                                   'Sign Off Hub',
                                 ],
-                                buttonText: 'Coming Soon',
-                                url: '',
+                                buttonText: 'Launch',
+                                url: 'https://flow-space-1.onrender.com/',
                                 moduleKey: 'deliverable_sprint',
-                                isComingSoon: true,
+                                isComingSoon: false,
                               ),
                             );
 
@@ -604,13 +604,10 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                         widget.url,
                                         widget.moduleKey,
                                       );
-
                                       await _loadLastAccessed();
                                     } finally {
                                       if (mounted) {
-                                        setState(
-                                          () => _isLoading = false,
-                                        );
+                                        setState(() => _isLoading = false);
                                       }
                                     }
                                   },
@@ -633,19 +630,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                   ? Colors.transparent
                                   : primaryAccent.withValues(alpha: 0.5),
                             ),
-                            child: _isLoading
-                                ? SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      valueColor:
-                                          const AlwaysStoppedAnimation<Color>(
-                                            Colors.white,
-                                          ),
-                                    ),
-                                  )
-                                : Text(widget.buttonText),
+                            child: Text(widget.buttonText),
                           ),
                         ],
                       ),
@@ -787,54 +772,26 @@ Future<void> _launchUrlFromContext(
       secureUrl = 'https://$secureUrl';
     }
 
-    final bool isPDHUrl =
-        secureUrl.contains('pdh-web-app.onrender.com') ||
-        secureUrl.contains('pdh');
-    final bool isSOWBuilderUrl =
-        secureUrl.contains('proposal-and-sow-builder.onrender.com') ||
-        secureUrl.contains('sow_builder') ||
-        secureUrl.contains('sow-builder');
-    final bool requiresToken = isPDHUrl || isSOWBuilderUrl;
-
-    String? token;
-    if (requiresToken) {
-      final authProvider = context.read<AuthProvider>();
-
-      if (authProvider.userEmail != null) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Generating authentication token...',
-                style: TextStyle(fontFamily: 'Poppins'),
-              ),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-
-        await authProvider.fetchUserToken();
-        token = authProvider.userToken;
-
-        if (token == null || token.isEmpty) {
-          if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Failed to generate authentication token. Please try again.',
-                style: TextStyle(fontFamily: 'Poppins'),
-              ),
-            ),
-          );
-          return;
-        }
-      }
+    final authProvider = context.read<AuthProvider>();
+    final String? existingToken = authProvider.userToken;
+    if (existingToken == null || existingToken.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Authentication token is missing. Please log in again.',
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
+        ),
+      );
+      return;
     }
+    final String token = existingToken;
 
     Uri uri = Uri.parse(secureUrl);
-    if (requiresToken && token != null && token.isNotEmpty) {
-      uri = uri.replace(queryParameters: {'token': token});
-    }
+    final existingParams = Map<String, String>.from(uri.queryParameters);
+    existingParams['token'] = token;
+    uri = uri.replace(queryParameters: existingParams);
 
     debugPrint('[ModuleLaunch] Launching URL for $moduleKey: $uri');
 
