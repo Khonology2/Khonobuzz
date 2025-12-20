@@ -663,7 +663,6 @@ class _LoadingConfirmButtonWrapperState
         if (widget.animationKey?.currentState != null) {
           widget.animationKey!.currentState!.triggerParticleExplosion();
         }
-        await Future.delayed(const Duration(milliseconds: 1200));
         widget.onLoadingChanged(true);
         try {
           await widget.onPressed();

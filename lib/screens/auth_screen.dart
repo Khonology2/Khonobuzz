@@ -312,8 +312,16 @@ class AuthScreenState extends State<AuthScreen> {
     return _ClickBubblyButton(
       text: text,
       color: color,
-      onPressed: onPressed,
-      animationKey: _animationKey,
+      onPressed: () {
+        if (onPressed == null) {
+          return;
+        }
+        if (_animationKey.currentState != null) {
+          _animationKey.currentState!.triggerParticleExplosion();
+        }
+        onPressed();
+      },
+      animationKey: null,
     );
   }
 }
@@ -592,14 +600,8 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
           child: MaterialButton(
             onPressed: () {
               _clickController.forward(from: 0);
-              if (widget.animationKey?.currentState != null) {
-                widget.animationKey!.currentState!.triggerParticleExplosion();
-              }
               if (widget.onPressed != null) {
-                Future.delayed(
-                  const Duration(milliseconds: 1200),
-                  widget.onPressed!,
-                );
+                widget.onPressed!();
               }
             },
             padding: const EdgeInsets.symmetric(vertical: 16.0),
