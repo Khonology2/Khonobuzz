@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'auth_screen.dart';
 import '../widgets/floating_circles_particle_animation.dart';
@@ -255,30 +256,42 @@ class _BubblesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (progress <= 0 || progress >= 1) return;
-    final paint = Paint()..style = PaintingStyle.fill;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
     final topXs = [0.05, 0.15, 0.3, 0.5, 0.7, 0.85, 0.95];
     final bottomXs = [0.1, 0.25, 0.45, 0.6, 0.75, 0.9];
     for (final x in topXs) {
       final p = progress;
       final y = (0.0 - size.height * (0.8 * p));
-      final r = (size.height * 0.12) * (1.0 - p);
-      paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
-      canvas.drawCircle(
-        Offset(x * size.width, y + size.height * 0.1),
-        r,
-        paint,
-      );
+      final baseRadius = (size.height * 0.12) * (1.0 - p);
+      if (baseRadius <= 0) continue;
+      final strokeWidth = baseRadius * 0.6;
+      final radius = baseRadius - strokeWidth / 2;
+      paint
+        ..color = color.withValues(alpha: 0.5 * (1.0 - p))
+        ..strokeWidth = strokeWidth;
+      final center = Offset(x * size.width, y + size.height * 0.1);
+      final rect = Rect.fromCircle(center: center, radius: radius);
+      const startAngle = -math.pi * 0.75;
+      const sweepAngle = math.pi * 1.42;
+      canvas.drawArc(rect, startAngle, sweepAngle, false, paint);
     }
     for (final x in bottomXs) {
       final p = progress;
       final y = size.height + size.height * (0.8 * p);
-      final r = (size.height * 0.12) * (1.0 - p);
-      paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
-      canvas.drawCircle(
-        Offset(x * size.width, y - size.height * 0.1),
-        r,
-        paint,
-      );
+      final baseRadius = (size.height * 0.12) * (1.0 - p);
+      if (baseRadius <= 0) continue;
+      final strokeWidth = baseRadius * 0.6;
+      final radius = baseRadius - strokeWidth / 2;
+      paint
+        ..color = color.withValues(alpha: 0.5 * (1.0 - p))
+        ..strokeWidth = strokeWidth;
+      final center = Offset(x * size.width, y - size.height * 0.1);
+      final rect = Rect.fromCircle(center: center, radius: radius);
+      const startAngle = -math.pi * 0.75;
+      const sweepAngle = math.pi * 1.42;
+      canvas.drawArc(rect, startAngle, sweepAngle, false, paint);
     }
   }
 
