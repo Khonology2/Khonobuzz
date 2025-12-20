@@ -443,215 +443,253 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
   @override
   Widget build(BuildContext context) {
     final String? description = _getModuleDescription(widget.moduleKey);
-    return Container(
-      width: widget.cardWidth * 1.1,
-      height: 400,
-      padding: EdgeInsets.all(widget.cardWidth * 0.05),
-      child: MouseRegion(
-        onEnter: (_) {
-          setState(() => _isHovered = true);
-          _animationController.forward();
-        },
-        onExit: (_) {
-          setState(() => _isHovered = false);
-          _animationController.reverse();
-        },
-        child: ScaleTransition(
-          scale: _scaleAnimation,
-          alignment: Alignment.center,
-          child: SizedBox(
-            width: widget.cardWidth,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16.0),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: FloatingCirclesParticleAnimation(
-                        key: _animationKey,
-                      ),
-                    ),
-                  ),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: widget.cardWidth,
-                    padding: const EdgeInsets.all(28.8),
-                    decoration: BoxDecoration(
-                      color: primaryDark.withValues(
-                        alpha: _isHovered ? 0.7 : 0.5,
-                      ),
-                      borderRadius: BorderRadius.circular(16.0),
-                      border: Border.all(
-                        color: _isHovered ? Colors.white38 : Colors.white24,
-                        width: _isHovered ? 1.5 : 1.0,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _isHovered
-                              ? Colors.black.withValues(alpha: 0.7)
-                              : Colors.black54,
-                          blurRadius: _isHovered ? 35 : 25,
-                          offset: Offset(0, _isHovered ? 15 : 10),
-                          spreadRadius: _isHovered ? 2 : 0,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool hasBoundedHeight =
+            constraints.hasBoundedHeight && constraints.maxHeight.isFinite;
+        final double targetHeight = hasBoundedHeight && constraints.maxHeight > 0
+            ? constraints.maxHeight
+            : 400;
+        return Container(
+          width: widget.cardWidth * 1.1,
+          height: targetHeight,
+          padding: EdgeInsets.all(widget.cardWidth * 0.05),
+          child: MouseRegion(
+            onEnter: (_) {
+              setState(() => _isHovered = true);
+              _animationController.forward();
+            },
+            onExit: (_) {
+              setState(() => _isHovered = false);
+              _animationController.reverse();
+            },
+            child: ScaleTransition(
+              scale: _scaleAnimation,
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: widget.cardWidth,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16.0),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: FloatingCirclesParticleAnimation(
+                            key: _animationKey,
+                          ),
                         ),
-                      ],
-                    ),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Align(
-                            alignment: Alignment.center,
-                            child: Image.asset(
-                              'assets/images/khonology_white_logo.png',
-                              height: 40,
-                              fit: BoxFit.contain,
-                            ),
+                      ),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: widget.cardWidth,
+                        padding: const EdgeInsets.all(28.8),
+                        decoration: BoxDecoration(
+                          color: primaryDark.withValues(
+                            alpha: _isHovered ? 0.7 : 0.5,
                           ),
-                          const SizedBox(height: 16.0),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: widget.titleLines.map((line) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 3.6),
-                                child: Text(
-                                  line,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: widget.cardWidth > 300
-                                        ? 23.4
-                                        : widget.cardWidth > 200
-                                        ? 19.8
-                                        : 16.2,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                    height: 1.3,
-                                  ),
+                          borderRadius: BorderRadius.circular(16.0),
+                          border: Border.all(
+                            color:
+                                _isHovered ? Colors.white38 : Colors.white24,
+                            width: _isHovered ? 1.5 : 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _isHovered
+                                  ? Colors.black.withValues(alpha: 0.7)
+                                  : Colors.black54,
+                              blurRadius: _isHovered ? 35 : 25,
+                              offset: Offset(0, _isHovered ? 15 : 10),
+                              spreadRadius: _isHovered ? 2 : 0,
+                            ),
+                          ],
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, innerConstraints) {
+                            return SingleChildScrollView(
+                              physics: const ClampingScrollPhysics(),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: innerConstraints.maxHeight,
                                 ),
-                              );
-                            }).toList(),
-                          ),
-                          if (widget.subtitle != null &&
-                              widget.subtitle!.isNotEmpty) ...[
-                            const SizedBox(height: 10.8),
-                            Text(
-                              widget.subtitle!,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 18.0,
-                                fontWeight: FontWeight.w600,
-                                color: primaryAccent,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                          if (_lastAccessedText != null) ...[
-                            const SizedBox(height: 10.8),
-                            Text(
-                              _lastAccessedText!,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12.6,
-                                fontWeight: FontWeight.w400,
-                                color: Colors.white70,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 18.0),
-                          if (description != null && description.isNotEmpty) ...[
-                            Text(
-                              description,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white70,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                            const SizedBox(height: 18.0),
-                          ],
-                          ElevatedButton(
-                            onPressed: _isLoading
-                                ? null
-                                : () async {
-                                    _animationKey.currentState
-                                        ?.triggerParticleExplosion();
-
-                                    if (widget.isComingSoon) {
-                                      if (!mounted) return;
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Deliverables & Sprint Sign-Off Hub is coming soon.',
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Align(
+                                      alignment: Alignment.center,
+                                      child: Image.asset(
+                                        'assets/images/khonology_white_logo.png',
+                                        height: 40,
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16.0),
+                                    Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children:
+                                          widget.titleLines.map((line) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 3.6,
+                                          ),
+                                          child: Text(
+                                            line,
+                                            textAlign: TextAlign.center,
                                             style: TextStyle(
-                                              fontFamily: 'Poppins',
+                                              fontSize:
+                                                  widget.cardWidth > 300
+                                                      ? 23.4
+                                                      : widget.cardWidth > 200
+                                                          ? 19.8
+                                                          : 16.2,
+                                              fontWeight: FontWeight.w900,
+                                              color: Colors.white,
+                                              height: 1.3,
                                             ),
                                           ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                    if (widget.subtitle != null &&
+                                        widget.subtitle!.isNotEmpty) ...[
+                                      const SizedBox(height: 10.8),
+                                      Text(
+                                        widget.subtitle!,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontSize: 18.0,
+                                          fontWeight: FontWeight.w600,
+                                          color: primaryAccent,
                                         ),
-                                      );
-                                      return;
-                                    }
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                    if (_lastAccessedText != null) ...[
+                                      const SizedBox(height: 10.8),
+                                      Text(
+                                        _lastAccessedText!,
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 12.6,
+                                          fontWeight: FontWeight.w400,
+                                          color: Colors.white70,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 18.0),
+                                    if (description != null &&
+                                        description.isNotEmpty) ...[
+                                      Text(
+                                        description,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.white70,
+                                          fontFamily: 'Poppins',
+                                        ),
+                                      ),
+                                      const SizedBox(height: 18.0),
+                                    ],
+                                    ElevatedButton(
+                                      onPressed: _isLoading
+                                          ? null
+                                          : () async {
+                                              _animationKey.currentState
+                                                  ?.triggerParticleExplosion();
 
-                                    setState(() => _isLoading = true);
-                                    try {
-                                      await _launchUrlFromContext(
-                                        widget.context,
-                                        widget.url,
-                                        widget.moduleKey,
-                                      );
-                                      await _loadLastAccessed();
-                                    } finally {
-                                      if (mounted) {
-                                        setState(() => _isLoading = false);
-                                      }
-                                    }
-                                  },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryAccent,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 36.0,
-                                vertical: 14.4,
+                                              if (widget.isComingSoon) {
+                                                if (!mounted) {
+                                                  return;
+                                                }
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Deliverables & Sprint Sign-Off Hub is coming soon.',
+                                                      style: TextStyle(
+                                                        fontFamily: 'Poppins',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                                return;
+                                              }
+
+                                              setState(
+                                                () => _isLoading = true,
+                                              );
+                                              try {
+                                                await _launchUrlFromContext(
+                                                  widget.context,
+                                                  widget.url,
+                                                  widget.moduleKey,
+                                                );
+                                                await _loadLastAccessed();
+                                              } finally {
+                                                if (mounted) {
+                                                  setState(
+                                                    () => _isLoading = false,
+                                                  );
+                                                }
+                                              }
+                                            },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: primaryAccent,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 36.0,
+                                          vertical: 14.4,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(45.0),
+                                        ),
+                                        textStyle: const TextStyle(
+                                          fontSize: 16.2,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        elevation:
+                                            widget.isComingSoon ? 0 : 10,
+                                        shadowColor: widget.isComingSoon
+                                            ? Colors.transparent
+                                            : primaryAccent
+                                                .withValues(alpha: 0.5),
+                                      ),
+                                      child: Text(widget.buttonText),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(45.0),
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 16.2,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              elevation: widget.isComingSoon ? 0 : 10,
-                              shadowColor: widget.isComingSoon
-                                  ? Colors.transparent
-                                  : primaryAccent.withValues(alpha: 0.5),
-                            ),
-                            child: Text(widget.buttonText),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (_isLoading)
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(16.0),
+                            );
+                          },
                         ),
-                        child: Center(child: _BouncingRedSpinner()),
                       ),
-                    ),
-                ],
+                      if (_isLoading)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color:
+                                  Colors.black.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(16.0),
+                            ),
+                            child: Center(
+                              child: _BouncingRedSpinner(),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

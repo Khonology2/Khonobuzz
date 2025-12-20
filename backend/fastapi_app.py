@@ -95,7 +95,7 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
         else:
             debug_log(f"Checking for {json_env_var}: SET (length: {len(json_str)} chars)")
     else:
-        error_log(f"Checking for {json_env_var}: NOT SET")
+        debug_log(f"Checking for {json_env_var}: NOT SET")
         possible_vars = [
             json_env_var.upper(),
             json_env_var.lower(),
@@ -105,7 +105,7 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
         ]
         for possible_var in possible_vars:
             if possible_var != json_env_var and possible_var in os.environ:
-                error_log(f"Found similar variable '{possible_var}' but looking for '{json_env_var}'")
+                debug_log(f"Found similar variable '{possible_var}' but looking for '{json_env_var}'")
     if json_str:
         try:
             json_str = json_str.strip()

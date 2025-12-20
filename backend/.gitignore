@@ -27,3 +27,6 @@ venv/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Rules
+.trae/rules/buzzrules.md
