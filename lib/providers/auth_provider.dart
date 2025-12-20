@@ -36,6 +36,77 @@ class AuthProvider extends ChangeNotifier {
     _loadAuthState();
   }
 
+  Future<http.Response> _postWithTimeoutAndRetry(
+    Uri url, {
+    Map<String, String>? headers,
+    Object? body,
+    int maxRetries = 1,
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    http.Response? lastResponse;
+    Object? lastError;
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      final attemptStart = DateTime.now().millisecondsSinceEpoch;
+      try {
+        final response = await http
+            .post(
+              url,
+              headers: headers,
+              body: body,
+            )
+            .timeout(
+              timeout,
+              onTimeout: () {
+                throw TimeoutException(
+                  'Request timed out after ${timeout.inSeconds} seconds.',
+                );
+              },
+            );
+        final elapsed =
+            DateTime.now().millisecondsSinceEpoch - attemptStart;
+        debugPrint(
+          '[AuthProvider] POST ${url.path} attempt ${attempt + 1} '
+          'completed in ${elapsed}ms with status ${response.statusCode}',
+        );
+        lastResponse = response;
+        if (response.statusCode < 500) {
+          return response;
+        }
+      } on TimeoutException catch (e) {
+        lastError = e;
+        final elapsed =
+            DateTime.now().millisecondsSinceEpoch - attemptStart;
+        debugPrint(
+          '[AuthProvider] POST ${url.path} attempt ${attempt + 1} '
+          'timed out after ${elapsed}ms: ${e.message}',
+        );
+      } catch (e) {
+        lastError = e;
+        final elapsed =
+            DateTime.now().millisecondsSinceEpoch - attemptStart;
+        debugPrint(
+          '[AuthProvider] POST ${url.path} attempt ${attempt + 1} '
+          'failed after ${elapsed}ms: $e',
+        );
+        if (e is! TimeoutException) {
+          break;
+        }
+      }
+      if (attempt < maxRetries) {
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+    }
+    if (lastResponse != null) {
+      return lastResponse;
+    }
+    if (lastError is TimeoutException) {
+      throw lastError;
+    }
+    throw Exception(
+      lastError?.toString() ?? 'Request failed after retries',
+    );
+  }
+
   Future<void> _loadAuthState() async {
     final prefs = await SharedPreferences.getInstance();
     _isAuthenticated = prefs.getBool('isAuthenticated') ?? false;
@@ -60,30 +131,34 @@ class AuthProvider extends ChangeNotifier {
 
     final url = Uri.parse(
       ApiConfig.authRegisterEndpoint,
-    ); // Your backend registration endpoint
+    );
 
     // Debug logging
     debugPrint('[AuthProvider] Attempting to register/login with URL: $url');
     debugPrint('[AuthProvider] Backend base URL: ${ApiConfig.baseUrl}');
 
     try {
-      final response = await http.post(
+      final start = DateTime.now().millisecondsSinceEpoch;
+      final response = await _postWithTimeoutAndRetry(
         url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': email,
-          'password':
-              'password', // Placeholder: You might want a proper password or remove this if registration is passwordless
+          'password': 'password',
           'name': '$firstName $lastName',
-          'firstName': firstName, // Added to match Pydantic model
-          'lastName': lastName, // Added to match Pydantic model
+          'firstName': firstName,
+          'lastName': lastName,
           'role': role ?? 'Staff',
-          'department': department ?? '', // Handle nullable department
+          'department': department ?? '',
           'designation': designation,
         }),
       );
+      final elapsed = DateTime.now().millisecondsSinceEpoch - start;
 
-      debugPrint('[AuthProvider] Response status: ${response.statusCode}');
+      debugPrint(
+        '[AuthProvider] Registration/login response '
+        '${response.statusCode} in ${elapsed}ms',
+      );
       debugPrint('[AuthProvider] Response body: ${response.body}');
 
       if (response.statusCode == 201) {
@@ -198,6 +273,14 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return false; // Indicate failure
       }
+    } on TimeoutException catch (e) {
+      debugPrint(
+        '[AuthProvider] Registration/login timed out: ${e.message}',
+      );
+      _isAuthenticated = false;
+      _userAlreadyOnboarded = false;
+      notifyListeners();
+      return false;
     } catch (e) {
       // Enhanced error logging
       debugPrint('[AuthProvider] ERROR during registration/login: $e');
@@ -216,6 +299,7 @@ class AuthProvider extends ChangeNotifier {
     final url = Uri.parse(ApiConfig.authLoginEndpoint);
 
     try {
+      final start = DateTime.now().millisecondsSinceEpoch;
       final headers = <String, String>{
         'Content-Type': 'application/json',
       };
@@ -223,20 +307,15 @@ class AuthProvider extends ChangeNotifier {
         headers['X-Session-Type'] = 'special';
       }
 
-      final response = await http
-          .post(
-            url,
-            headers: headers,
-            body: json.encode({'email': email}),
-          )
-          .timeout(
-            const Duration(seconds: 20),
-            onTimeout: () {
-              throw TimeoutException(
-                'Login request timed out. Please check your internet connection and try again.',
-              );
-            },
-          );
+      final response = await _postWithTimeoutAndRetry(
+        url,
+        headers: headers,
+        body: json.encode({'email': email}),
+      );
+      final elapsed = DateTime.now().millisecondsSinceEpoch - start;
+      debugPrint(
+        '[AuthProvider] manualLogin response ${response.statusCode} in ${elapsed}ms',
+      );
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);

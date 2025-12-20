@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from fastapi import status
 from fastapi import HTTPException
-from typing import Optional
+from typing import Optional, Dict, Any
 from pathlib import Path
 import jwt
 try:
@@ -50,6 +50,8 @@ def error_log(message: str):
 def info_log(message: str):
     logger.info(message)
     print(f"[INFO] {message}")
+LOGIN_CACHE_TTL_SECONDS = int(os.environ.get('LOGIN_CACHE_TTL_SECONDS', '600'))
+USER_CACHE: Dict[str, Dict[str, Any]] = {}
 def derive_module_access_from_role(module_access: Optional[str], module_access_role: Optional[str]) -> Optional[str]:
     if module_access and module_access.strip():
         return module_access
@@ -277,6 +279,16 @@ app = FastAPI(
     description="Backend API for Khonology project management application",
     version="1.0.0",
 )
+@app.on_event("startup")
+async def startup_warmup():
+    start = time.time()
+    try:
+        db.collection('users').limit(1).get()
+        info_log(
+            f"Startup warm-up Firestore users took {time.time() - start:.3f} seconds",
+        )
+    except Exception as e:
+        error_log(f"Startup warm-up failed: {e}")
 cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
 PRODUCTION_FRONTEND_URLS = [
     'https://khonobuzz-web-app.onrender.com',
@@ -1131,6 +1143,13 @@ async def create_initial_roles():
         return JSONResponse(status_code=500, content={"error": str(e)})
 @app.post("/api/auth/login")
 async def login_user(user_login: UserLogin, request: Request):
+    request_start = time.time()
+    user_lookup_start = None
+    user_lookup_end = None
+    onboarding_lookup_start = None
+    onboarding_lookup_end = None
+    token_gen_start = None
+    token_gen_end = None
     try:
         session_header = request.headers.get('X-Session-Type', '')
         is_special_session = session_header == 'special'
@@ -1149,29 +1168,48 @@ async def login_user(user_login: UserLogin, request: Request):
         if not is_special_session:
             info_log(f"Login attempt for email: {normalized_email}")
         users_ref = db.collection('users')
-        try:
-            all_users = users_ref.stream()
-            user_data = None
-            user_id = None
-            stored_email = None
-            for user_doc in all_users:
-                doc_data = user_doc.to_dict()
-                doc_email = doc_data.get('email', '').strip() if doc_data.get('email') else ''
-                if doc_email.lower() == normalized_email:
+        user_lookup_start = time.time()
+        user_data = None
+        user_id = None
+        stored_email = None
+        cache_key = f"user:{normalized_email}"
+        cache_entry = USER_CACHE.get(cache_key)
+        now = time.time()
+        if cache_entry and cache_entry.get("expires_at", 0) > now:
+            user_data = cache_entry.get("user_data")
+            user_id = cache_entry.get("user_id")
+            stored_email = cache_entry.get("stored_email")
+            debug_log(f"Login cache hit for {normalized_email}")
+        else:
+            try:
+                query = users_ref.where('email', '==', normalized_email).limit(1)
+                users = query.get()
+                if users:
+                    user_doc = users[0]
+                    doc_data = user_doc.to_dict()
+                    doc_email = doc_data.get('email', '').strip() if doc_data.get('email') else ''
                     user_data = doc_data
                     user_id = user_doc.id
                     stored_email = doc_email
-                    break
-            if not user_data or not user_id:
-                print(f"[DEBUG] User not found: {normalized_email}")
-                return JSONResponse(status_code=404, content={"error": "User not found"})
-        except Exception as query_error:
-            if not is_special_session:
-                error_log(f"Firestore query error during login: {query_error}")
-            return JSONResponse(
-                status_code=500,
-                content={"error": f"Database query failed: {str(query_error)}"}
-            )
+                    USER_CACHE[cache_key] = {
+                        "user_data": user_data,
+                        "user_id": user_id,
+                        "stored_email": stored_email,
+                        "expires_at": now + LOGIN_CACHE_TTL_SECONDS,
+                    }
+                    debug_log(f"Login cache populated for {normalized_email}")
+            except Exception as query_error:
+                user_lookup_end = time.time()
+                if not is_special_session:
+                    error_log(f"Firestore query error during login: {query_error}")
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": f"Database query failed: {str(query_error)}"}
+                )
+        user_lookup_end = time.time()
+        if not user_data or not user_id:
+            print(f"[DEBUG] User not found: {normalized_email}")
+            return JSONResponse(status_code=404, content={"error": "User not found"})
         user_status = user_data.get('status', 'Pending')
         if not is_special_session and user_status != 'Active':
             return JSONResponse(
@@ -1183,6 +1221,7 @@ async def login_user(user_login: UserLogin, request: Request):
             )
         onboarding_data = {}
         module_access_role = ""
+        onboarding_lookup_start = time.time()
         try:
             onboarding_query = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
             for onboarding_doc in onboarding_query:
@@ -1191,6 +1230,7 @@ async def login_user(user_login: UserLogin, request: Request):
                 break
         except Exception as onboarding_query_error:
             error_log(f"Failed to query onboarding collection: {onboarding_query_error}")
+        onboarding_lookup_end = time.time()
         if not module_access_role:
             module_access_role = user_data.get('moduleAccessRole', '')
         roles = parse_module_access_role_to_roles(module_access_role)
@@ -1202,6 +1242,7 @@ async def login_user(user_login: UserLogin, request: Request):
         if not full_name:
             full_name = user_data.get('name', '')
         encrypted_token = None
+        token_gen_start = time.time()
         try:
             encrypted_token = generate_and_encrypt_token(
                 user_id=user_id,
@@ -1211,6 +1252,7 @@ async def login_user(user_login: UserLogin, request: Request):
             )
         except Exception:
             pass
+        token_gen_end = time.time()
         if encrypted_token:
             if onboarding_data:
                 try:
@@ -1320,6 +1362,24 @@ async def login_user(user_login: UserLogin, request: Request):
             status_code=500,
             content={"error": f"Login failed: {str(e)}"}
         )
+    finally:
+        total_duration = time.time() - request_start
+        if user_lookup_start is not None and user_lookup_end is not None:
+            info_log(
+                f"/api/auth/login user lookup took "
+                f"{user_lookup_end - user_lookup_start:.3f} seconds",
+            )
+        if onboarding_lookup_start is not None and onboarding_lookup_end is not None:
+            info_log(
+                f"/api/auth/login onboarding lookup took "
+                f"{onboarding_lookup_end - onboarding_lookup_start:.3f} seconds",
+            )
+        if token_gen_start is not None and token_gen_end is not None:
+            info_log(
+                f"/api/auth/login token generation took "
+                f"{token_gen_end - token_gen_start:.3f} seconds",
+            )
+        info_log(f"/api/auth/login completed in {total_duration:.3f} seconds")
 @app.get("/api/auth/token")
 async def get_user_token(email: str = Query(..., description="User email address")):
     """
