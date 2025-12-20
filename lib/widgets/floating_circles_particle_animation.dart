@@ -71,6 +71,18 @@ class FloatingCirclesParticleAnimationState
   }
 
   void triggerParticleExplosion() {
+    if (_isExploding || _isMorphing || _isSpinning || _showParticles) {
+      return;
+    }
+
+    _spinController.stop();
+    _spinController.reset();
+    _particleController.stop();
+    _particleController.reset();
+    _fadeInController.stop();
+    _fadeInController.reset();
+    _dissolveController.stop();
+    _dissolveController.reset();
     _morphController.stop();
     _morphController.reset();
     setState(() {
