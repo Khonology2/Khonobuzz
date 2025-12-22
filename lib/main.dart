@@ -7,11 +7,12 @@ import 'screens/analytics_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/project_data_screen.dart';
 import 'screens/projects_screen.dart';
-import 'screens/module_screen.dart'; // Import ModuleScreen
+import 'screens/module_screen.dart';
 import 'screens/entity_management_screen.dart';
 import 'screens/user_management_screen.dart';
 import 'screens/module_access_screen.dart';
-import 'screens/landing_screen.dart'; // Import LandingScreen
+import 'screens/landing_screen.dart';
+import 'screens/onboarding_alert_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
 import 'widgets/side_menu.dart';
@@ -93,6 +94,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 9; // Initialize to Modules screen (index 9)
+  bool _isAlertPanelOpen = false;
 
   // Check if current user is Admin
   bool _isAdmin() {
@@ -128,11 +130,18 @@ class _MainScreenState extends State<MainScreen> {
 
     // Save the initial index as current screen index for refresh persistence
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        final authProvider = context.read<AuthProvider>();
-        authProvider.saveCurrentScreenIndex(finalIndex);
-        // Clear the initial screen index after using it
-        authProvider.clearInitialScreenIndex();
+      if (!mounted) {
+        return;
+      }
+      final authProvider = context.read<AuthProvider>();
+      authProvider.saveCurrentScreenIndex(finalIndex);
+      authProvider.clearInitialScreenIndex();
+      if ((authProvider.userRole ?? '').toLowerCase() == 'admin') {
+        final userProvider = context.read<UserProvider>();
+        userProvider.fetchUsers();
+        if (userProvider.hasCachedData) {
+          userProvider.refreshUsersInBackground();
+        }
       }
     });
   }
@@ -185,6 +194,28 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final userProvider = context.watch<UserProvider>();
+    final users = userProvider.users;
+
+    final pendingUsers = users
+        .where(
+          (u) => u.status.toLowerCase() == 'pending',
+        )
+        .toList();
+
+    final activeUsersWithoutAssignments = users
+        .where(
+          (u) =>
+              u.status.toLowerCase() == 'active' &&
+              ((u.entity == null || u.entity!.isEmpty) ||
+                  (u.moduleAccess == null || u.moduleAccess!.isEmpty)),
+        )
+        .toList();
+
+    final hasOnboardingAlerts =
+        _isAdmin() &&
+        (pendingUsers.isNotEmpty || activeUsersWithoutAssignments.isNotEmpty);
+
     return Scaffold(
       appBar: PreferredSize(
         preferredSize: Size.zero,
@@ -192,20 +223,96 @@ class _MainScreenState extends State<MainScreen> {
           // The leading IconButton to open the drawer will be removed later.
         ),
       ),
-      body: Row(
+      body: Stack(
         children: [
-          SideMenu(
-            selectedIndex: (_selectedIndex < _screens.length)
-                ? _selectedIndex
-                : 0,
-            onItemSelected: _onItemTapped,
-          ),
-          Expanded(
-            child:
-                _screens[(_selectedIndex < _screens.length)
+          Row(
+            children: [
+              SideMenu(
+                selectedIndex: (_selectedIndex < _screens.length)
                     ? _selectedIndex
-                    : 0],
+                    : 0,
+                onItemSelected: _onItemTapped,
+              ),
+              Expanded(
+                child:
+                    _screens[(_selectedIndex < _screens.length)
+                        ? _selectedIndex
+                        : 0],
+              ),
+            ],
           ),
+          if (hasOnboardingAlerts)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _isAlertPanelOpen = !_isAlertPanelOpen;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(24),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFC10D00),
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.4),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.notifications_active,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              pendingUsers.isNotEmpty
+                                  ? 'New user onboarded'
+                                  : 'Assign access and entity',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_isAlertPanelOpen) ...[
+                    const SizedBox(height: 8),
+                    OnboardingAlertPanel(
+                      pendingUsers: pendingUsers,
+                      activeUsersWithoutAssignments:
+                          activeUsersWithoutAssignments,
+                      onClose: () {
+                        setState(() {
+                          _isAlertPanelOpen = false;
+                        });
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
         ],
       ),
     );
