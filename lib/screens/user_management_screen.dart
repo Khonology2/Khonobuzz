@@ -1913,14 +1913,46 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     });
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Deleting ${userIds.length} user(s)...',
-            style: const TextStyle(fontFamily: 'Poppins'),
-          ),
-          duration: const Duration(seconds: 2),
-        ),
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return Center(
+            child: Container(
+              padding: const EdgeInsets.all(24.0),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C3E50),
+                borderRadius: BorderRadius.circular(16.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Color(0xFFC10D00),
+                    ),
+                  ),
+                  const SizedBox(height: 16.0),
+                  Text(
+                    'Deleting ${userIds.length} user(s)...',
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 14.0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       );
     }
 
@@ -1970,6 +2002,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
 
     if (mounted) {
+      Navigator.of(context).pop();
+    }
+
+    if (mounted) {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
 
       // Clear local state if expanded user was deleted
@@ -1988,34 +2024,64 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
 
     if (mounted) {
-      if (failureCount == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Successfully deleted $successCount user(s)',
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white,
+      final bool allSuccessful = failureCount == 0;
+      final String message = allSuccessful
+          ? 'Successfully deleted $successCount user(s)'
+          : 'Deleted $successCount user(s), $failureCount failed';
+
+      await showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (BuildContext dialogContext) {
+          return Center(
+            child: Container(
+              padding: const EdgeInsets.all(24.0),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C3E50),
+                borderRadius: BorderRadius.circular(16.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    allSuccessful ? Icons.check_circle : Icons.error_outline,
+                    color: allSuccessful ? Colors.greenAccent : Colors.orange,
+                    size: 36.0,
+                  ),
+                  const SizedBox(height: 16.0),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 14.0,
+                    ),
+                  ),
+                  const SizedBox(height: 16.0),
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text(
+                      'OK',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Deleted $successCount user(s), $failureCount failed',
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white,
-              ),
-            ),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+          );
+        },
+      );
     }
   }
 
