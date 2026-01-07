@@ -7,6 +7,7 @@ import 'manual_login_screen.dart';
 import '../main.dart';
 import 'onboarding_screen.dart';
 import '../widgets/floating_circles_particle_animation.dart';
+import '../widgets/version_control.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -146,6 +147,7 @@ class AuthScreenState extends State<AuthScreen> {
                 }
               },
             ),
+            const VersionControlOverlay(),
             Center(
               child: SingleChildScrollView(
                 child: Padding(

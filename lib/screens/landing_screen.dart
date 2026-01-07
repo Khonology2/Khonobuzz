@@ -1,7 +1,10 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import '../config/api_config.dart';
+import '../providers/user_provider.dart';
+import '../widgets/version_control.dart';
 import 'auth_screen.dart';
 import '../widgets/floating_circles_particle_animation.dart';
 
@@ -127,6 +130,7 @@ class _LandingScreenState extends State<LandingScreen>
                 }
               },
             ),
+            const VersionControlOverlay(),
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -268,14 +272,27 @@ class _LandingScreenState extends State<LandingScreen>
 
   Future<void> _pingBackend() async {
     try {
+      debugPrint(
+        '[LandingScreen] Starting backend warm-up and user prefetch',
+      );
+      final userProvider = context.read<UserProvider>();
+      debugPrint(
+        '[LandingScreen] Obtained UserProvider instance for prefetch',
+      );
       final uri = Uri.parse(ApiConfig.baseUrl);
       debugPrint('[LandingScreen] Pinging backend at: ${uri.toString()}');
       final response = await http.get(uri).timeout(const Duration(seconds: 5));
       debugPrint(
         '[LandingScreen] Backend ping completed with status: ${response.statusCode}',
       );
+      debugPrint(
+        '[LandingScreen] Triggering initial user fetch from backend (forceRefresh=true)',
+      );
+      userProvider.fetchUsers(forceRefresh: true);
     } catch (e) {
-      debugPrint('[LandingScreen] Backend ping failed: $e');
+      debugPrint(
+        '[LandingScreen] Backend warm-up or user prefetch failed: $e',
+      );
     }
   }
 }

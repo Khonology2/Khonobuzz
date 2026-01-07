@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'auth_screen.dart';
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart';
 import 'package:video_player/video_player.dart';
+import '../widgets/version_control.dart';
 
 class LobbyScreen extends StatefulWidget {
   final FlutterAadOauth? oauth;
@@ -244,100 +245,103 @@ class LobbyScreenState extends State<LobbyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          Colors.transparent,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(
-              'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          Container(
+            width: double.infinity,
+            height: double.infinity,
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage(
+                  'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
+                ),
+                fit: BoxFit.cover,
+              ),
             ),
-            fit: BoxFit.cover,
-          ),
-        ),
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 24.0,
-              vertical: 32.0,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-
-                  if ((_videoController?.value.isInitialized ?? false))
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white24, width: 2),
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 32.0,
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if ((_videoController?.value.isInitialized ?? false))
+                        Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white24, width: 2),
+                          ),
+                          child: ClipOval(
+                            child: FittedBox(
+                              fit: BoxFit.cover,
+                              child: SizedBox(
+                                width:
+                                    _videoController?.value.size.width ?? 0,
+                                height:
+                                    _videoController?.value.size.height ?? 0,
+                                child: VideoPlayer(_videoController!),
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        const SizedBox(height: 72),
+                      const SizedBox(height: 24),
+                      Image.asset(
+                        'assets/images/khono.png',
+                        height: 100,
                       ),
-                      child: ClipOval(
-                        child: FittedBox(
-                          fit: BoxFit.cover,
-                          child: SizedBox(
-                            width: _videoController?.value.size.width ?? 0,
-                            height: _videoController?.value.size.height ?? 0,
-                            child: VideoPlayer(_videoController!),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Please be patient while Khonology Admin attends to your onboarding request...',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      _AnimatedBubblyButton(
+                        text: 'Go Back',
+                        color: const Color(0xFFC10D00),
+                        onPressed: () {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(
+                              builder: (context) => const AuthScreen(),
+                            ),
+                            (Route<dynamic> route) => false,
+                          );
+                        },
+                        bounceDelayMs: 250,
+                      ),
+                      const SizedBox(height: 32),
+                      AnimatedOpacity(
+                        opacity: _discsOpacity,
+                        duration: const Duration(milliseconds: 1000),
+                        child: RotatedBox(
+                          quarterTurns: 1,
+                          child: Image.asset(
+                            'assets/videos/spinning_discs.gif',
+                            height: 122,
                           ),
                         ),
                       ),
-                    )
-                  else
-                    const SizedBox(height: 72),
-                  const SizedBox(height: 24),
-
-                  Image.asset(
-                    'assets/images/khono.png',
-                    height: 100,
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Please be patient while Khonology Admin attends to your onboarding request...',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.white,
-                      fontFamily: 'Poppins',
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  _AnimatedBubblyButton(
-                    text: 'Go Back',
-                    color: const Color(0xFFC10D00),
-                    onPressed: () {
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(
-                          builder: (context) => const AuthScreen(),
-                        ),
-                        (Route<dynamic> route) => false,
-                      );
-                    },
-                    bounceDelayMs: 250,
-                  ),
-                  const SizedBox(height: 32),
-
-                  AnimatedOpacity(
-                    opacity: _discsOpacity,
-                    duration: const Duration(milliseconds: 1000),
-                    child: RotatedBox(
-                      quarterTurns: 1,
-                      child: Image.asset(
-                        'assets/videos/spinning_discs.gif',
-                        height: 122,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
+          const VersionControlOverlay(),
+        ],
       ),
     );
   }
