@@ -14,7 +14,7 @@ class VersionControlOverlay extends StatelessWidget {
         versionLabel,
         style: const TextStyle(
           fontFamily: 'Poppins',
-          fontSize: 16,
+          fontSize: 15,
           fontWeight: FontWeight.w400,
           color: Colors.white70,
         ),
@@ -22,4 +22,3 @@ class VersionControlOverlay extends StatelessWidget {
     );
   }
 }
-
