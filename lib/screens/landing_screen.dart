@@ -269,8 +269,14 @@ class _LandingScreenState extends State<LandingScreen>
   Future<void> _pingBackend() async {
     try {
       final uri = Uri.parse(ApiConfig.baseUrl);
-      await http.get(uri).timeout(const Duration(seconds: 5));
-    } catch (_) {}
+      debugPrint('[LandingScreen] Pinging backend at: ${uri.toString()}');
+      final response = await http.get(uri).timeout(const Duration(seconds: 5));
+      debugPrint(
+        '[LandingScreen] Backend ping completed with status: ${response.statusCode}',
+      );
+    } catch (e) {
+      debugPrint('[LandingScreen] Backend ping failed: $e');
+    }
   }
 }
 
