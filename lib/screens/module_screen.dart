@@ -629,7 +629,12 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                                   widget.url,
                                                   widget.moduleKey,
                                                 );
-                                                await _loadLastAccessed();
+                                                if (mounted) {
+                                                  setState(() {
+                                                    _lastAccessedText =
+                                                        'Last accessed: Just now';
+                                                  });
+                                                }
                                               } finally {
                                                 if (mounted) {
                                                   setState(

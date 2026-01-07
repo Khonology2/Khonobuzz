@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import 'auth_screen.dart';
 import '../widgets/floating_circles_particle_animation.dart';
 
@@ -163,6 +165,7 @@ class _LandingScreenState extends State<LandingScreen>
                         text: 'GET STARTED',
                         color: const Color(0xFFC10D00),
                         onPressed: () {
+                          _pingBackend();
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => const AuthScreen(),
@@ -261,6 +264,13 @@ class _LandingScreenState extends State<LandingScreen>
     _btnController.dispose();
     _clickController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pingBackend() async {
+    try {
+      final uri = Uri.parse(ApiConfig.baseUrl);
+      await http.get(uri).timeout(const Duration(seconds: 5));
+    } catch (_) {}
   }
 }
 

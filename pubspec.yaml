@@ -83,7 +83,7 @@ flutter:
     - assets/images/Account_User Profile/red_user_profile.png
     - assets/images/Project Management/Project_Red Badge_White.png
     - assets/images/HR_Team_Management/Management_White_Badge_Red.png
-    - assets/images/Logout_KhonoBuzz.png # Added new logout asset
+    - assets/images/Logout_KhonoBuzz.png
     - assets/images/Chatbot_Red.png
     - assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png
     - assets/images/Networking_Collaboration/Networking_Collaboration_White Badge__Red.png
