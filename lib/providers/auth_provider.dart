@@ -580,6 +580,10 @@ class AuthProvider extends ChangeNotifier {
         if (!moduleNames.contains('Proposal & SOW Builder')) {
           moduleNames.add('Proposal & SOW Builder');
         }
+      } else if (trimmed.startsWith('Deliverables & Sprint Sign-Off Hub')) {
+        if (!moduleNames.contains('Deliverables & Sprint Sign-Off Hub')) {
+          moduleNames.add('Deliverables & Sprint Sign-Off Hub');
+        }
       }
     }
     

@@ -605,7 +605,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                 backgroundColor: const Color(0xFFC10D00),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0),
+                  borderRadius: BorderRadius.circular(45.0),
                 ),
               ),
               child: _updatingUserId == user.id

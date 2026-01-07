@@ -86,6 +86,14 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 if (!moduleNames.contains('Proposal & SOW Builder')) {
                   moduleNames.add('Proposal & SOW Builder');
                 }
+              } else if (trimmed.startsWith(
+                'Deliverables & Sprint Sign-Off Hub',
+              )) {
+                if (!moduleNames.contains(
+                  'Deliverables & Sprint Sign-Off Hub',
+                )) {
+                  moduleNames.add('Deliverables & Sprint Sign-Off Hub');
+                }
               }
             }
             cachedModuleAccess = moduleNames.isEmpty
@@ -193,15 +201,23 @@ class _ModuleScreenState extends State<ModuleScreen> {
                             final showPDH = isAdmin || hasPDHAccess;
                             final showSkillsHeatmap =
                                 isAdmin || hasSkillsHeatmapAccess;
+                            final hasDeliverablesAccess =
+                                authProvider.hasModuleAccess(
+                                  'Deliverables & Sprint Sign-Off Hub',
+                                );
+
                             final showRecruitment =
                                 isAdmin || hasRecruitmentAccess;
                             final showSOWBuilder =
                                 isAdmin || hasSOWBuilderAccess;
+                            final showDeliverables =
+                                isAdmin || hasDeliverablesAccess;
 
                             if (!showPDH &&
                                 !showSkillsHeatmap &&
                                 !showRecruitment &&
-                                !showSOWBuilder) {
+                                !showSOWBuilder &&
+                                !showDeliverables) {
                               return const Center(
                                 child: Text(
                                   'No module access assigned. Please contact your administrator.',
@@ -295,23 +311,25 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                 ),
                               );
                             }
-                            if (bottomRow.isNotEmpty) {
-                              bottomRow.add(const SizedBox(width: 18.0));
+                            if (showDeliverables) {
+                              if (bottomRow.isNotEmpty) {
+                                bottomRow.add(const SizedBox(width: 18.0));
+                              }
+                              bottomRow.add(
+                                _buildModuleCard(
+                                  context: context,
+                                  cardWidth: calculatedCardWidth,
+                                  titleLines: [
+                                    'Deliverables & Sprint',
+                                    'Sign Off Hub',
+                                  ],
+                                  buttonText: 'Launch',
+                                  url: 'https://flow-space-1.onrender.com/',
+                                  moduleKey: 'deliverable_sprint',
+                                  isComingSoon: false,
+                                ),
+                              );
                             }
-                            bottomRow.add(
-                              _buildModuleCard(
-                                context: context,
-                                cardWidth: calculatedCardWidth,
-                                titleLines: [
-                                  'Deliverables & Sprint',
-                                  'Sign Off Hub',
-                                ],
-                                buttonText: 'Launch',
-                                url: 'https://flow-space-1.onrender.com/',
-                                moduleKey: 'deliverable_sprint',
-                                isComingSoon: false,
-                              ),
-                            );
 
                             return Column(
                               mainAxisAlignment: MainAxisAlignment.center,

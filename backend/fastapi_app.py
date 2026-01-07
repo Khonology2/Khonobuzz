@@ -310,6 +310,7 @@ LOCALHOST_ORIGINS = [
     'http://127.0.0.1',
     'http://10.0.2.2:5000',
 ]
+LOCALHOST_ORIGIN_REGEX = r"http://localhost(:\d+)?|http://127\.0\.0\.1(:\d+)?"
 if cors_origins_env == '*':
     if is_production:
         cors_origins = PRODUCTION_FRONTEND_URLS + LOCALHOST_ORIGINS
@@ -328,11 +329,20 @@ else:
         for localhost_origin in LOCALHOST_ORIGINS:
             if localhost_origin not in cors_origins:
                 cors_origins.append(localhost_origin)
-    cors_allow_credentials = os.environ.get('CORS_ALLOW_CREDENTIALS', 'True' if is_production else 'False').lower() == 'true'
-    info_log(f"CORS configured with {len(cors_origins)} origins from CORS_ORIGINS env var")
+    cors_allow_credentials = os.environ.get(
+        'CORS_ALLOW_CREDENTIALS',
+        'True' if is_production else 'False',
+    ).lower() == 'true'
+    info_log(
+        f"CORS configured with {len(cors_origins)} origins from CORS_ORIGINS env var",
+    )
+cors_origin_regex = None
+if is_production:
+    cors_origin_regex = LOCALHOST_ORIGIN_REGEX
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=cors_allow_credentials,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],

@@ -29,6 +29,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     'Candidate',
   ];
   final List<String> _moduleRoleOptionsSOWBuilder = ['Admin', 'Manager'];
+  final List<String> _moduleRoleOptionsDeliverables = [
+    'System admin',
+    'Client',
+    'Team member',
+  ];
   static const String _notAssignedValue = 'Not Assigned';
 
   String? expandedUserId;
@@ -42,6 +47,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   final Map<String, String?> _selectedRecruitmentRoles = {};
 
   final Map<String, String?> _selectedSOWBuilderRoles = {};
+
+  final Map<String, String?> _selectedDeliverablesRoles = {};
 
   Map<String, Color> get userStatusColors => {
     'Active': Colors.green.shade600,
@@ -159,6 +166,35 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     _selectedSOWBuilderRoles[user.id] = _notAssignedValue;
   }
 
+  void _refreshDeliverablesRoleCache(ManagedUser user) {
+    if (user.moduleAccessRole != null && user.moduleAccessRole!.isNotEmpty) {
+      final parts = user.moduleAccessRole!.split(', ');
+      for (var part in parts) {
+        final trimmedPart = part.trim();
+        if (trimmedPart.startsWith('Deliverables & Sprint Sign-Off Hub - ')) {
+          final extractedRole = trimmedPart
+              .replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '')
+              .trim();
+
+          final roleLower = extractedRole.toLowerCase();
+          for (var option in _moduleRoleOptionsDeliverables) {
+            if (option.toLowerCase() == roleLower) {
+              _selectedDeliverablesRoles[user.id] = option;
+              return;
+            }
+          }
+
+          if (extractedRole.isNotEmpty) {
+            _selectedDeliverablesRoles[user.id] = extractedRole;
+          }
+          return;
+        }
+      }
+    }
+
+    _selectedDeliverablesRoles[user.id] = _notAssignedValue;
+  }
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
@@ -173,6 +209,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     bool skillsHeatmapSelected,
     bool recruitmentSelected,
     bool sowBuilderSelected,
+    bool deliverablesSelected,
   ) {
     List<String> accessList = [];
     if (pdhSelected) accessList.add('Personal Development Hub');
@@ -181,6 +218,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     }
     if (recruitmentSelected) accessList.add('Automated Recruitment Workflow');
     if (sowBuilderSelected) accessList.add('Proposal & SOW Builder');
+    if (deliverablesSelected) {
+      accessList.add('Deliverables & Sprint Sign-Off Hub');
+    }
 
     user.moduleAccess = accessList.isEmpty ? null : accessList.join(',');
   }
@@ -191,9 +231,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     bool skillsHeatmapSelected,
     bool recruitmentSelected,
     bool sowBuilderSelected,
+    bool deliverablesSelected,
     String? newModuleRole,
     String? newRecruitmentRole,
     String? newSOWBuilderRole,
+     String? newDeliverablesRole,
   ) async {
     final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
     setState(() {
@@ -207,6 +249,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     }
     if (recruitmentSelected) accessList.add('Automated Recruitment Workflow');
     if (sowBuilderSelected) accessList.add('Proposal & SOW Builder');
+    if (deliverablesSelected) {
+      accessList.add('Deliverables & Sprint Sign-Off Hub');
+    }
 
     final sanitizedModuleAccess = accessList.isEmpty
         ? ''
@@ -237,10 +282,20 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     if (sowBuilderSelected) {
       sanitizedSOWBuilderRole =
           (newSOWBuilderRole != null &&
-              newSOWBuilderRole.trim().isNotEmpty &&
-              newSOWBuilderRole != _notAssignedValue)
-          ? newSOWBuilderRole.trim()
-          : '';
+                  newSOWBuilderRole.trim().isNotEmpty &&
+                  newSOWBuilderRole != _notAssignedValue)
+              ? newSOWBuilderRole.trim()
+              : '';
+    }
+
+    String sanitizedDeliverablesRole = '';
+    if (deliverablesSelected) {
+      sanitizedDeliverablesRole =
+          (newDeliverablesRole != null &&
+                  newDeliverablesRole.trim().isNotEmpty &&
+                  newDeliverablesRole != _notAssignedValue)
+              ? newDeliverablesRole.trim()
+              : '';
     }
 
     List<String> combinedParts = [];
@@ -263,6 +318,13 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       combinedParts.add('Proposal & SOW Builder - $sanitizedSOWBuilderRole');
     } else if (sowBuilderSelected) {
       combinedParts.add('Proposal & SOW Builder');
+    }
+    if (deliverablesSelected && sanitizedDeliverablesRole.isNotEmpty) {
+      combinedParts.add(
+        'Deliverables & Sprint Sign-Off Hub - $sanitizedDeliverablesRole',
+      );
+    } else if (deliverablesSelected) {
+      combinedParts.add('Deliverables & Sprint Sign-Off Hub');
     }
 
     String combinedModuleAccess = combinedParts.isEmpty
@@ -360,6 +422,35 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           }
         } else if (!sowBuilderSelected) {
           _selectedSOWBuilderRoles[user.id] = _notAssignedValue;
+        }
+
+        if (updatedModuleAccessRole != null &&
+            updatedModuleAccessRole.isNotEmpty) {
+          final parts = updatedModuleAccessRole.split(', ');
+          for (var part in parts) {
+            final trimmedPart = part.trim();
+            if (trimmedPart.startsWith(
+              'Deliverables & Sprint Sign-Off Hub - ',
+            )) {
+              final extractedRole = trimmedPart
+                  .replaceFirst(
+                    'Deliverables & Sprint Sign-Off Hub - ',
+                    '',
+                  )
+                  .trim();
+
+              final roleLower = extractedRole.toLowerCase();
+              for (var option in _moduleRoleOptionsDeliverables) {
+                if (option.toLowerCase() == roleLower) {
+                  _selectedDeliverablesRoles[user.id] = option;
+                  break;
+                }
+              }
+              break;
+            }
+          }
+        } else if (!deliverablesSelected) {
+          _selectedDeliverablesRoles[user.id] = _notAssignedValue;
         }
       });
 
@@ -468,9 +559,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         bool skillsHeatmapSelected = false;
         bool recruitmentSelected = false;
         bool sowBuilderSelected = false;
+        bool deliverablesSelected = false;
         String? selectedModuleRole = _notAssignedValue;
         String? selectedRecruitmentRole = _notAssignedValue;
         String? selectedSOWBuilderRole = _notAssignedValue;
+        String? selectedDeliverablesRole = _notAssignedValue;
         bool isUpdating = false;
 
         return StatefulBuilder(
@@ -882,6 +975,106 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 16.0),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                        vertical: 8.0,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2C3E50),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: CheckboxListTile(
+                              title: const Text(
+                                'Deliverables & Sprint Sign-Off Hub',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              value: deliverablesSelected,
+                              activeColor: const Color(0xFFC10D00),
+                              checkColor: Colors.white,
+                              onChanged: (bool? value) {
+                                setStateDialog(() {
+                                  deliverablesSelected = value ?? false;
+                                  if (!deliverablesSelected) {
+                                    selectedDeliverablesRole = _notAssignedValue;
+                                  }
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                          const SizedBox(width: 16.0),
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8.0,
+                                vertical: 8.0,
+                              ),
+                              decoration: BoxDecoration(
+                                color: deliverablesSelected
+                                    ? const Color(0xFF2C3E50)
+                                    : const Color(0xFF1A1A1A),
+                                borderRadius: BorderRadius.circular(8.0),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String?>(
+                                  value: deliverablesSelected
+                                      ? selectedDeliverablesRole
+                                      : _notAssignedValue,
+                                  isExpanded: true,
+                                  dropdownColor: const Color(0xFF2C3E50),
+                                  icon: const Icon(
+                                    Icons.arrow_drop_down,
+                                    color: Colors.white70,
+                                  ),
+                                  hint: const Text(
+                                    'Module Role',
+                                    style: TextStyle(
+                                      color: Colors.white60,
+                                      fontFamily: 'Poppins',
+                                    ),
+                                  ),
+                                  style: TextStyle(
+                                    color: deliverablesSelected
+                                        ? Colors.white
+                                        : Colors.white54,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                  onChanged: deliverablesSelected
+                                      ? (value) {
+                                          setStateDialog(() {
+                                            selectedDeliverablesRole = value;
+                                          });
+                                        }
+                                      : null,
+                                  items: <DropdownMenuItem<String?>>[
+                                    DropdownMenuItem<String?>(
+                                      value: _notAssignedValue,
+                                      child: Text(_notAssignedValue),
+                                    ),
+                                    ..._moduleRoleOptionsDeliverables.map(
+                                      (option) => DropdownMenuItem<String?>(
+                                        value: option,
+                                        child: Text(option),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -924,9 +1117,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 skillsHeatmapSelected,
                                 recruitmentSelected,
                                 sowBuilderSelected,
+                                deliverablesSelected,
                                 selectedModuleRole,
                                 selectedRecruitmentRole,
                                 selectedSOWBuilderRole,
+                                selectedDeliverablesRole,
                               );
                             }
 
@@ -951,6 +1146,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFC10D00),
                     foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(45.0),
+                    ),
                   ),
                   child: isUpdating
                       ? const SizedBox(
@@ -1053,6 +1251,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFC10D00),
                             foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(45.0),
+                            ),
                           ),
                           child: const Text(
                             'Update Access',
@@ -1256,6 +1457,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               expandedUserId = user.id;
               _refreshRecruitmentRoleCache(user);
               _refreshSOWBuilderRoleCache(user);
+              _refreshDeliverablesRoleCache(user);
             } else {
               expandedUserId = null;
             }
@@ -1526,11 +1728,14 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     bool sowBuilderSelected =
         selectedModuleAccessList.contains('Proposal & SOW Builder') ||
         selectedModuleAccessList.contains('SOW Builder');
+    bool deliverablesSelected = selectedModuleAccessList.contains(
+      'Deliverables & Sprint Sign-Off Hub',
+    );
 
     String? selectedModuleRole =
         (user.moduleRole == null || user.moduleRole!.isEmpty)
-        ? _notAssignedValue
-        : user.moduleRole;
+            ? _notAssignedValue
+            : user.moduleRole;
 
     String? selectedRecruitmentRole = _selectedRecruitmentRoles[user.id];
 
@@ -1598,6 +1803,44 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       _selectedSOWBuilderRoles[user.id] = selectedSOWBuilderRole;
     }
 
+    String? selectedDeliverablesRole = _selectedDeliverablesRoles[user.id];
+
+    if (selectedDeliverablesRole == null) {
+      selectedDeliverablesRole = _notAssignedValue;
+      if (user.moduleAccessRole != null && user.moduleAccessRole!.isNotEmpty) {
+        final parts = user.moduleAccessRole!.split(', ');
+        for (var part in parts) {
+          final trimmedPart = part.trim();
+          if (trimmedPart.startsWith(
+            'Deliverables & Sprint Sign-Off Hub - ',
+          )) {
+            final extractedRole = trimmedPart
+                .replaceFirst(
+                  'Deliverables & Sprint Sign-Off Hub - ',
+                  '',
+                )
+                .trim();
+
+            final roleLower = extractedRole.toLowerCase();
+            for (var option in _moduleRoleOptionsDeliverables) {
+              if (option.toLowerCase() == roleLower) {
+                selectedDeliverablesRole = option;
+                break;
+              }
+            }
+
+            if (selectedDeliverablesRole == _notAssignedValue &&
+                extractedRole.isNotEmpty) {
+              selectedDeliverablesRole = extractedRole;
+            }
+            break;
+          }
+        }
+      }
+
+      _selectedDeliverablesRoles[user.id] = selectedDeliverablesRole;
+    }
+
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: const BoxDecoration(
@@ -1642,6 +1885,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           skillsHeatmapSelected,
                           recruitmentSelected,
                           sowBuilderSelected,
+                          deliverablesSelected,
                         );
 
                         if (!pdhSelected &&
@@ -1762,6 +2006,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           skillsHeatmapSelected,
                           recruitmentSelected,
                           sowBuilderSelected,
+                          deliverablesSelected,
                         );
                       });
                     },
@@ -1865,6 +2110,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           skillsHeatmapSelected,
                           recruitmentSelected,
                           sowBuilderSelected,
+                          deliverablesSelected,
                         );
                       });
                     },
@@ -1959,6 +2205,117 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   ),
                   child: CheckboxListTile(
                     title: const Text(
+                      'Deliverables & Sprint Sign-Off Hub',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    value: deliverablesSelected,
+                    activeColor: const Color(0xFFC10D00),
+                    checkColor: Colors.white,
+                    onChanged: (bool? value) {
+                      setState(() {
+                        deliverablesSelected = value ?? false;
+                        _updateModuleAccessList(
+                          user,
+                          pdhSelected,
+                          skillsHeatmapSelected,
+                          recruitmentSelected,
+                          sowBuilderSelected,
+                          deliverablesSelected,
+                        );
+                      });
+                    },
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16.0),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 8.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: deliverablesSelected
+                        ? const Color(0xFF2C3E50)
+                        : const Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      value: deliverablesSelected
+                          ? (_selectedDeliverablesRoles[user.id] ??
+                              selectedDeliverablesRole)
+                          : _notAssignedValue,
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF2C3E50),
+                      icon: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.white70,
+                      ),
+                      hint: const Text(
+                        'Module Role',
+                        style: TextStyle(
+                          color: Colors.white60,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                      style: TextStyle(
+                        color: deliverablesSelected
+                            ? Colors.white
+                            : Colors.white54,
+                        fontFamily: 'Poppins',
+                      ),
+                      onChanged: deliverablesSelected
+                          ? (value) {
+                              setState(() {
+                                if (value == _notAssignedValue) {
+                                  _selectedDeliverablesRoles[user.id] =
+                                      _notAssignedValue;
+                                } else {
+                                  _selectedDeliverablesRoles[user.id] = value;
+                                }
+                              });
+                            }
+                          : null,
+                      items: <DropdownMenuItem<String?>>[
+                        DropdownMenuItem<String?>(
+                          value: _notAssignedValue,
+                          child: Text(_notAssignedValue),
+                        ),
+                        ..._moduleRoleOptionsDeliverables.map(
+                          (option) => DropdownMenuItem<String?>(
+                            value: option,
+                            child: Text(option),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16.0),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 8.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2C3E50),
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: CheckboxListTile(
+                    title: const Text(
                       'Proposal & SOW Builder',
                       style: TextStyle(
                         color: Colors.white,
@@ -1977,6 +2334,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           skillsHeatmapSelected,
                           recruitmentSelected,
                           sowBuilderSelected,
+                          deliverablesSelected,
                         );
                       });
                     },
@@ -2003,7 +2361,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     child: DropdownButton<String?>(
                       value: sowBuilderSelected
                           ? (_selectedSOWBuilderRoles[user.id] ??
-                                selectedSOWBuilderRole)
+                              selectedSOWBuilderRole)
                           : _notAssignedValue,
                       isExpanded: true,
                       dropdownColor: const Color(0xFF2C3E50),
@@ -2067,9 +2425,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       skillsHeatmapSelected,
                       recruitmentSelected,
                       sowBuilderSelected,
+                      deliverablesSelected,
                       selectedModuleRole,
                       _selectedRecruitmentRoles[user.id] ?? _notAssignedValue,
                       _selectedSOWBuilderRoles[user.id] ?? _notAssignedValue,
+                      _selectedDeliverablesRoles[user.id] ?? _notAssignedValue,
                     ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFC10D00),

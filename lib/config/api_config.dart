@@ -5,28 +5,52 @@ class ApiConfig {
     if (kIsWeb) {
       final uri = Uri.base;
       final host = uri.host;
+      final queryParams = uri.queryParameters;
 
       if (kDebugMode) {
         print('[ApiConfig] Current host: $host');
         print('[ApiConfig] Full URI: ${uri.toString()}');
       }
 
-      if (host.contains('onrender.com') ||
-          host.contains('khonobuzz-web')) {
-        final backendUrl = 'https://khonobuzz-backend-i24f.onrender.com';
+      // Explicit overrides via query parameter
+      if (queryParams['backend'] == 'prod') {
+        const hostedBackend = 'https://khonobuzz-backend-i24f.onrender.com';
         if (kDebugMode) {
           print(
-            '[ApiConfig] Detected production environment, using backend: $backendUrl',
+            '[ApiConfig] Web: backend=prod override detected, using: $hostedBackend',
           );
         }
-        return backendUrl;
+        return hostedBackend;
       }
+      if (queryParams['backend'] == 'local') {
+        const localBackend = 'http://localhost:5000';
+        if (kDebugMode) {
+          print(
+            '[ApiConfig] Web: backend=local override detected, using: $localBackend',
+          );
+        }
+        return localBackend;
+      }
+
+      // Hosted web builds (onrender) use the hosted backend
+      if (host.contains('onrender.com') || host.contains('khonobuzz-web')) {
+        const hostedBackend = 'https://khonobuzz-backend-i24f.onrender.com';
+        if (kDebugMode) {
+          print(
+            '[ApiConfig] Web: detected hosted environment, using backend: $hostedBackend',
+          );
+        }
+        return hostedBackend;
+      }
+
+      // Default for local web development is the local backend
+      const localBackend = 'http://localhost:5000';
       if (kDebugMode) {
         print(
-          '[ApiConfig] Detected local development, using: http://localhost:5000',
+          '[ApiConfig] Web: detected local development, using backend: $localBackend (host=$host)',
         );
       }
-      return 'http://localhost:5000';
+      return localBackend;
     }
 
     if (!kDebugMode) {
