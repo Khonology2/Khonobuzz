@@ -3,7 +3,18 @@ import 'package:flutter/material.dart';
 class VersionControlOverlay extends StatelessWidget {
   const VersionControlOverlay({super.key});
 
-  static const String versionLabel = 'Ver. 2026.01.AC3_SIT';
+  static const int _versionYear = 2026;
+  static const String _versionMonth = '01';
+  static const String _versionWeekCode = 'A';
+  static const String _versionDayCode = 'C';
+  static const int _versionCommitNumber = 3;
+  static const String _versionEnvironment = 'SIT';
+
+  static const String versionLabel =
+      'Ver. $_versionYear.$_versionMonth.'
+      '$_versionWeekCode$_versionDayCode'
+      '$_versionCommitNumber'
+      '_$_versionEnvironment';
 
   @override
   Widget build(BuildContext context) {
