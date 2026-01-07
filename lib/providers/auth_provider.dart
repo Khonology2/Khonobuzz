@@ -311,6 +311,8 @@ class AuthProvider extends ChangeNotifier {
         url,
         headers: headers,
         body: json.encode({'email': email}),
+        maxRetries: 0,
+        timeout: const Duration(seconds: 4),
       );
       final elapsed = DateTime.now().millisecondsSinceEpoch - start;
       debugPrint(
@@ -364,10 +366,7 @@ class AuthProvider extends ChangeNotifier {
         }
         notifyListeners();
 
-        await Future.wait([
-          if (_userModuleAccess == null) fetchCurrentUserModuleAccess(),
-          if (_userToken == null || _userToken!.isEmpty) fetchUserToken(),
-        ]);
+        _schedulePostLoginWarmup();
 
         return true;
       } else if (response.statusCode == 403 && !isSpecialAccess) {
@@ -420,13 +419,26 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  void _schedulePostLoginWarmup() {
+    Future<void>(() async {
+      try {
+        await Future.wait([
+          if (_userModuleAccess == null) fetchCurrentUserModuleAccess(),
+          if (_userToken == null || _userToken!.isEmpty) fetchUserToken(),
+        ]);
+      } catch (e) {
+        debugPrint('[AuthProvider] Post-login warmup failed: $e');
+      }
+    });
+  }
+
   Future<bool> _attemptFallbackLogin(String email) async {
     final userCheckUrl = Uri.parse(ApiConfig.usersEndpoint);
     try {
       final userCheckResponse = await http
           .get(userCheckUrl)
           .timeout(
-            const Duration(seconds: 15),
+            const Duration(seconds: 8),
             onTimeout: () {
               throw TimeoutException('Request timed out');
             },
