@@ -262,6 +262,8 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     status: Optional[str] = None
     entity: Optional[str] = None
+    department: Optional[str] = None
+    designation: Optional[str] = None
     moduleAccess: Optional[str] = None
     moduleRole: Optional[str] = None
     moduleAccessRole: Optional[str] = None
@@ -853,6 +855,10 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
             update_payload['status'] = user_update.status
         if user_update.entity is not None:
             update_payload['entity'] = user_update.entity
+        if user_update.department is not None:
+            update_payload['department'] = user_update.department
+        if user_update.designation is not None:
+            update_payload['designation'] = user_update.designation
         if user_update.moduleAccess is not None:
             update_payload['moduleAccess'] = user_update.moduleAccess
         if user_update.moduleRole is not None:
@@ -881,6 +887,10 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
             onboarding_update_payload['status'] = user_update.status
         if user_update.entity is not None:
             onboarding_update_payload['entity'] = user_update.entity
+        if user_update.department is not None:
+            onboarding_update_payload['department'] = user_update.department
+        if user_update.designation is not None:
+            onboarding_update_payload['designation'] = user_update.designation
         if user_update.moduleAccess is not None:
             onboarding_update_payload['moduleAccess'] = user_update.moduleAccess
         if user_update.moduleRole is not None:

@@ -34,6 +34,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   String? _selectedStatus;
   String? _selectedDepartment;
   String? _selectedDesignation;
+  final Map<String, String> _editedDepartments = {};
+  final Map<String, String> _editedDesignations = {};
 
   Set<String> get _availableStatuses {
     final userProvider = Provider.of<UserProvider>(context);
@@ -168,6 +170,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'role': newRole,
           'status': newStatus,
           'entity': entity,
+          'department': department,
+          'designation': designation,
           if (adminEmail.isNotEmpty && !isSpecialSession)
             'adminApproved': adminEmail,
         }),
@@ -206,12 +210,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             'role': newRole,
             'status': newStatus,
             'entity': entity,
+            'department': department,
+            'designation': designation,
             if (adminField != null) ...adminField,
           },
           onboardingFields: {
             'role': newRole,
             'status': newStatus,
             'entity': entity,
+            'department': department,
+            'designation': designation,
             if (adminField != null) ...adminField,
           },
         );
@@ -237,12 +245,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             'role': newRole,
             'status': newStatus,
             'entity': entity,
+            'department': department,
+            'designation': designation,
             if (adminField != null) ...adminField,
           },
           onboardingFields: {
             'role': newRole,
             'status': newStatus,
             'entity': entity,
+            'department': department,
+            'designation': designation,
             if (adminField != null) ...adminField,
           },
         );
@@ -258,6 +270,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           if (backendUser != null) {
             final updatedUser = ManagedUser.fromApi(backendUser);
             userProvider.updateUser(updatedUser);
+            _editedDepartments.remove(userId);
+            _editedDesignations.remove(userId);
           } else {
             final users = userProvider.users;
             final index = users.indexWhere((u) => u.id == userId);
@@ -900,6 +914,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Widget _buildDropdownContent(ManagedUser user) {
     String selectedRole = user.role;
     String selectedStatusLocal = user.status;
+    String selectedDepartmentLocal =
+        _editedDepartments[user.id] ?? user.department;
+    String selectedDesignationLocal =
+        _editedDesignations[user.id] ?? user.designation;
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: const BoxDecoration(
@@ -1049,6 +1067,213 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
           const SizedBox(height: 16.0),
 
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Department: ',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    const SizedBox(height: 8.0),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2C3E50),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: DropdownButton<String>(
+                        value: selectedDepartmentLocal.isNotEmpty
+                            ? selectedDepartmentLocal
+                            : null,
+                        hint: const Text(
+                          'Select department',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        dropdownColor: const Color(0xFF2C3E50),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                        icon: const Icon(
+                          Icons.arrow_drop_down,
+                          color: Colors.white70,
+                        ),
+                        underline: const SizedBox.shrink(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            selectedDepartmentLocal = newValue ?? '';
+                            if (selectedDepartmentLocal.isNotEmpty) {
+                              _editedDepartments[user.id] =
+                                  selectedDepartmentLocal;
+                            } else {
+                              _editedDepartments.remove(user.id);
+                            }
+                          });
+                        },
+                        items: const [
+                          DropdownMenuItem<String>(
+                            value: 'Management',
+                            child: Text('Management'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Operations',
+                            child: Text('Operations'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Finance',
+                            child: Text('Finance'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'HR',
+                            child: Text('HR'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Sales',
+                            child: Text('Sales'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16.0),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Designation: ',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    const SizedBox(height: 8.0),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2C3E50),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: DropdownButton<String>(
+                        value: selectedDesignationLocal.isNotEmpty
+                            ? selectedDesignationLocal
+                            : null,
+                        hint: const Text(
+                          'Select designation',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        dropdownColor: const Color(0xFF2C3E50),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                        icon: const Icon(
+                          Icons.arrow_drop_down,
+                          color: Colors.white70,
+                        ),
+                        underline: const SizedBox.shrink(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            selectedDesignationLocal = newValue ?? '';
+                            if (selectedDesignationLocal.isNotEmpty) {
+                              _editedDesignations[user.id] =
+                                  selectedDesignationLocal;
+                            } else {
+                              _editedDesignations.remove(user.id);
+                            }
+                          });
+                        },
+                        items: const [
+                          DropdownMenuItem<String>(
+                            value: 'Director',
+                            child: Text('Director'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Developer',
+                            child: Text('Developer'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Support Analyst',
+                            child: Text('Support Analyst'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Learner',
+                            child: Text('Learner'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'UX Designer',
+                            child: Text('UX Designer'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'AWS Cloud Engineer',
+                            child: Text('AWS Cloud Engineer'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Tester',
+                            child: Text('Tester'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'RMB Small Talk Developer',
+                            child: Text('RMB Small Talk Developer'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Finance',
+                            child: Text('Finance'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Business Analyst',
+                            child: Text('Business Analyst'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Manager',
+                            child: Text('Manager'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Delivery Manager',
+                            child: Text('Delivery Manager'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Analyst',
+                            child: Text('Analyst'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Sales Person',
+                            child: Text('Sales Person'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'HR',
+                            child: Text('HR'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Junior Analyst',
+                            child: Text('Junior Analyst'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16.0),
+
           ElevatedButton(
             onPressed: _updatingUserId == user.id
                 ? null
@@ -1059,8 +1284,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       user.status,
                       firstName: user.firstName,
                       lastName: user.lastName,
-                      department: user.department,
-                      designation: user.designation,
+                      department: selectedDepartmentLocal,
+                      designation: selectedDesignationLocal,
                       entity: user.entity,
                     );
                   },
