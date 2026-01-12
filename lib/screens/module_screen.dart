@@ -306,7 +306,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   titleLines: ['Proposal &', 'SOW Builder'],
                                   buttonText: 'Launch',
                                   url:
-                                      'https://proposal-and-sow-builder.onrender.com',
+                                      'https://proposals2025.netlify.app/',
                                   moduleKey: 'sow_builder',
                                 ),
                               );
