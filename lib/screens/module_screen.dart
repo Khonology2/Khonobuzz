@@ -720,7 +720,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
 String? _getModuleDescription(String moduleKey) {
   switch (moduleKey) {
     case 'pdh':
-      return 'Team Development, Track Progress, Unlock Achievements, and Gamification.';
+      return 'Track Progress, Unlock Achievements, and Gamification.';
     case 'skills_heatmap':
       return 'Visualising Availability vs Pipeline Demand for Proactive Staffing Decisions.';
     case 'sow_builder':
