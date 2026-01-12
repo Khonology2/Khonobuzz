@@ -1,9 +1,12 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/version_control.dart';
 import 'auth_screen.dart';
 import '../widgets/floating_circles_particle_animation.dart';
@@ -32,6 +35,7 @@ class _LandingScreenState extends State<LandingScreen>
       GlobalKey();
   VoidCallback? _pendingNavigation;
   bool _isAnimatingNavigation = false;
+  bool _isCheckingRedirect = false;
 
   @override
   void initState() {
@@ -102,6 +106,81 @@ class _LandingScreenState extends State<LandingScreen>
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) _btnController.forward();
     });
+
+    if (kIsWeb) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _handleRedirectResult();
+      });
+    }
+  }
+
+  Future<void> _handleRedirectResult() async {
+    if (!kIsWeb) return;
+    if (_isCheckingRedirect) return;
+    _isCheckingRedirect = true;
+
+    try {
+      debugPrint('LandingScreen: Checking for Microsoft redirect result...');
+      final credential =
+          await fb_auth.FirebaseAuth.instance.getRedirectResult();
+
+      if (credential.user != null) {
+        debugPrint(
+          'LandingScreen: Redirect result user: ${credential.user?.email}',
+        );
+        final email = credential.user?.email;
+        if (email != null && email.toLowerCase().endsWith('@khonology.com')) {
+          if (!mounted) {
+            _isCheckingRedirect = false;
+            return;
+          }
+          final authProvider = context.read<AuthProvider>();
+          final messenger = ScaffoldMessenger.of(context);
+          final success = await authProvider.login(email, role: null);
+          if (!mounted) {
+            _isCheckingRedirect = false;
+            return;
+          }
+
+          if (!success) {
+            await fb_auth.FirebaseAuth.instance.signOut();
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text('Login failed. Please try again later.'),
+              ),
+            );
+          }
+        } else {
+          await fb_auth.FirebaseAuth.instance.signOut();
+          if (!mounted) {
+            _isCheckingRedirect = false;
+            return;
+          }
+          final messenger = ScaffoldMessenger.of(context);
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Only khonology.com accounts are allowed'),
+            ),
+          );
+        }
+      } else {
+        debugPrint('LandingScreen: No redirect result found');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('LandingScreen redirect result error: $e');
+      debugPrint('LandingScreen stack trace: $stackTrace');
+      if (mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Authentication error: ${e.toString()}'),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      _isCheckingRedirect = false;
+    }
   }
 
   @override

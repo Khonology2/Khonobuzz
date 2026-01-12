@@ -369,15 +369,14 @@ class AuthProvider extends ChangeNotifier {
         _schedulePostLoginWarmup();
 
         return true;
-      } else if (response.statusCode == 403 && !isSpecialAccess) {
-        final responseData = json.decode(response.body);
-        final errorMessage =
-            responseData['error'] as String? ??
-            'Your account is pending approval. Please wait for admin activation.';
-        _isAuthenticated = false;
-        notifyListeners();
-        throw Exception(errorMessage);
-      } else if (response.statusCode == 404 || response.statusCode == 401) {
+      } else if (!isSpecialAccess &&
+          (response.statusCode == 403 ||
+              response.statusCode == 404 ||
+              response.statusCode == 401)) {
+        final success = await _attemptFallbackLogin(email);
+        if (success) {
+          return true;
+        }
         _isAuthenticated = false;
         notifyListeners();
         return false;
@@ -443,14 +442,6 @@ class AuthProvider extends ChangeNotifier {
         final foundUser = usersData['user'] as Map<String, dynamic>?;
 
         if (foundUser != null) {
-          final userStatus = foundUser['status']?.toString() ?? 'Pending';
-          if (userStatus != 'Active') {
-            debugPrint('Fallback login rejected: User status is $userStatus');
-            _isAuthenticated = false;
-            notifyListeners();
-            return false;
-          }
-
           final prefs = await SharedPreferences.getInstance();
           _isAuthenticated = true;
           _userEmail = foundUser['email'] ?? email;
