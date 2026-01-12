@@ -662,6 +662,59 @@ async def skills_heatmap_update_user(uid: str, data: dict):
 async def home():
     info_log("Health check endpoint accessed")
     return {"message": "Khonology Backend API (FastAPI)", "status": "running"}
+
+
+@app.get("/api/users/by-email")
+async def get_user_by_email(email: str = Query(..., description="User email address")):
+    try:
+        normalized_email = email.lower().strip()
+        users_ref = db.collection('users')
+        query = users_ref.where('email', '==', normalized_email).limit(1)
+        users = query.get()
+        if not users:
+            print(f"[DEBUG] get_user_by_email: User not found: {normalized_email}")
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"error": "User not found"},
+            )
+
+        user_doc = users[0]
+        user_info = user_doc.to_dict() or {}
+        user_id = user_doc.id
+
+        onboarding_query = (
+            db.collection('onboarding')
+            .where('user_id', '==', user_id)
+            .limit(1)
+            .stream()
+        )
+        onboarding_info = {}
+        for onboarding_doc in onboarding_query:
+            onboarding_info = onboarding_doc.to_dict() or {}
+            break
+
+        module_access_raw = user_info.get('moduleAccess') or onboarding_info.get('moduleAccess', '')
+        module_access_role_raw = user_info.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', '')
+
+        response_user = {
+            'email': user_info.get('email', normalized_email),
+            'role': user_info.get('role', ''),
+            'status': user_info.get('status', 'Pending'),
+            'moduleAccess': module_access_raw or '',
+            'moduleAccessRole': module_access_role_raw or '',
+        }
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={'user': response_user},
+        )
+    except Exception as e:
+        print(f"[ERROR] get_user_by_email failed for {email}: {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": str(e)},
+        )
+
 @app.post("/api/auth/register")
 async def register_user(user: UserRegister):
     try:

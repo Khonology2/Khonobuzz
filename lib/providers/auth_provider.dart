@@ -378,12 +378,6 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         throw Exception(errorMessage);
       } else if (response.statusCode == 404 || response.statusCode == 401) {
-        // User not found or unauthorized - but still allow login if email exists in our system
-        // Check if user exists by attempting to fetch user data
-        final success = await _attemptFallbackLogin(email);
-        if (success) {
-          return true;
-        }
         _isAuthenticated = false;
         notifyListeners();
         return false;
@@ -433,7 +427,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> _attemptFallbackLogin(String email) async {
-    final userCheckUrl = Uri.parse(ApiConfig.usersEndpoint);
+    final userCheckUrl = Uri.parse(ApiConfig.userByEmailEndpoint(email));
     try {
       final userCheckResponse = await http
           .get(userCheckUrl)
@@ -446,24 +440,9 @@ class AuthProvider extends ChangeNotifier {
 
       if (userCheckResponse.statusCode == 200) {
         final usersData = json.decode(userCheckResponse.body);
-        final users = (usersData['users'] as List<dynamic>? ?? []);
-        Map<String, dynamic>? foundUser;
-        try {
-          foundUser =
-              users.firstWhere(
-                    (u) =>
-                        (u as Map<String, dynamic>)['email']
-                            ?.toString()
-                            .toLowerCase() ==
-                        email.toLowerCase(),
-                  )
-                  as Map<String, dynamic>?;
-        } catch (_) {
-          foundUser = null;
-        }
+        final foundUser = usersData['user'] as Map<String, dynamic>?;
 
         if (foundUser != null) {
-          // Check user status - reject if not Active
           final userStatus = foundUser['status']?.toString() ?? 'Pending';
           if (userStatus != 'Active') {
             debugPrint('Fallback login rejected: User status is $userStatus');
@@ -479,12 +458,13 @@ class AuthProvider extends ChangeNotifier {
           _initialScreenIndex = 9;
           _currentScreenIndex = 9;
 
-          // Extract module access from found user if available
           final moduleAccessRaw = foundUser['moduleAccess'] as String?;
           final moduleAccessRoleRaw = foundUser['moduleAccessRole'] as String?;
-          _userModuleAccess = _deriveModuleAccessFromRole(moduleAccessRaw, moduleAccessRoleRaw);
+          _userModuleAccess = _deriveModuleAccessFromRole(
+            moduleAccessRaw,
+            moduleAccessRoleRaw,
+          );
 
-          // Batch all SharedPreferences writes
           await Future.wait([
             prefs.setBool('isAuthenticated', true),
             prefs.setString('userEmail', _userEmail!),
@@ -495,7 +475,6 @@ class AuthProvider extends ChangeNotifier {
 
           notifyListeners();
 
-          // Run these in parallel
           await Future.wait([
             if (_userModuleAccess == null) fetchCurrentUserModuleAccess(),
             fetchUserToken(),
@@ -503,6 +482,11 @@ class AuthProvider extends ChangeNotifier {
 
           return true;
         }
+      } else if (userCheckResponse.statusCode == 404) {
+        debugPrint('Fallback login: user not found for email $email');
+        _isAuthenticated = false;
+        notifyListeners();
+        return false;
       }
     } catch (e) {
       debugPrint('Fallback login failed: $e');
