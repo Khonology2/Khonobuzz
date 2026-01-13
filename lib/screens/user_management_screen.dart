@@ -945,10 +945,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     ),
                     const SizedBox(height: 8.0),
                     Container(
+                      height: 40.0,
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       decoration: BoxDecoration(
                         color: const Color(0xFF2C3E50),
-                        borderRadius: BorderRadius.circular(8.0),
+                        borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: DropdownButton<String>(
                         value: userRoles.contains(selectedRole)
@@ -965,6 +966,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         style: const TextStyle(
                           color: Colors.white,
                           fontFamily: 'Poppins',
+                          fontSize: 14.0,
                         ),
                         icon: const Icon(
                           Icons.arrow_drop_down,
@@ -1011,10 +1013,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     ),
                     const SizedBox(height: 8.0),
                     Container(
+                      height: 40.0,
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       decoration: BoxDecoration(
                         color: const Color(0xFF2C3E50),
-                        borderRadius: BorderRadius.circular(8.0),
+                        borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: DropdownButton<String>(
                         value:
@@ -1032,6 +1035,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         style: const TextStyle(
                           color: Colors.white,
                           fontFamily: 'Poppins',
+                          fontSize: 14.0,
                         ),
                         icon: const Icon(
                           Icons.arrow_drop_down,
@@ -1083,10 +1087,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     ),
                     const SizedBox(height: 8.0),
                     Container(
+                      height: 40.0,
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       decoration: BoxDecoration(
                         color: const Color(0xFF2C3E50),
-                        borderRadius: BorderRadius.circular(8.0),
+                        borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: DropdownButton<String>(
                         value: selectedDepartmentLocal.isNotEmpty
@@ -1103,6 +1108,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         style: const TextStyle(
                           color: Colors.white,
                           fontFamily: 'Poppins',
+                          fontSize: 14.0,
                         ),
                         icon: const Icon(
                           Icons.arrow_drop_down,
@@ -1162,10 +1168,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     ),
                     const SizedBox(height: 8.0),
                     Container(
+                      height: 40.0,
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       decoration: BoxDecoration(
                         color: const Color(0xFF2C3E50),
-                        borderRadius: BorderRadius.circular(8.0),
+                        borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: DropdownButton<String>(
                         value: selectedDesignationLocal.isNotEmpty
@@ -1182,6 +1189,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         style: const TextStyle(
                           color: Colors.white,
                           fontFamily: 'Poppins',
+                          fontSize: 14.0,
                         ),
                         icon: const Icon(
                           Icons.arrow_drop_down,
@@ -1267,6 +1275,53 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 12.0),
+                    const Text(
+                      'Managed by: ',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    const SizedBox(height: 8.0),
+                    GestureDetector(
+                      onTap: () {
+                        _showManagedByDialog(user);
+                      },
+                      child: Container(
+                        height: 40.0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8.0,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2C3E50),
+                          borderRadius: BorderRadius.circular(4.0),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                user.manager?.isNotEmpty == true
+                                    ? user.manager!
+                                    : 'Select manager',
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Poppins',
+                                  fontSize: 14.0,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8.0),
+                            const Icon(
+                              Icons.arrow_drop_down,
+                              color: Colors.white70,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1274,41 +1329,276 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
           const SizedBox(height: 16.0),
 
-          ElevatedButton(
-            onPressed: _updatingUserId == user.id
-                ? null
-                : () {
-                    _updateUserRoleAndStatus(
-                      user.id,
-                      user.role,
-                      user.status,
-                      firstName: user.firstName,
-                      lastName: user.lastName,
-                      department: selectedDepartmentLocal,
-                      designation: selectedDesignationLocal,
-                      entity: user.entity,
-                    );
-                  },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFC10D00),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8.0),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton(
+              onPressed: _updatingUserId == user.id
+                  ? null
+                  : () {
+                      _updateUserRoleAndStatus(
+                        user.id,
+                        user.role,
+                        user.status,
+                        firstName: user.firstName,
+                        lastName: user.lastName,
+                        department: selectedDepartmentLocal,
+                        designation: selectedDesignationLocal,
+                        entity: user.entity,
+                      );
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFC10D00),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(45.0),
+                ),
               ),
-            ),
-            child: _updatingUserId == user.id
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              child: _updatingUserId == user.id
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Text(
+                      'Update',
+                      style: TextStyle(fontFamily: 'Poppins'),
                     ),
-                  )
-                : const Text('Update', style: TextStyle(fontFamily: 'Poppins')),
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _updateUserManager(
+    ManagedUser user,
+    ManagedUser manager,
+  ) async {
+    final authProvider = context.read<AuthProvider>();
+    final adminEmail = authProvider.userEmail?.trim() ?? '';
+    final isSpecialSession = authProvider.isSpecialSession;
+
+    final managerFullName = '${manager.firstName} ${manager.lastName}'.trim().isNotEmpty
+        ? '${manager.firstName} ${manager.lastName}'.trim()
+        : manager.name;
+
+    setState(() {
+      _updatingUserId = user.id;
+    });
+
+    try {
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (isSpecialSession) {
+        headers['X-Session-Type'] = 'special';
+      }
+
+      final response = await http.patch(
+        Uri.parse(ApiConfig.userEndpoint(user.id)),
+        headers: headers,
+        body: jsonEncode({
+          'manager': managerFullName,
+          if (adminEmail.isNotEmpty && !isSpecialSession)
+            'adminApproved': adminEmail,
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed to update manager for ${user.id}: ${response.statusCode} ${response.body}',
+        );
+      }
+
+      if (!mounted) return;
+
+      try {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
+        final backendUser = decoded?['user'] as Map<String, dynamic>?;
+        if (backendUser != null) {
+          final updatedUser = ManagedUser.fromApi(backendUser);
+          final userProvider =
+              Provider.of<UserProvider>(context, listen: false);
+          userProvider.updateUser(updatedUser);
+        }
+      } catch (_) {
+        // If parsing fails, rely on background refresh or ignore
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Manager set to $managerFullName for ${user.name}.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _updatingUserId = null;
+        });
+      }
+    }
+  }
+
+  void _showManagedByDialog(ManagedUser user) {
+    final userProvider = context.read<UserProvider>();
+    final allUsers = userProvider.users;
+
+    final TextEditingController searchController = TextEditingController();
+    ManagedUser? selectedManager;
+    String query = '';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            final lowerQuery = query.toLowerCase().trim();
+            final filtered = allUsers.where((candidate) {
+              if (candidate.id == user.id) {
+                return false;
+              }
+              if (lowerQuery.isEmpty) {
+                return true;
+              }
+              final name = candidate.name.toLowerCase();
+              final email = candidate.email.toLowerCase();
+              return name.contains(lowerQuery) || email.contains(lowerQuery);
+            }).toList();
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF2C3E50),
+              title: Text(
+                'Managed by: ${user.name}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              content: SizedBox(
+                width: 400,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: searchController,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Search manager',
+                          labelStyle: TextStyle(
+                            color: Colors.white70,
+                            fontFamily: 'Poppins',
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white24),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFFC10D00)),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setStateDialog(() {
+                            query = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12.0),
+                      SizedBox(
+                        height: 260,
+                        child: filtered.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  'No users match your search.',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: filtered.length,
+                                itemBuilder: (context, index) {
+                                  final candidate = filtered[index];
+                                  final isSelected =
+                                      selectedManager?.id == candidate.id;
+                                  return ListTile(
+                                    title: Text(
+                                      candidate.name,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      candidate.email,
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontFamily: 'Poppins',
+                                        fontSize: 12.0,
+                                      ),
+                                    ),
+                                    trailing: isSelected
+                                        ? const Icon(
+                                            Icons.check,
+                                            color: Color(0xFFC10D00),
+                                          )
+                                        : null,
+                                    onTap: () {
+                                      setStateDialog(() {
+                                        selectedManager = candidate;
+                                      });
+                                    },
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: selectedManager == null
+                      ? null
+                      : () async {
+                          final manager = selectedManager!;
+                          Navigator.of(dialogContext).pop();
+                          await _updateUserManager(user, manager);
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC10D00),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(fontFamily: 'Poppins'),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

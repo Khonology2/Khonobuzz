@@ -264,6 +264,7 @@ class UserUpdate(BaseModel):
     entity: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
+    manager: Optional[str] = None
     moduleAccess: Optional[str] = None
     moduleRole: Optional[str] = None
     moduleAccessRole: Optional[str] = None
@@ -912,6 +913,8 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
             update_payload['department'] = user_update.department
         if user_update.designation is not None:
             update_payload['designation'] = user_update.designation
+        if user_update.manager is not None:
+            update_payload['manager'] = user_update.manager
         if user_update.moduleAccess is not None:
             update_payload['moduleAccess'] = user_update.moduleAccess
         if user_update.moduleRole is not None:

@@ -8,6 +8,7 @@ class ManagedUser {
   String role;
   String status;
   String? entity;
+  String? manager;
   String? moduleAccess; // PDH or SOW Builder
   String? moduleRole; // Employee or Manager (depends on moduleAccess)
   String? moduleAccessRole; // Combined field like "PDH - Employee, Skills Heatmap - Manager"
@@ -66,6 +67,7 @@ class ManagedUser {
     this.role = 'Staff',
     this.status = 'Active',
     this.entity,
+    this.manager,
     this.moduleAccess,
     this.moduleRole,
     this.moduleAccessRole,
@@ -147,6 +149,9 @@ class ManagedUser {
       role: userData['role'] ?? 'Staff',
       status: userData['status'] ?? 'Active',
       entity: entityValue,
+      manager: (userData['manager'] as String?)?.isNotEmpty == true
+          ? userData['manager'] as String
+          : null,
       moduleAccess: finalModuleAccess,
       moduleRole: moduleRoleValue,
       moduleAccessRole: moduleAccessRoleValue,
@@ -178,6 +183,9 @@ class ManagedUser {
       status: data['status'] ?? 'Active',
       entity: (data['entity'] as String?)?.isNotEmpty == true
           ? data['entity'] as String
+          : null,
+      manager: (data['manager'] as String?)?.isNotEmpty == true
+          ? data['manager'] as String
           : null,
       moduleAccess: finalModuleAccess,
       moduleRole: (data['moduleRole'] as String?)?.isNotEmpty == true
