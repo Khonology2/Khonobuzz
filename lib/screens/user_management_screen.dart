@@ -1462,9 +1462,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               if (candidate.id == user.id) {
                 return false;
               }
+
+              if (candidate.department == 'Operations' &&
+                  candidate.designation == 'Learner') {
+                return false;
+              }
+
               if (lowerQuery.isEmpty) {
                 return true;
               }
+
               final name = candidate.name.toLowerCase();
               final email = candidate.email.toLowerCase();
               return name.contains(lowerQuery) || email.contains(lowerQuery);
