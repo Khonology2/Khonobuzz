@@ -2316,10 +2316,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   void _showDeleteConfirmation(BuildContext context) {
     final selectedCount = _selectedUserIds.length;
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final selectedUsers = userProvider.users
-        .where((user) => _selectedUserIds.contains(user.id))
-        .toList();
 
     showDialog(
       context: context,
@@ -2334,69 +2330,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Are you sure you want to delete $selectedCount user(s)?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-                const SizedBox(height: 16.0),
-                const Text(
-                  'This will permanently delete users from:',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontFamily: 'Poppins',
-                    fontSize: 12.0,
-                  ),
-                ),
-                const SizedBox(height: 8.0),
-                const Text(
-                  '• Users collection',
-                  style: TextStyle(
-                    color: Colors.white60,
-                    fontFamily: 'Poppins',
-                    fontSize: 11.0,
-                  ),
-                ),
-                const Text(
-                  '• Onboarding collection',
-                  style: TextStyle(
-                    color: Colors.white60,
-                    fontFamily: 'Poppins',
-                    fontSize: 11.0,
-                  ),
-                ),
-                if (selectedUsers.length <= 10) ...[
-                  const SizedBox(height: 16.0),
-                  const Text(
-                    'Users to be deleted:',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontFamily: 'Poppins',
-                      fontSize: 12.0,
-                    ),
-                  ),
-                  ...selectedUsers.map(
-                    (user) => Padding(
-                      padding: const EdgeInsets.only(left: 8.0, top: 4.0),
-                      child: Text(
-                        '• ${user.name} (${user.email})',
-                        style: const TextStyle(
-                          color: Colors.redAccent,
-                          fontFamily: 'Poppins',
-                          fontSize: 11.0,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+          content: Text(
+            'Are you sure you want to delete $selectedCount user(s)?',
+            style: const TextStyle(
+              color: Colors.white,
+              fontFamily: 'Poppins',
             ),
           ),
           actions: [
@@ -2408,9 +2346,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ),
             ),
             ElevatedButton(
-              onPressed: () async {
+              onPressed: () {
                 Navigator.of(context).pop();
-                await _deleteUsers(_selectedUserIds.toList());
+                _deleteUsers(_selectedUserIds.toList());
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
@@ -2430,58 +2368,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Future<void> _deleteUsers(List<String> userIds) async {
     if (userIds.isEmpty) return;
 
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+
     setState(() {
       _isSelectionMode = false;
+      if (expandedUserId != null && userIds.contains(expandedUserId)) {
+        expandedUserId = null;
+      }
+      _selectedUserIds.clear();
     });
 
-    if (mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext dialogContext) {
-          return Center(
-            child: Container(
-              padding: const EdgeInsets.all(24.0),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2C3E50),
-                borderRadius: BorderRadius.circular(16.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Color(0xFFC10D00),
-                    ),
-                  ),
-                  const SizedBox(height: 16.0),
-                  Text(
-                    'Deleting ${userIds.length} user(s)...',
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white,
-                      fontSize: 14.0,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-    }
+    userProvider.removeUsers(userIds);
 
-    int successCount = 0;
     int failureCount = 0;
     final List<String> failedUserIds = [];
-    final List<String> successfulUserIds = [];
     final List<String> errorMessages = [];
 
     const int batchSize = 10;
@@ -2502,10 +2402,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       );
 
       for (final result in results) {
-        if (result['success'] as bool) {
-          successCount++;
-          successfulUserIds.add(result['userId'] as String);
-        } else {
+        if (!(result['success'] as bool)) {
           failureCount++;
           failedUserIds.add(result['userId'] as String);
           errorMessages.add(result['error'] as String? ?? 'Unknown error');
@@ -2517,92 +2414,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
     }
 
-    // Immediately remove successfully deleted users from provider
-    if (successfulUserIds.isNotEmpty && mounted) {
-      final userProvider = Provider.of<UserProvider>(context, listen: false);
-      userProvider.removeUsers(successfulUserIds);
-    }
-
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
-
-    if (mounted) {
-      final userProvider = Provider.of<UserProvider>(context, listen: false);
-
-      // Clear local state if expanded user was deleted
-      final deletedUserIds = userIds
-          .where((id) => !failedUserIds.contains(id))
-          .toList();
-      setState(() {
-        if (expandedUserId != null && deletedUserIds.contains(expandedUserId)) {
-          expandedUserId = null;
-        }
-        _selectedUserIds.clear();
-      });
-
-      // Refresh provider to ensure all screens have updated data
-      await userProvider.fetchUsers(forceRefresh: true);
-    }
-
-    if (mounted) {
-      final bool allSuccessful = failureCount == 0;
-      final String message = allSuccessful
-          ? 'Successfully deleted $successCount user(s)'
-          : 'Deleted $successCount user(s), $failureCount failed';
-
-      await showDialog(
-        context: context,
-        barrierDismissible: true,
-        builder: (BuildContext dialogContext) {
-          return Center(
-            child: Container(
-              padding: const EdgeInsets.all(24.0),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2C3E50),
-                borderRadius: BorderRadius.circular(16.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    allSuccessful ? Icons.check_circle : Icons.error_outline,
-                    color: allSuccessful ? Colors.greenAccent : Colors.orange,
-                    size: 36.0,
-                  ),
-                  const SizedBox(height: 16.0),
-                  Text(
-                    message,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white,
-                      fontSize: 14.0,
-                    ),
-                  ),
-                  const SizedBox(height: 16.0),
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: const Text(
-                      'OK',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+    if (failureCount > 0 && failedUserIds.isNotEmpty && errorMessages.isNotEmpty) {
+      debugPrint(
+        'Failed to delete $failureCount user(s): ${failedUserIds.join(', ')}. '
+        'Errors: ${errorMessages.join(' | ')}',
       );
     }
   }
