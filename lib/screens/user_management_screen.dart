@@ -1414,16 +1414,40 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       if (!mounted) return;
 
       try {
-        final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
-        final backendUser = decoded?['user'] as Map<String, dynamic>?;
-        if (backendUser != null) {
-          final updatedUser = ManagedUser.fromApi(backendUser);
-          final userProvider =
-              Provider.of<UserProvider>(context, listen: false);
-          userProvider.updateUser(updatedUser);
-        }
-      } catch (_) {
-        // If parsing fails, rely on background refresh or ignore
+        await updatePDHUserPartial(
+          user.id,
+          {
+            'manager': managerFullName,
+          },
+          onboardingFields: {
+            'manager': managerFullName,
+          },
+        );
+      } catch (e) {
+        debugPrint('PDH manager sync failed: $e');
+      }
+
+      try {
+        await updateSkillsHeatmapUserPartial(
+          user.id,
+          {
+            'manager': managerFullName,
+          },
+          onboardingFields: {
+            'manager': managerFullName,
+          },
+        );
+      } catch (e) {
+        debugPrint('Skills Heatmap manager sync failed: $e');
+      }
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
+      final backendUser = decoded?['user'] as Map<String, dynamic>?;
+      if (backendUser != null && mounted) {
+        final updatedUser = ManagedUser.fromApi(backendUser);
+        final userProvider =
+            Provider.of<UserProvider>(context, listen: false);
+        userProvider.updateUser(updatedUser);
       }
 
       if (mounted) {
