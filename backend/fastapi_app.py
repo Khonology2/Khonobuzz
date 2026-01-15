@@ -883,6 +883,7 @@ async def list_users():
                 'department': onboarding_info.get('department', ''),
                 'designation': onboarding_info.get('designation', ''),
                 'entity': user_info.get('entity') or onboarding_info.get('entity', ''),
+                'manager': user_info.get('manager') or onboarding_info.get('manager', ''),
                 'moduleAccess': final_module_access or '',
                 'moduleRole': user_info.get('moduleRole') or onboarding_info.get('moduleRole', ''),
                 'moduleAccessRole': module_access_role_raw or '',
@@ -947,6 +948,8 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
             onboarding_update_payload['department'] = user_update.department
         if user_update.designation is not None:
             onboarding_update_payload['designation'] = user_update.designation
+        if user_update.manager is not None:
+            onboarding_update_payload['manager'] = user_update.manager
         if user_update.moduleAccess is not None:
             onboarding_update_payload['moduleAccess'] = user_update.moduleAccess
         if user_update.moduleRole is not None:
@@ -1023,6 +1026,7 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
             'department': onboarding_info.get('department', ''),
             'designation': onboarding_info.get('designation', ''),
             'entity': updated_data.get('entity') or onboarding_info.get('entity', ''),
+            'manager': updated_data.get('manager') or onboarding_info.get('manager', ''),
             'moduleAccess': updated_data.get('moduleAccess') or onboarding_info.get('moduleAccess', ''),
             'moduleRole': updated_data.get('moduleRole') or onboarding_info.get('moduleRole', ''),
             'moduleAccessRole': updated_data.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', ''),
