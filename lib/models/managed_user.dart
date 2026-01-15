@@ -149,9 +149,11 @@ class ManagedUser {
       role: userData['role'] ?? 'Staff',
       status: userData['status'] ?? 'Active',
       entity: entityValue,
-      manager: (userData['manager'] as String?)?.isNotEmpty == true
-          ? userData['manager'] as String
-          : null,
+      manager: (onboardingData['manager'] as String?)?.isNotEmpty == true
+          ? onboardingData['manager'] as String
+          : (userData['manager'] as String?)?.isNotEmpty == true
+              ? userData['manager'] as String
+              : null,
       moduleAccess: finalModuleAccess,
       moduleRole: moduleRoleValue,
       moduleAccessRole: moduleAccessRoleValue,
