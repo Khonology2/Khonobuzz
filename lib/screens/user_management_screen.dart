@@ -1384,10 +1384,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         ? '${manager.firstName} ${manager.lastName}'.trim()
         : manager.name;
 
-    user.manager = managerFullName;
-
     setState(() {
       _updatingUserId = user.id;
+      user.manager = managerFullName;
     });
 
     try {
