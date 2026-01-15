@@ -999,7 +999,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
               ),
               const SizedBox(width: 16.0),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1067,13 +1066,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   ],
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16.0),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
+              const SizedBox(width: 16.0),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1154,7 +1147,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
               ),
               const SizedBox(width: 16.0),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1275,7 +1267,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 12.0),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16.0),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     const Text(
                       'Managed by: ',
                       style: TextStyle(
