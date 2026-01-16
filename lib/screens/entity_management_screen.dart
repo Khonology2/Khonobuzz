@@ -529,6 +529,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     String? selectedEntity = (user.entity == null || user.entity!.isEmpty)
         ? _notAssignedValue
         : user.entity;
+    final isUpdating = _updatingUserId == user.id;
 
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -542,14 +543,28 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Entity Assignment',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16.0,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'Poppins',
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Entity Assignment',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16.0,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              if (isUpdating)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 16.0),
           DropdownButtonHideUnderline(
@@ -568,17 +583,14 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                   color: Colors.white,
                   fontFamily: 'Poppins',
                 ),
-                onChanged: (value) {
-                  setState(() {
-                    if (value == _notAssignedValue) {
-                      selectedEntity = _notAssignedValue;
-                      user.entity = null;
-                    } else {
-                      selectedEntity = value;
-                      user.entity = value;
-                    }
-                  });
-                },
+                onChanged: isUpdating 
+                    ? null 
+                    : (value) async {
+                        final newEntity = value == _notAssignedValue ? null : value;
+                        if (newEntity != user.entity) {
+                          await _updateUserEntity(user, newEntity);
+                        }
+                      },
                 items: <DropdownMenuItem<String?>>[
                   DropdownMenuItem<String?>(
                     value: _notAssignedValue,
@@ -592,35 +604,6 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                   ),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(height: 16.0),
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton(
-              onPressed: _updatingUserId == user.id
-                  ? null
-                  : () => _updateUserEntity(user, selectedEntity),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFC10D00),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(45.0),
-                ),
-              ),
-              child: _updatingUserId == user.id
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text(
-                      'Update Entity',
-                      style: TextStyle(fontFamily: 'Poppins'),
-                    ),
             ),
           ),
         ],

@@ -6,8 +6,8 @@ class VersionControlOverlay extends StatelessWidget {
   static const int _versionYear = 2026;
   static const String _versionMonth = '01';
   static const String _versionWeekCode = 'B';
-  static const String _versionDayCode = 'D';
-  static const int _versionCommitNumber = 5;
+  static const String _versionDayCode = 'E';
+  static const int _versionCommitNumber = 1;
   static const String _versionEnvironment = 'SIT';
 
   static const String versionLabel =
