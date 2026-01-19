@@ -28,7 +28,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     'Hiring Manager',
     'Candidate',
   ];
-  final List<String> _moduleRoleOptionsSOWBuilder = ['Admin', 'Manager'];
+  final List<String> _moduleRoleOptionsSOWBuilder = ['Admin', 'Manager', 'Finance'];
   final List<String> _moduleRoleOptionsDeliverables = [
     'System admin',
     'Client',
