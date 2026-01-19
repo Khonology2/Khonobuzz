@@ -975,6 +975,7 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
                 onboarding_doc.reference.update(onboarding_update_payload)
                 if should_regenerate_token:
                     try:
+                        print(f"[DEBUG] Regenerating token for user_id: {user_id} due to moduleAccessRole update")
                         user_email = current_user_data.get('email', '')
                         onboarding_data = onboarding_doc.to_dict() or {}
                         if not user_email:
@@ -1000,8 +1001,48 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
                         if user_email and not onboarding_data.get('email'):
                             update_data['email'] = user_email
                         onboarding_doc.reference.update(update_data)
-                    except Exception:
-                        pass
+                        print(f"[DEBUG] Token regenerated and updated in main onboarding collection for user_id: {user_id}")
+                        # Sync new token to PDH
+                        try:
+                            pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
+                            pdh_onboarding_ref.set({
+                                'email': user_email,
+                                'token': encrypted_token,
+                                'fullName': full_name,
+                                'token_updated_at': datetime.utcnow(),
+                                'updated_at': datetime.utcnow(),
+                            }, merge=True)
+                            print(f"[DEBUG] New token synced to PDH onboarding collection for user_id: {user_id}")
+                        except Exception as pdh_sync_error:
+                            print(f"[ERROR] Failed to sync new token to PDH: {pdh_sync_error}")
+                        # Sync new token to Skills Heatmap
+                        try:
+                            skills_heatmap_onboarding_ref = skills_heatmap_db.collection('onboarding').document(user_id)
+                            skills_heatmap_onboarding_ref.set({
+                                'email': user_email,
+                                'token': encrypted_token,
+                                'fullName': full_name,
+                                'token_updated_at': datetime.utcnow(),
+                                'updated_at': datetime.utcnow(),
+                            }, merge=True)
+                            print(f"[DEBUG] New token synced to Skills Heatmap onboarding collection for user_id: {user_id}")
+                        except Exception as skills_sync_error:
+                            print(f"[ERROR] Failed to sync new token to Skills Heatmap: {skills_sync_error}")
+                        # Sync new token to SOW Builder
+                        try:
+                            sow_builder_onboarding_ref = sow_builder_db.collection('onboarding').document(user_id)
+                            sow_builder_onboarding_ref.set({
+                                'email': user_email,
+                                'token': encrypted_token,
+                                'fullName': full_name,
+                                'token_updated_at': datetime.utcnow(),
+                                'updated_at': datetime.utcnow(),
+                            }, merge=True)
+                            print(f"[DEBUG] New token synced to SOW Builder onboarding collection for user_id: {user_id}")
+                        except Exception as sow_sync_error:
+                            print(f"[ERROR] Failed to sync new token to SOW Builder: {sow_sync_error}")
+                    except Exception as token_error:
+                        print(f"[ERROR] Failed to regenerate token: {token_error}")
         updated_doc = user_ref.get()
         updated_data = updated_doc.to_dict() or {}
         onboarding_info = {}
