@@ -269,6 +269,7 @@ class UserUpdate(BaseModel):
     moduleRole: Optional[str] = None
     moduleAccessRole: Optional[str] = None
     adminApproved: Optional[str] = None
+    regenerateToken: Optional[bool] = None
 try:
     main_cred = load_firebase_credentials('FIREBASE_CREDENTIALS', 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json')
     initialize_app(main_cred)
@@ -958,7 +959,7 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
             onboarding_update_payload['moduleAccessRole'] = user_update.moduleAccessRole
         if user_update.adminApproved is not None and not is_special_session:
             onboarding_update_payload['admin'] = {'approved': user_update.adminApproved}
-        should_regenerate_token = user_update.moduleAccessRole is not None
+        should_regenerate_token = user_update.moduleAccessRole is not None and (user_update.regenerateToken is True)
         if len(onboarding_update_payload) > 1:
             onboarding_query = (
                 db.collection('onboarding')

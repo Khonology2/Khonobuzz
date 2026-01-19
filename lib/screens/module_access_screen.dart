@@ -341,6 +341,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           'moduleAccess': sanitizedModuleAccess,
           'moduleRole': sanitizedModuleRole,
           'moduleAccessRole': combinedModuleAccess,
+          'regenerateToken': true,
           if (adminEmail.isNotEmpty) 'adminApproved': adminEmail,
         }),
       );
