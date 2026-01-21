@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,6 +21,8 @@ class ModuleScreen extends StatefulWidget {
 class _ModuleScreenState extends State<ModuleScreen> {
   bool _isLoadingModuleAccess = false;
   final ScrollController _scrollController = ScrollController();
+  String? _generatedToken;
+  bool _isGeneratingToken = false;
 
   @override
   void initState() {
@@ -124,6 +127,99 @@ class _ModuleScreenState extends State<ModuleScreen> {
       setState(() {
         _isLoadingModuleAccess = false;
       });
+    }
+  }
+
+  Future<void> _generateToken() async {
+    if (!mounted) return;
+    
+    setState(() {
+      _isGeneratingToken = true;
+      _generatedToken = null;
+    });
+
+    try {
+      final authProvider = context.read<AuthProvider>();
+      await authProvider.fetchUserToken();
+      
+      if (mounted && authProvider.userToken != null) {
+        setState(() {
+          _generatedToken = authProvider.userToken;
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Token generated successfully!',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Failed to generate token. Please try again.',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error generating token: $e',
+              style: const TextStyle(fontFamily: 'Poppins'),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGeneratingToken = false;
+        });
+      }
+    }
+  }
+
+  void _copyTokenToClipboard() async {
+    if (_generatedToken != null) {
+      try {
+        await Clipboard.setData(ClipboardData(text: _generatedToken!));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Token copied to clipboard!',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to copy token: $e',
+                style: const TextStyle(fontFamily: 'Poppins'),
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -327,6 +423,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   url: 'https://flow-space-1.onrender.com/',
                                   moduleKey: 'deliverable_sprint',
                                   isComingSoon: false,
+                                  showTokenField: true,
+                                  onGenerateToken: _generateToken,
+                                  onCopyToken: _copyTokenToClipboard,
+                                  generatedToken: _generatedToken,
+                                  isGeneratingToken: _isGeneratingToken,
                                 ),
                               );
                             }
@@ -381,6 +482,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
     required String url,
     required String moduleKey,
     bool isComingSoon = false,
+    bool showTokenField = false,
+    VoidCallback? onGenerateToken,
+    VoidCallback? onCopyToken,
+    String? generatedToken,
+    bool isGeneratingToken = false,
   }) {
     return _HoverableModuleCard(
       context: context,
@@ -391,6 +497,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
       url: url,
       moduleKey: moduleKey,
       isComingSoon: isComingSoon,
+      showTokenField: showTokenField,
+      onGenerateToken: onGenerateToken,
+      onCopyToken: onCopyToken,
+      generatedToken: generatedToken,
+      isGeneratingToken: isGeneratingToken,
     );
   }
 }
@@ -404,6 +515,11 @@ class _HoverableModuleCard extends StatefulWidget {
   final String url;
   final String moduleKey;
   final bool isComingSoon;
+  final bool showTokenField;
+  final VoidCallback? onGenerateToken;
+  final VoidCallback? onCopyToken;
+  final String? generatedToken;
+  final bool isGeneratingToken;
 
   const _HoverableModuleCard({
     required this.context,
@@ -414,6 +530,11 @@ class _HoverableModuleCard extends StatefulWidget {
     required this.url,
     required this.moduleKey,
     this.isComingSoon = false,
+    this.showTokenField = false,
+    this.onGenerateToken,
+    this.onCopyToken,
+    this.generatedToken,
+    this.isGeneratingToken = false,
   });
 
   @override
@@ -611,6 +732,131 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                         ),
                                       ),
                                       const SizedBox(height: 18.0),
+                                    ],
+                                    if (widget.showTokenField) ...[
+                                      Container(
+                                        padding: const EdgeInsets.all(12.0),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(alpha: 0.3),
+                                          borderRadius: BorderRadius.circular(8.0),
+                                          border: Border.all(
+                                            color: Colors.white24,
+                                            width: 1.0,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Access Token',
+                                              style: const TextStyle(
+                                                fontSize: 12.0,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white70,
+                                                fontFamily: 'Poppins',
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8.0),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: 12.0,
+                                                      vertical: 8.0,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black.withValues(alpha: 0.5),
+                                                      borderRadius: BorderRadius.circular(6.0),
+                                                      border: Border.all(
+                                                        color: Colors.white12,
+                                                        width: 1.0,
+                                                      ),
+                                                    ),
+                                                    child: widget.generatedToken != null
+                                                        ? Text(
+                                                            widget.generatedToken!,
+                                                            style: const TextStyle(
+                                                              fontSize: 11.0,
+                                                              color: Colors.green,
+                                                              fontFamily: 'monospace',
+                                                              fontWeight: FontWeight.w500,
+                                                            ),
+                                                            maxLines: 2,
+                                                            overflow: TextOverflow.ellipsis,
+                                                          )
+                                                        : Text(
+                                                            'No token generated',
+                                                            style: TextStyle(
+                                                              fontSize: 11.0,
+                                                              color: Colors.white.withValues(alpha: 0.5),
+                                                              fontFamily: 'Poppins',
+                                                              fontStyle: FontStyle.italic,
+                                                            ),
+                                                          ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8.0),
+                                                ElevatedButton(
+                                                  onPressed: widget.isGeneratingToken
+                                                      ? null
+                                                      : widget.onGenerateToken,
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: primaryAccent,
+                                                    foregroundColor: Colors.white,
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: 16.0,
+                                                      vertical: 8.0,
+                                                    ),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius: BorderRadius.circular(6.0),
+                                                    ),
+                                                    textStyle: const TextStyle(
+                                                      fontSize: 11.0,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                    minimumSize: const Size(0, 32),
+                                                  ),
+                                                  child: widget.isGeneratingToken
+                                                      ? const SizedBox(
+                                                          width: 12.0,
+                                                          height: 12.0,
+                                                          child: CircularProgressIndicator(
+                                                            strokeWidth: 2.0,
+                                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                                          ),
+                                                        )
+                                                      : const Text('Generate'),
+                                                ),
+                                                if (widget.generatedToken != null) ...[
+                                                  const SizedBox(width: 4.0),
+                                                  ElevatedButton(
+                                                    onPressed: widget.onCopyToken,
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: Colors.white24,
+                                                      foregroundColor: Colors.white,
+                                                      padding: const EdgeInsets.symmetric(
+                                                        horizontal: 12.0,
+                                                        vertical: 8.0,
+                                                      ),
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius: BorderRadius.circular(6.0),
+                                                      ),
+                                                      textStyle: const TextStyle(
+                                                        fontSize: 11.0,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                      minimumSize: const Size(0, 32),
+                                                    ),
+                                                    child: const Text('Copy'),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16.0),
                                     ],
                                     ElevatedButton(
                                       onPressed: _isLoading

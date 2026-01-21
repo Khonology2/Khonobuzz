@@ -4,12 +4,63 @@ FastAPI-based REST API for the Khonology project management application.
 
 ## Setup Instructions
 
-### 1. Install Dependencies
+### Option 1: Docker Setup (Recommended)
+
+#### Prerequisites
+- Docker and Docker Compose installed
+- Firebase credentials files
+
+#### Quick Start
+1. **Create credentials directory:**
+```bash
+mkdir -p credentials
+```
+
+2. **Copy Firebase credentials to credentials directory:**
+```bash
+# Copy all JSON credential files to the credentials/ directory
+cp *.json credentials/
+```
+
+3. **Run with Docker Compose:**
+```bash
+# For development (without local database)
+docker-compose up --build
+
+# For development with local PostgreSQL
+docker-compose --profile local-db up --build
+
+# For production
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+```
+
+4. **Access the API:**
+- API: `http://localhost:5000`
+- Documentation: `http://localhost:5000/docs`
+
+#### Environment Variables
+Create a `.env` file or set environment variables:
+```bash
+# Required
+JWT_SECRET_KEY=your-secret-key
+ENCRYPTION_KEY=your-encryption-key
+DATABASE_URL=your-database-url
+
+# Optional
+DEBUG=false
+HOST=0.0.0.0
+PORT=5000
+BACKEND_URL=https://your-backend-url.com
+```
+
+### Option 2: Local Development
+
+#### 1. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Firebase Setup
+#### 2. Firebase Setup
 1. Go to [Firebase Console](https://console.firebase.google.com/)
 2. Create a new project or select existing one
 3. Go to Project Settings > Service Accounts
@@ -17,13 +68,13 @@ pip install -r requirements.txt
 5. Download the JSON file and rename it to `khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json`
 6. Place it in the backend folder
 
-### 3. Environment Variables
+#### 3. Environment Variables
 Copy `.env` file and update the values:
 ```bash
 cp .env.example .env
 ```
 
-### 4. Run the Application
+#### 4. Run the Application
 ```bash
 python app.py
 ```
