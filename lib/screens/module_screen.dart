@@ -423,11 +423,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   url: 'https://flow-space-1.onrender.com/',
                                   moduleKey: 'deliverable_sprint',
                                   isComingSoon: false,
-                                  showTokenField: true,
-                                  onGenerateToken: _generateToken,
-                                  onCopyToken: _copyTokenToClipboard,
-                                  generatedToken: _generatedToken,
-                                  isGeneratingToken: _isGeneratingToken,
                                 ),
                               );
                             }

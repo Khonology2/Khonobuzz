@@ -3,6 +3,30 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
+// Onboarding Collection Functions
+
+Future<void> updateOnboardingUserPartial(
+  String uid,
+  Map<String, dynamic> onboardingFields,
+) async {
+  try {
+    final response = await http.patch(
+      Uri.parse(ApiConfig.onboardingUpdateUserEndpoint(uid)),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'onboardingFields': onboardingFields,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update user in onboarding: ${response.body}');
+    }
+    debugPrint('Successfully updated user $uid in onboarding via backend.');
+  } catch (e) {
+    debugPrint('!!!!!!!! ERROR updating user $uid in onboarding: $e !!!!!!!!!!');
+    rethrow;
+  }
+}
+
 // PDH Sync Functions
 
 Future<void> syncUserToPDH(

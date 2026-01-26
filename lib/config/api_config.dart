@@ -97,4 +97,5 @@ class ApiConfig {
       '$baseUrl/api/skills-heatmap/update-user/$uid';
   static String userEndpoint(String userId) => '$baseUrl/api/users/$userId';
   static String deleteUserEndpoint(String userId) => '$baseUrl/api/users/$userId';
+  static String onboardingUpdateUserEndpoint(String userId) => '$baseUrl/api/onboarding/update-user/$userId';
 }

@@ -8,6 +8,7 @@ import '../utils/pdh_firebase.dart'
     show
         updatePDHUserPartial,
         updateSkillsHeatmapUserPartial,
+        updateOnboardingUserPartial,
         syncUserToPDH,
         syncUserToSkillsHeatmap;
 import '../models/managed_user.dart';
@@ -260,6 +261,22 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         );
       } catch (e) {
         debugPrint('Skills Heatmap sync failed for user update: $e');
+      }
+
+      try {
+        await updateOnboardingUserPartial(
+          userId,
+          {
+            'role': newRole,
+            'status': newStatus,
+            'entity': entity,
+            'department': department,
+            'designation': designation,
+            if (adminField != null) ...adminField,
+          },
+        );
+      } catch (e) {
+        debugPrint('Onboarding sync failed for user update: $e');
       }
 
       if (mounted) {
@@ -974,10 +991,23 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
-                          setState(() {
-                            selectedRole = newValue!;
-                            user.role = newValue;
-                          });
+                          if (newValue != null && newValue != selectedRole) {
+                            setState(() {
+                              selectedRole = newValue;
+                              user.role = newValue;
+                            });
+                            // Auto-save the role change
+                            _updateUserRoleAndStatus(
+                              user.id,
+                              newValue,
+                              user.status,
+                              firstName: user.firstName,
+                              lastName: user.lastName,
+                              department: user.department,
+                              designation: user.designation,
+                              entity: user.entity,
+                            );
+                          }
                         },
                         items: userRoles.map<DropdownMenuItem<String>>((
                           String value,
@@ -1042,10 +1072,23 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
-                          setState(() {
-                            selectedStatusLocal = newValue!;
-                            user.status = newValue;
-                          });
+                          if (newValue != null && newValue != selectedStatusLocal) {
+                            setState(() {
+                              selectedStatusLocal = newValue;
+                              user.status = newValue;
+                            });
+                            // Auto-save the status change
+                            _updateUserRoleAndStatus(
+                              user.id,
+                              user.role,
+                              newValue,
+                              firstName: user.firstName,
+                              lastName: user.lastName,
+                              department: user.department,
+                              designation: user.designation,
+                              entity: user.entity,
+                            );
+                          }
                         },
                         items: ['Active', 'Pending']
                             .map<DropdownMenuItem<String>>((String value) {
@@ -1439,6 +1482,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         );
       } catch (e) {
         debugPrint('Skills Heatmap manager sync failed: $e');
+      }
+
+      try {
+        await updateOnboardingUserPartial(
+          user.id,
+          {
+            'manager': managerFullName,
+          },
+        );
+      } catch (e) {
+        debugPrint('Onboarding manager sync failed: $e');
       }
 
       final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
@@ -2402,10 +2456,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       _selectedUserIds.clear();
     });
 
-    userProvider.removeUsers(userIds);
-
     int failureCount = 0;
     final List<String> failedUserIds = [];
+    final List<String> successfullyDeletedUserIds = [];
     final List<String> errorMessages = [];
 
     const int batchSize = 10;
@@ -2426,7 +2479,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       );
 
       for (final result in results) {
-        if (!(result['success'] as bool)) {
+        if (result['success'] as bool) {
+          successfullyDeletedUserIds.add(result['userId'] as String);
+        } else {
           failureCount++;
           failedUserIds.add(result['userId'] as String);
           errorMessages.add(result['error'] as String? ?? 'Unknown error');
@@ -2438,10 +2493,38 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
     }
 
+    // Only remove users from UI after successful API deletion
+    if (successfullyDeletedUserIds.isNotEmpty) {
+      userProvider.removeUsers(successfullyDeletedUserIds);
+    }
+
     if (failureCount > 0 && failedUserIds.isNotEmpty && errorMessages.isNotEmpty) {
       debugPrint(
         'Failed to delete $failureCount user(s): ${failedUserIds.join(', ')}. '
         'Errors: ${errorMessages.join(' | ')}',
+      );
+    }
+
+    // Show feedback to user
+    if (mounted) {
+      String message = '';
+      if (successfullyDeletedUserIds.isNotEmpty) {
+        message += 'Successfully deleted ${successfullyDeletedUserIds.length} user(s).';
+      }
+      if (failureCount > 0) {
+        message += ' Failed to delete $failureCount user(s).';
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
+          ),
+          backgroundColor: successfullyDeletedUserIds.isNotEmpty 
+              ? (failureCount > 0 ? Colors.orange : Colors.green)
+              : Colors.red,
+        ),
       );
     }
   }
