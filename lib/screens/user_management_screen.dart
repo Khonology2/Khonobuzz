@@ -315,9 +315,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         }
       }
     } finally {
-      setState(() {
-        _updatingUserId = null;
-      });
+      if (mounted) {
+        setState(() {
+          _updatingUserId = null;
+          // Ensure expandedUserId is preserved during the state update
+          // Note: We don't modify expandedUserId here, so it remains unchanged
+        });
+      }
     }
   }
 
@@ -992,9 +996,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
                           if (newValue != null && newValue != selectedRole) {
+                            // Store current expanded state before setState
+                            final currentExpandedUserId = expandedUserId;
+                            
                             setState(() {
                               selectedRole = newValue;
                               user.role = newValue;
+                              // Preserve the expanded state
+                              expandedUserId = currentExpandedUserId;
                             });
                             // Auto-save the role change
                             _updateUserRoleAndStatus(
@@ -1073,9 +1082,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
                           if (newValue != null && newValue != selectedStatusLocal) {
+                            // Store current expanded state before setState
+                            final currentExpandedUserId = expandedUserId;
+                            
                             setState(() {
                               selectedStatusLocal = newValue;
                               user.status = newValue;
+                              // Preserve the expanded state
+                              expandedUserId = currentExpandedUserId;
                             });
                             // Auto-save the status change
                             _updateUserRoleAndStatus(
@@ -1430,6 +1444,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     setState(() {
       _updatingUserId = user.id;
       user.manager = managerFullName;
+      // Preserve expandedUserId - we don't modify it here
     });
 
     try {
@@ -1517,6 +1532,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       if (mounted) {
         setState(() {
           _updatingUserId = null;
+          // Ensure expandedUserId is preserved during the state update
+          // Note: We don't modify expandedUserId here, so it remains unchanged
         });
       }
     }
