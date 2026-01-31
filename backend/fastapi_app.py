@@ -29,6 +29,10 @@ except ImportError:
         parse_module_access_role_to_roles,
         verify_token,
     )
+try:
+    from .imagekit_service import imagekit_service
+except ImportError:
+    from imagekit_service import imagekit_service
 load_dotenv()
 DEBUG_MODE = os.environ.get('DEBUG', 'True').lower() == 'true'
 LOG_LEVEL = logging.DEBUG if DEBUG_MODE else logging.INFO
@@ -1614,3 +1618,75 @@ async def get_user_token(email: str = Query(..., description="User email address
     except Exception as e:
         print(f"[ERROR] During token generation: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+from fastapi import UploadFile, File
+from typing import Union
+
+@app.post("/users/profile-image")
+async def upload_profile_image(file: UploadFile = File(...), user_id: str = Query(..., description="User ID for folder organization")):
+    """
+    Upload a profile image to ImageKit using the upload_profile_image method.
+    
+    Args:
+        file: Image file (multipart/form-data)
+        user_id: User ID for organizing files in folders
+        
+    Returns:
+        JSON response with ImageKit CDN URL and file ID
+    """
+    try:
+        info_log(f"Profile image upload request for user_id: {user_id}")
+        
+        # Use the new upload_profile_image method
+        result = imagekit_service.upload_profile_image(file, user_id)
+        
+        if result['success']:
+            info_log(f"Profile image uploaded successfully for user_id: {user_id}")
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "url": result['url'],
+                    "file_id": result['file_id']
+                }
+            )
+        else:
+            error_log(f"Profile image upload failed for user_id: {user_id}: {result['error']}")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": result['error']
+                }
+            )
+            
+    except Exception as e:
+        error_log(f"Unexpected error during profile image upload: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Internal server error during upload"}
+        )
+
+@app.delete("/api/delete/profile-picture")
+async def delete_profile_picture(public_id: str = Query(..., description="ImageKit file ID")):
+    """
+    Delete a profile picture from ImageKit
+    """
+    try:
+        result = imagekit_service.delete_image(public_id)
+        
+        if result:
+            return JSONResponse(
+                status_code=200,
+                content={"success": True, "message": "Profile picture deleted successfully"}
+            )
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Failed to delete profile picture", "message": "Deletion failed"}
+            )
+            
+    except Exception as e:
+        print(f"[ERROR] During profile picture deletion: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "message": "Failed to delete profile picture"}
+        )

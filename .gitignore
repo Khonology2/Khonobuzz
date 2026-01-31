@@ -23,3 +23,7 @@ key.properties
 **/*.keystore
 **/*.jks
 .trae/rules/buzzrules.md
+
+# Environment variables
+.env
+**/.env

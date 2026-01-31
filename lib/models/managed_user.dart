@@ -12,6 +12,8 @@ class ManagedUser {
   String? moduleAccess; // PDH or SOW Builder
   String? moduleRole; // Employee or Manager (depends on moduleAccess)
   String? moduleAccessRole; // Combined field like "PDH - Employee, Skills Heatmap - Manager"
+  String? phoneNumber; // New field for phone number
+  String? profilePictureUrl; // New field for profile picture URL
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -71,6 +73,8 @@ class ManagedUser {
     this.moduleAccess,
     this.moduleRole,
     this.moduleAccessRole,
+    this.phoneNumber,
+    this.profilePictureUrl,
     this.createdAt,
     this.updatedAt,
   });
@@ -157,6 +161,8 @@ class ManagedUser {
       moduleAccess: finalModuleAccess,
       moduleRole: moduleRoleValue,
       moduleAccessRole: moduleAccessRoleValue,
+      phoneNumber: onboardingData['phone'] ?? userData['phone'],
+      profilePictureUrl: onboardingData['profilePictureUrl'] ?? userData['profilePictureUrl'],
     );
   }
 
@@ -194,6 +200,8 @@ class ManagedUser {
           ? data['moduleRole'] as String
           : null,
       moduleAccessRole: moduleAccessRoleRaw,
+      phoneNumber: data['phone'],
+      profilePictureUrl: data['profilePictureUrl'],
       createdAt: createdAtRaw is String && createdAtRaw.isNotEmpty
           ? DateTime.tryParse(createdAtRaw)
           : null,

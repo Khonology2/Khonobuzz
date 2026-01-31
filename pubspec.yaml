@@ -37,13 +37,14 @@ dependencies:
   cloud_firestore: ^4.17.4 # Added for Firestore integration
   firebase_auth: ^4.19.0 # Added for Firebase Authentication
   provider: ^6.1.5+1
-  http: ^0.13.6
   shared_preferences: ^2.5.3
   intl: ^0.18.1
   flutter_aad_oauth: ^2.3.0
   firebase_core: ^2.32.0 # Added firebase_core dependency
   video_player: ^2.9.2
   url_launcher: ^6.3.0
+  image_picker: ^1.1.2
+  http: ^0.13.6
 
 dev_dependencies:
   flutter_test:
