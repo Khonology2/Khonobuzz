@@ -1,17 +1,12 @@
 // ignore_for_file: avoid_print, use_build_context_synchronously, deprecated_member_use
 
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import '../models/managed_user.dart';
 import '../utils/pdh_firebase.dart' show updateOnboardingUserPartial;
-import '../config/api_config.dart';
 
 class StaffProfileScreen extends StatefulWidget {
   const StaffProfileScreen({super.key});
@@ -20,16 +15,11 @@ class StaffProfileScreen extends StatefulWidget {
   State<StaffProfileScreen> createState() => _StaffProfileScreenState();
 }
 
-class _StaffProfileScreenState extends State<StaffProfileScreen>
-    with SingleTickerProviderStateMixin {
+class _StaffProfileScreenState extends State<StaffProfileScreen> {
   Timer? _debounceTimer;
   bool _isLoading = false;
-  File? _profileImage;
   ManagedUser? _currentUser;
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
 
-  final ImagePicker _imagePicker = ImagePicker();
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -71,25 +61,6 @@ class _StaffProfileScreenState extends State<StaffProfileScreen>
   void initState() {
     super.initState();
     _loadUserData();
-
-    // Initialize animation controller for heartbeat effect
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    );
-
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
-    );
-
-    // Add status listener to repeat the animation
-    _animationController.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        _animationController.reverse();
-      } else if (status == AnimationStatus.dismissed) {
-        _animationController.forward();
-      }
-    });
   }
 
   @override
@@ -100,7 +71,6 @@ class _StaffProfileScreenState extends State<StaffProfileScreen>
     _emailController.dispose();
     _phoneController.dispose();
     _managerController.dispose();
-    _animationController.dispose();
     super.dispose();
   }
 
@@ -138,200 +108,6 @@ class _StaffProfileScreenState extends State<StaffProfileScreen>
     }
   }
 
-  Future<void> _pickImage() async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 85,
-      );
-
-      if (image != null) {
-        setState(() {
-          _profileImage = File(image.path);
-        });
-        // Auto-save profile picture
-        _autoSaveProfilePicture();
-      }
-    } catch (e) {
-      // Silent fail - no toast shown
-    }
-  }
-
-  bool _isValidUrl(String? url) {
-    if (url == null || url.trim().isEmpty) return false;
-    try {
-      final uri = Uri.parse(url.trim());
-      return uri.hasScheme &&
-          (uri.scheme == 'http' || uri.scheme == 'https') &&
-          uri.host.isNotEmpty &&
-          !uri.host.contains(' ') &&
-          !url.contains(' ');
-    } catch (e) {
-      return false;
-    }
-  }
-
-  Future<void> _autoSaveProfilePicture() async {
-    if (_currentUser == null || _profileImage == null) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Upload to backend (which handles ImageKit)
-      String imageUrl = await _uploadToBackend(_profileImage!);
-
-      if (imageUrl.isNotEmpty) {
-        // Update user profile with ImageKit URL
-        await updateOnboardingUserPartial(_currentUser!.id, {
-          'profilePictureUrl': imageUrl,
-        });
-
-        // Update local user data
-        final userProvider = context.read<UserProvider>();
-        await userProvider.fetchUsers(forceRefresh: true);
-        _loadUserData();
-
-        print('Profile picture uploaded successfully: $imageUrl');
-      } else {
-        throw Exception('Received empty URL from backend');
-      }
-    } catch (e) {
-      print('Auto-save profile picture error: $e');
-      // Show user-friendly error message
-      if (mounted) {
-        String userMessage = 'Failed to upload profile picture';
-        if (e.toString().contains('timeout')) {
-          userMessage =
-              'Upload timeout - please check your internet connection and try again';
-        } else if (e.toString().contains('Server error')) {
-          userMessage =
-              'Server is temporarily unavailable - please try again later';
-        } else if (e.toString().contains('too large')) {
-          userMessage =
-              'Image file is too large - please choose a smaller image (max 5MB)';
-        } else if (e.toString().contains('does not exist')) {
-          userMessage =
-              'Image file not found - please try selecting the image again';
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(userMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Retry',
-              textColor: Colors.white,
-              onPressed: () {
-                if (_profileImage != null) {
-                  _autoSaveProfilePicture();
-                }
-              },
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<String> _uploadToBackend(File imageFile) async {
-    try {
-      // Validate file exists and is readable
-      if (!await imageFile.exists()) {
-        throw Exception('Image file does not exist');
-      }
-
-      final fileSize = await imageFile.length();
-      if (fileSize > 5 * 1024 * 1024) {
-        // 5MB limit
-        throw Exception('Image file too large (max 5MB)');
-      }
-
-      // Get current user ID for folder organization
-      final authProvider = context.read<AuthProvider>();
-      final userProvider = context.read<UserProvider>();
-      final currentUser = userProvider.users
-          .where((user) => user.email == authProvider.userEmail)
-          .firstOrNull;
-
-      if (currentUser == null) {
-        throw Exception('User not found');
-      }
-
-      // Create multipart request to new ImageKit endpoint
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('${ApiConfig.baseUrl}/users/profile-image'),
-      );
-
-      // Add headers
-      request.headers.addAll({
-        'Accept': 'application/json',
-        'Content-Type': 'multipart/form-data',
-      });
-
-      // Add user_id parameter
-      request.fields['user_id'] = currentUser.id;
-
-      // Add file with proper content type
-      final imageBytes = await imageFile.readAsBytes();
-      final multipartFile = http.MultipartFile.fromBytes(
-        'file',
-        imageBytes,
-        filename: 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-
-      request.files.add(multipartFile);
-
-      // Send request with timeout
-      final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 30),
-        onTimeout: () => throw Exception(
-          'Upload timeout - please check your internet connection',
-        ),
-      );
-
-      // Get response body
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode != 200) {
-        throw Exception(
-          'Server error: ${response.statusCode} - ${response.reasonPhrase}',
-        );
-      }
-
-      if (response.body.isEmpty) {
-        throw Exception('Empty response from server');
-      }
-
-      // Parse JSON response from new ImageKit endpoint
-      final jsonResponse = json.decode(response.body);
-
-      // New endpoint returns {"url": "...", "file_id": "..."}
-      final url = jsonResponse['url'] as String?;
-      if (url != null && url.isNotEmpty) {
-        print('Staff profile picture uploaded successfully to ImageKit: $url');
-        return url;
-      } else {
-        final error = jsonResponse['error'] ?? 'Unknown upload error';
-        throw Exception('Upload failed: $error');
-      }
-    } catch (e) {
-      print('Staff backend upload error: $e');
-      rethrow;
-    }
-  }
-
   void _autoSave(String field, String value) {
     if (_currentUser == null || _isLoading) return;
 
@@ -363,19 +139,6 @@ class _StaffProfileScreenState extends State<StaffProfileScreen>
           case 'phone':
             updateData['phoneNumber'] = value;
             break;
-        }
-
-        // Add profile picture URL if it exists
-        if (_profileImage != null) {
-          try {
-            String imageUrl = await _uploadToBackend(_profileImage!);
-            if (imageUrl.isNotEmpty) {
-              updateData['profilePictureUrl'] = imageUrl;
-            }
-          } catch (e) {
-            print('Backend upload failed during auto-save: $e');
-            // Keep existing URL if upload fails
-          }
         }
 
         await updateOnboardingUserPartial(_currentUser!.id, updateData);
@@ -532,10 +295,6 @@ class _StaffProfileScreenState extends State<StaffProfileScreen>
   }
 
   Widget _buildProfileHeader() {
-    final userName = '${_firstNameController.text} ${_lastNameController.text}'
-        .trim();
-    final userInitial = userName.isNotEmpty ? userName[0].toUpperCase() : 'U';
-
     return Container(
       constraints: const BoxConstraints(maxWidth: 500),
       decoration: BoxDecoration(
@@ -568,159 +327,7 @@ class _StaffProfileScreenState extends State<StaffProfileScreen>
               fontFamily: 'Poppins',
             ),
           ),
-          const SizedBox(height: 24.0),
-
-          // Profile Photo Section - Centered at the top
-          Center(
-            child: Column(
-              children: [
-                MouseRegion(
-                  onEnter: (_) => _animationController.forward(),
-                  onExit: (_) => _animationController.reverse(),
-                  child: GestureDetector(
-                    onTap: _pickImage,
-                    child: AnimatedBuilder(
-                      animation: _scaleAnimation,
-                      builder: (context, child) {
-                        return Transform.scale(
-                          scale: _scaleAnimation.value,
-                          child: Stack(
-                            children: [
-                              Container(
-                                width: 100,
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  color: Colors.white10,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.2),
-                                    width: 2,
-                                  ),
-                                ),
-                                child: ClipOval(
-                                  child: _profileImage != null
-                                      ? Image.file(
-                                          _profileImage!,
-                                          fit: BoxFit.cover,
-                                          width: 100,
-                                          height: 100,
-                                        )
-                                      : _isValidUrl(
-                                          _currentUser?.profilePictureUrl,
-                                        )
-                                      ? Image.network(
-                                          _currentUser!.profilePictureUrl!,
-                                          fit: BoxFit.cover,
-                                          width: 100,
-                                          height: 100,
-                                          errorBuilder:
-                                              (context, error, stackTrace) {
-                                                print(
-                                                  'Error loading staff profile image: $error',
-                                                );
-                                                return _buildDefaultAvatar(
-                                                  _currentUser!
-                                                          .firstName
-                                                          .isNotEmpty
-                                                      ? _currentUser!
-                                                            .firstName[0]
-                                                            .toUpperCase()
-                                                      : 'S',
-                                                  100,
-                                                );
-                                              },
-                                          loadingBuilder: (context, child, loadingProgress) {
-                                            if (loadingProgress == null) {
-                                              return child;
-                                            }
-                                            return Center(
-                                              child: CircularProgressIndicator(
-                                                value:
-                                                    loadingProgress
-                                                            .expectedTotalBytes !=
-                                                        null
-                                                    ? loadingProgress
-                                                              .cumulativeBytesLoaded /
-                                                          loadingProgress
-                                                              .expectedTotalBytes!
-                                                    : null,
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<
-                                                      Color
-                                                    >(Colors.white),
-                                              ),
-                                            );
-                                          },
-                                        )
-                                      : _buildDefaultAvatar(userInitial, 100),
-                                ),
-                              ),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: Container(
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFC10D00),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.4,
-                                      ),
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.camera_alt,
-                                    color: Colors.white,
-                                    size: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Upload Photo',
-                  style: TextStyle(
-                    color: Color(0xFFC10D00),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildDefaultAvatar(String initial, double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: const BoxDecoration(
-        color: Color(0xFFC10D00),
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Text(
-          initial,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: size * 0.4,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Poppins',
-          ),
-        ),
       ),
     );
   }
