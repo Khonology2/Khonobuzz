@@ -39,5 +39,5 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:5000/health || exit 1
 
-# For Render, use gunicorn like in Procfile
-CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "fastapi_app:app", "--bind", "0.0.0.0:$PORT"]
+# Use shell to expand $PORT variable
+CMD ["sh", "-c", "gunicorn -w 4 -k uvicorn.workers.UvicornWorker fastapi_app:app --bind 0.0.0.0:$PORT"]
