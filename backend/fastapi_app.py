@@ -115,9 +115,21 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
     if json_str:
         try:
             json_str = json_str.strip()
+            # Remove surrounding quotes if present
             if (json_str.startswith('"') and json_str.endswith('"')) or \
                (json_str.startswith("'") and json_str.endswith("'")):
                 json_str = json_str[1:-1]
+            
+            # Check for common formatting issues
+            if json_str.startswith('"') and not json_str.startswith('{"'):
+                error_msg = (
+                    f"Invalid format in {json_env_var}. The value appears to have extra quotes.\n"
+                    f"Current format starts with: {json_str[:50]}...\n"
+                    f"Expected format: {{\"type\":\"service_account\",...}}\n"
+                    f"Solution: Remove surrounding quotes from the environment variable in Render."
+                )
+                raise ValueError(error_msg)
+            
             debug_log(f"{json_env_var} value length: {len(json_str)} characters")
             debug_log(f"{json_env_var} starts with: {json_str[:50]}...")
             debug_log(f"{json_env_var} ends with: ...{json_str[-50:]}")
