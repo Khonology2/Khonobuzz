@@ -35,9 +35,7 @@ echo "🔍 Checking for Firebase credentials files..."
 
 credential_files=(
     "pdh-fe6eb-firebase-adminsdk-fbsvc-2700680531.json"
-    "resource-capacity-3b654-firebase-adminsdk-fbsvc-ebe5037ab6.json"
     "khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json"
-    "lukens-e17d6-firebase-adminsdk-fbsvc-ea49e5a350.json"
 )
 
 missing_files=()
@@ -84,9 +82,7 @@ BACKEND_URL=https://your-backend-url.com
 
 # Firebase Credentials Paths
 PDH_FIREBASE_CREDENTIALS_PATH=/app/credentials/pdh-fe6eb-firebase-adminsdk-fbsvc-2700680531.json
-SKILLS_HEATMAP_FIREBASE_CREDENTIALS_PATH=/app/credentials/resource-capacity-3b654-firebase-adminsdk-fbsvc-ebe5037ab6.json
 FIREBASE_CREDENTIALS_PATH=/app/credentials/khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json
-SOW_BUILDER_FIREBASE_CREDENTIALS_PATH=/app/credentials/lukens-e17d6-firebase-adminsdk-fbsvc-ea49e5a350.json
 EOF
     echo "✅ Example .env file created. Please update it with your actual values."
 else

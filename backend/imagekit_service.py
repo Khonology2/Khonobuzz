@@ -23,9 +23,9 @@ class ImageKitService:
             # Try alternative initialization
             try:
                 self.imagekit = ImageKit(
-                    os.getenv('IMAGEKIT_PRIVATE_KEY'),
-                    os.getenv('IMAGEKIT_PUBLIC_KEY'),
-                    os.getenv('IMAGEKIT_URL_ENDPOINT')
+                    private_key=os.getenv('IMAGEKIT_PRIVATE_KEY'),
+                    public_key=os.getenv('IMAGEKIT_PUBLIC_KEY'),
+                    url_endpoint=os.getenv('IMAGEKIT_URL_ENDPOINT')
                 )
                 logger.info("ImageKit service initialized successfully (alternative method)")
             except Exception as e2:

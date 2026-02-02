@@ -47,17 +47,6 @@ if not exist "pdh-fe6eb-firebase-adminsdk-fbsvc-2700680531.json" (
     )
 )
 
-if not exist "resource-capacity-3b654-firebase-adminsdk-fbsvc-ebe5037ab6.json" (
-    echo ❌ Missing: resource-capacity-3b654-firebase-adminsdk-fbsvc-ebe5037ab6.json
-    set /a missing_files+=1
-) else (
-    echo ✅ Found: resource-capacity-3b654-firebase-adminsdk-fbsvc-ebe5037ab6.json
-    if not exist "credentials\resource-capacity-3b654-firebase-adminsdk-fbsvc-ebe5037ab6.json" (
-        copy "resource-capacity-3b654-firebase-adminsdk-fbsvc-ebe5037ab6.json" "credentials\"
-        echo 📋 Copied to credentials\: resource-capacity-3b654-firebase-adminsdk-fbsvc-ebe5037ab6.json
-    )
-)
-
 if not exist "khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json" (
     echo ❌ Missing: khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json
     set /a missing_files+=1
@@ -66,17 +55,6 @@ if not exist "khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.js
     if not exist "credentials\khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json" (
         copy "khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json" "credentials\"
         echo 📋 Copied to credentials\: khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json
-    )
-)
-
-if not exist "lukens-e17d6-firebase-adminsdk-fbsvc-ea49e5a350.json" (
-    echo ❌ Missing: lukens-e17d6-firebase-adminsdk-fbsvc-ea49e5a350.json
-    set /a missing_files+=1
-) else (
-    echo ✅ Found: lukens-e17d6-firebase-adminsdk-fbsvc-ea49e5a350.json
-    if not exist "credentials\lukens-e17d6-firebase-adminsdk-fbsvc-ea49e5a350.json" (
-        copy "lukens-e17d6-firebase-adminsdk-fbsvc-ea49e5a350.json" "credentials\"
-        echo 📋 Copied to credentials\: lukens-e17d6-firebase-adminsdk-fbsvc-ea49e5a350.json
     )
 )
 
@@ -106,9 +84,7 @@ if not exist ".env" (
         echo.
         echo # Firebase Credentials Paths
         echo PDH_FIREBASE_CREDENTIALS_PATH=/app/credentials/pdh-fe6eb-firebase-adminsdk-fbsvc-2700680531.json
-        echo SKILLS_HEATMAP_FIREBASE_CREDENTIALS_PATH=/app/credentials/resource-capacity-3b654-firebase-adminsdk-fbsvc-ebe5037ab6.json
         echo FIREBASE_CREDENTIALS_PATH=/app/credentials/khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json
-        echo SOW_BUILDER_FIREBASE_CREDENTIALS_PATH=/app/credentials/lukens-e17d6-firebase-adminsdk-fbsvc-ea49e5a350.json
     ) > .env
     echo ✅ Example .env file created. Please update it with your actual values.
 ) else (

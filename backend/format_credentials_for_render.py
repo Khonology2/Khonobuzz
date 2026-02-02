@@ -7,18 +7,18 @@ This script:
 3. Generates the environment variable format ready to copy-paste
 Usage:
     python format_credentials_for_render.py
-"
+"""
 import json
 import os
 def format_json_for_render(json_file_path, env_var_name):
-    "
+    """
     Read a JSON file and format it as a single-line string for Render.
     Args:
         json_file_path: Path to the JSON file
         env_var_name: Name of the environment variable
     Returns:
         Formatted string ready for Render
-    "
+    """
     if not os.path.exists(json_file_path):
         print(f"⚠️  File not found: {json_file_path}")
         return None
@@ -41,17 +41,12 @@ def main():
     print()
     credentials = [
         {
-            'file': 'pdh-fe6eb-firebase-adminsdk-fbsvc-6fbc402974.json',
+            'file': 'pdh-fe6eb-firebase-adminsdk-fbsvc-2700680531.json',
             'env_var': 'PDH_FIREBASE_CREDENTIALS_JSON',
             'description': 'PDH Firebase Credentials'
         },
         {
-            'file': 'resource-capacity-3b654-firebase-adminsdk-fbsvc-71599861bf.json',
-            'env_var': 'SKILLS_HEATMAP_FIREBASE_CREDENTIALS_JSON',
-            'description': 'Skills Heatmap Firebase Credentials'
-        },
-        {
-            'file': 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json',
+            'file': 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json',
             'env_var': 'FIREBASE_CREDENTIALS_JSON',
             'description': 'Main Firebase Credentials'
         }
