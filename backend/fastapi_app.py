@@ -130,6 +130,16 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
                 )
                 raise ValueError(error_msg)
             
+            # Additional check for malformed JSON that starts with quotes but not proper JSON
+            if json_str.startswith('"') and '\n' in json_str:
+                error_msg = (
+                    f"Invalid format in {json_env_var}. The JSON appears to be quoted with newlines.\n"
+                    f"This usually happens when copying multi-line JSON into Render's environment variable field.\n"
+                    f"Solution: Use base64 encoding or ensure the JSON is on a single line without extra quotes.\n"
+                    f"First 100 chars: {json_str[:100]}..."
+                )
+                raise ValueError(error_msg)
+            
             debug_log(f"{json_env_var} value length: {len(json_str)} characters")
             debug_log(f"{json_env_var} starts with: {json_str[:50]}...")
             debug_log(f"{json_env_var} ends with: ...{json_str[-50:]}")
