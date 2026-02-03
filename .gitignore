@@ -27,6 +27,3 @@ key.properties
 # Environment variables
 .env
 **/.env
-
-# Module screen
-lib/screens/module_screen.dart
