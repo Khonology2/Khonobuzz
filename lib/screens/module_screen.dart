@@ -21,8 +21,6 @@ class ModuleScreen extends StatefulWidget {
 class _ModuleScreenState extends State<ModuleScreen> {
   bool _isLoadingModuleAccess = false;
   final ScrollController _scrollController = ScrollController();
-  final TextEditingController _tokenController = TextEditingController();
-  bool _isGeneratingToken = false;
 
   @override
   void initState() {
@@ -34,7 +32,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
-    _tokenController.dispose();
     super.dispose();
   }
 
@@ -160,8 +157,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         padding: const EdgeInsets.all(16.0),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            final authProvider =
-                                context.watch<AuthProvider>();
+                            final authProvider = context.watch<AuthProvider>();
 
                             if (_isLoadingModuleAccess &&
                                 authProvider.userModuleAccess == null) {
@@ -175,38 +171,35 @@ class _ModuleScreenState extends State<ModuleScreen> {
                             }
 
                             final isAdmin =
-                                authProvider.userRole?.toLowerCase() ==
-                                    'admin';
+                                authProvider.userRole?.toLowerCase() == 'admin';
                             final hasPDHAccess =
                                 authProvider.hasModuleAccess('PDH') ||
                                 authProvider.hasModuleAccess(
                                   'Personal Development Hub',
                                 );
                             final hasSkillsHeatmapAccess =
-                                authProvider.hasModuleAccess('Skills Heatmap') ||
+                                authProvider.hasModuleAccess(
+                                  'Skills Heatmap',
+                                ) ||
                                 authProvider.hasModuleAccess(
                                   'Resource & Capacity Skills Heatmap',
                                 );
                             final hasRecruitmentAccess =
                                 authProvider.hasModuleAccess(
-                                      'Automated Recruitment Workflow',
-                                    ) ||
-                                    authProvider.hasModuleAccess(
-                                      'Recruitment',
-                                    );
+                                  'Automated Recruitment Workflow',
+                                ) ||
+                                authProvider.hasModuleAccess('Recruitment');
                             final hasSOWBuilderAccess =
                                 authProvider.hasModuleAccess(
-                                      'Proposal & SOW Builder',
-                                    ) ||
-                                    authProvider.hasModuleAccess(
-                                      'SOW Builder',
-                                    );
+                                  'Proposal & SOW Builder',
+                                ) ||
+                                authProvider.hasModuleAccess('SOW Builder');
 
                             final showPDH = isAdmin || hasPDHAccess;
                             final showSkillsHeatmap =
                                 isAdmin || hasSkillsHeatmapAccess;
-                            final hasDeliverablesAccess =
-                                authProvider.hasModuleAccess(
+                            final hasDeliverablesAccess = authProvider
+                                .hasModuleAccess(
                                   'Deliverables & Sprint Sign-Off Hub',
                                 );
 
@@ -239,9 +232,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                 constraints.maxWidth - 32;
                             final double calculatedCardWidth =
                                 ((availableWidth - 36) / (3 * 1.1)).clamp(
-                              140.0,
-                              400.0,
-                            );
+                                  140.0,
+                                  400.0,
+                                );
 
                             final List<Widget> topRow = [];
                             if (showPDH) {
@@ -309,8 +302,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   cardWidth: calculatedCardWidth,
                                   titleLines: ['Proposal &', 'SOW Builder'],
                                   buttonText: 'Launch',
-                                  url:
-                                      'https://proposals2025.netlify.app/',
+                                  url: 'https://proposals2025.netlify.app/',
                                   moduleKey: 'sow_builder',
                                 ),
                               );
@@ -340,190 +332,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
                               crossAxisAlignment: CrossAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: 24.0,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      TextField(
-                                        controller: _tokenController,
-                                        readOnly: true,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontFamily: 'Poppins',
-                                        ),
-                                        decoration: InputDecoration(
-                                          labelText: 'SOW Builder Token',
-                                          labelStyle: const TextStyle(
-                                            color: Colors.white70,
-                                            fontFamily: 'Poppins',
-                                          ),
-                                          suffixIcon: IconButton(
-                                            icon: const Icon(
-                                              Icons.copy,
-                                              color: Colors.white70,
-                                            ),
-                                            tooltip: 'Copy token',
-                                            onPressed: () {
-                                              final text =
-                                                  _tokenController.text.trim();
-                                              if (text.isEmpty) {
-                                                ScaffoldMessenger.of(context)
-                                                    .showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'No token to copy',
-                                                      style: TextStyle(
-                                                          fontFamily:
-                                                              'Poppins'),
-                                                    ),
-                                                  ),
-                                                );
-                                                return;
-                                              }
-                                              Clipboard.setData(
-                                                ClipboardData(text: text),
-                                              );
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                    'Token copied to clipboard',
-                                                    style: TextStyle(
-                                                        fontFamily:
-                                                            'Poppins'),
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                          filled: true,
-                                          fillColor: const Color(0xFF2C3E50),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(8.0),
-                                            borderSide: const BorderSide(
-                                              color: Colors.white24,
-                                            ),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(8.0),
-                                            borderSide: const BorderSide(
-                                              color: primaryAccent,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12.0),
-                                      SizedBox(
-                                        height: 44.0,
-                                        child: ElevatedButton(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: primaryAccent,
-                                            foregroundColor: Colors.white,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8.0),
-                                            ),
-                                          ),
-                                          onPressed: _isGeneratingToken
-                                              ? null
-                                              : () async {
-                                                  final messenger =
-                                                      ScaffoldMessenger.of(
-                                                    context,
-                                                  );
-                                                  final authProvider =
-                                                      context.read<
-                                                          AuthProvider>();
-                                                  if (authProvider
-                                                          .userEmail ==
-                                                      null) {
-                                                    messenger.showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'You must be logged in to generate a token.',
-                                                        ),
-                                                      ),
-                                                    );
-                                                    return;
-                                                  }
-
-                                                  setState(() {
-                                                    _isGeneratingToken = true;
-                                                  });
-                                                  try {
-                                                    await authProvider
-                                                        .fetchUserToken();
-                                                    final token =
-                                                        authProvider.userToken;
-                                                    if (token == null ||
-                                                        token.isEmpty) {
-                                                      messenger.showSnackBar(
-                                                        const SnackBar(
-                                                          content: Text(
-                                                            'Failed to generate token. Please try again.',
-                                                          ),
-                                                        ),
-                                                      );
-                                                    } else {
-                                                      _tokenController.text =
-                                                          token;
-                                                      messenger.showSnackBar(
-                                                        const SnackBar(
-                                                          content: Text(
-                                                            'Token generated successfully.',
-                                                          ),
-                                                        ),
-                                                      );
-                                                    }
-                                                  } catch (e) {
-                                                    messenger.showSnackBar(
-                                                      SnackBar(
-                                                        content: Text(
-                                                          'Error generating token: $e',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  } finally {
-                                                    if (mounted) {
-                                                      setState(() {
-                                                        _isGeneratingToken =
-                                                            false;
-                                                      });
-                                                    }
-                                                  }
-                                                },
-                                          child: _isGeneratingToken
-                                              ? const SizedBox(
-                                                  width: 20,
-                                                  height: 20,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                    strokeWidth: 2,
-                                                    valueColor:
-                                                        AlwaysStoppedAnimation<
-                                                            Color>(
-                                                      Colors.white,
-                                                    ),
-                                                  ),
-                                                )
-                                              : const Text(
-                                                  'Generate SOW Token',
-                                                ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                                 if (topRow.isNotEmpty)
                                   Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.center,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     crossAxisAlignment:
                                         CrossAxisAlignment.center,
                                     mainAxisSize: MainAxisSize.min,
@@ -533,8 +344,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   const SizedBox(height: 18.0),
                                 if (bottomRow.isNotEmpty)
                                   Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.center,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     crossAxisAlignment:
                                         CrossAxisAlignment.center,
                                     mainAxisSize: MainAxisSize.min,
@@ -649,7 +459,8 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
       builder: (context, constraints) {
         final bool hasBoundedHeight =
             constraints.hasBoundedHeight && constraints.maxHeight.isFinite;
-        final double targetHeight = hasBoundedHeight && constraints.maxHeight > 0
+        final double targetHeight =
+            hasBoundedHeight && constraints.maxHeight > 0
             ? constraints.maxHeight
             : 400;
         return Container(
@@ -691,8 +502,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                           ),
                           borderRadius: BorderRadius.circular(16.0),
                           border: Border.all(
-                            color:
-                                _isHovered ? Colors.white38 : Colors.white24,
+                            color: _isHovered ? Colors.white38 : Colors.white24,
                             width: _isHovered ? 1.5 : 1.0,
                           ),
                           boxShadow: [
@@ -729,8 +539,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                     const SizedBox(height: 16.0),
                                     Column(
                                       mainAxisSize: MainAxisSize.min,
-                                      children:
-                                          widget.titleLines.map((line) {
+                                      children: widget.titleLines.map((line) {
                                         return Padding(
                                           padding: const EdgeInsets.only(
                                             bottom: 3.6,
@@ -739,12 +548,11 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                             line,
                                             textAlign: TextAlign.center,
                                             style: TextStyle(
-                                              fontSize:
-                                                  widget.cardWidth > 300
-                                                      ? 23.4
-                                                      : widget.cardWidth > 200
-                                                          ? 19.8
-                                                          : 16.2,
+                                              fontSize: widget.cardWidth > 300
+                                                  ? 23.4
+                                                  : widget.cardWidth > 200
+                                                  ? 19.8
+                                                  : 16.2,
                                               fontWeight: FontWeight.w900,
                                               color: Colors.white,
                                               height: 1.3,
@@ -822,9 +630,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                                 return;
                                               }
 
-                                              setState(
-                                                () => _isLoading = true,
-                                              );
+                                              setState(() => _isLoading = true);
                                               try {
                                                 await _launchUrlFromContext(
                                                   widget.context,
@@ -853,19 +659,20 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                           vertical: 14.4,
                                         ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(45.0),
+                                          borderRadius: BorderRadius.circular(
+                                            45.0,
+                                          ),
                                         ),
                                         textStyle: const TextStyle(
                                           fontSize: 16.2,
                                           fontWeight: FontWeight.bold,
                                         ),
-                                        elevation:
-                                            widget.isComingSoon ? 0 : 10,
+                                        elevation: widget.isComingSoon ? 0 : 10,
                                         shadowColor: widget.isComingSoon
                                             ? Colors.transparent
-                                            : primaryAccent
-                                                .withValues(alpha: 0.5),
+                                            : primaryAccent.withValues(
+                                                alpha: 0.5,
+                                              ),
                                       ),
                                       child: Text(widget.buttonText),
                                     ),
@@ -880,13 +687,10 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                         Positioned.fill(
                           child: Container(
                             decoration: BoxDecoration(
-                              color:
-                                  Colors.black.withValues(alpha: 0.3),
+                              color: Colors.black.withValues(alpha: 0.3),
                               borderRadius: BorderRadius.circular(16.0),
                             ),
-                            child: Center(
-                              child: _BouncingRedSpinner(),
-                            ),
+                            child: Center(child: _BouncingRedSpinner()),
                           ),
                         ),
                     ],
