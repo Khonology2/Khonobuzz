@@ -158,7 +158,7 @@ class _MainScreenState extends State<MainScreen> {
     const UserManagementScreen(),
     const EntityManagementScreen(),
     const ModuleAccessScreen(),
-    const ModuleScreen(), // Modules screen at index 9
+    ModuleScreen(), // Modules screen at index 9
     const ProjectsScreen(), // Projects screen at index 10
   ];
 
@@ -200,9 +200,7 @@ class _MainScreenState extends State<MainScreen> {
     final users = userProvider.users;
 
     final pendingUsers = users
-        .where(
-          (u) => u.status.toLowerCase() == 'pending',
-        )
+        .where((u) => u.status.toLowerCase() == 'pending')
         .toList();
 
     final activeUsersWithoutAssignments = users
