@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print, use_build_context_synchronously, deprecated_member_use, unused_import
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
@@ -26,6 +27,7 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
   final TextEditingController _departmentController = TextEditingController();
   final TextEditingController _preferredNameController = TextEditingController();
   final TextEditingController _designationController = TextEditingController();
+  final TextEditingController _managerController = TextEditingController();
 
   String? _selectedDepartment;
   String? _selectedDesignation;
@@ -56,16 +58,73 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
     'Junior Analyst',
   ];
 
+  Timer? _debounceTimer;
+  String? _phoneError;
+  String? _emailError;
+
+  bool _validateFields() {
+    final phone = _phoneController.text.trim();
+    final email = _emailController.text.trim();
+    bool isValid = true;
+
+    setState(() {
+      if (phone.isNotEmpty && phone.length != 10) {
+        _phoneError = 'Please enter a valid 10-digit phone number\nExample: 0123456789';
+        isValid = false;
+      } else {
+        _phoneError = null;
+      }
+
+      if (email.isNotEmpty && !email.contains('@khonology')) {
+        _emailError = 'Please enter a valid company email\nExample: name@khonology.com';
+        isValid = false;
+      } else {
+        _emailError = null;
+      }
+
+      if (_firstNameController.text.trim().isEmpty ||
+          _surnameController.text.trim().isEmpty ||
+          _emailController.text.trim().isEmpty) {
+        isValid = false;
+      }
+    });
+
+    return isValid;
+  }
+
   @override
   void initState() {
     super.initState();
+    _firstNameController.addListener(_onFieldChanged);
+    _surnameController.addListener(_onFieldChanged);
+    _emailController.addListener(_onFieldChanged);
+    _phoneController.addListener(_onFieldChanged);
+    _preferredNameController.addListener(_onFieldChanged);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadUserData();
     });
   }
 
+  void _onFieldChanged() {
+    if (_validateFields()) {
+      if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+      _debounceTimer = Timer(const Duration(seconds: 1), () {
+        _saveProfile();
+      });
+    } else {
+      _debounceTimer?.cancel();
+    }
+  }
+
   @override
   void dispose() {
+    _debounceTimer?.cancel();
+    _firstNameController.removeListener(_onFieldChanged);
+    _surnameController.removeListener(_onFieldChanged);
+    _emailController.removeListener(_onFieldChanged);
+    _phoneController.removeListener(_onFieldChanged);
+    _preferredNameController.removeListener(_onFieldChanged);
     _firstNameController.dispose();
     _surnameController.dispose();
     _emailController.dispose();
@@ -73,6 +132,7 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
     _departmentController.dispose();
     _preferredNameController.dispose();
     _designationController.dispose();
+    _managerController.dispose();
     super.dispose();
   }
 
@@ -110,24 +170,29 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         final deptRaw = (userMap['department'] ?? '').toString().trim();
         final desigRaw = (userMap['designation'] ?? '').toString().trim();
         final preferred = (userMap['preferredName'] ?? '').toString();
+        final manager = (userMap['managedBy'] ?? '').toString();
 
         // Robust matching for dropdowns
         String? matchedDept;
         if (deptRaw.isNotEmpty) {
-          matchedDept = _departments.firstWhere(
-            (d) => d.toLowerCase() == deptRaw.toLowerCase(),
-            orElse: () => '',
-          );
-          if (matchedDept.isEmpty) matchedDept = null;
+          try {
+            matchedDept = _departments.firstWhere(
+              (d) => d.toLowerCase() == deptRaw.toLowerCase(),
+            );
+          } catch (_) {
+            matchedDept = null;
+          }
         }
 
         String? matchedDesig;
         if (desigRaw.isNotEmpty) {
-          matchedDesig = _designations.firstWhere(
-            (d) => d.toLowerCase() == desigRaw.toLowerCase(),
-            orElse: () => '',
-          );
-          if (matchedDesig.isEmpty) matchedDesig = null;
+          try {
+            matchedDesig = _designations.firstWhere(
+              (d) => d.toLowerCase() == desigRaw.toLowerCase(),
+            );
+          } catch (_) {
+            matchedDesig = null;
+          }
         }
 
         setState(() {
@@ -136,6 +201,7 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
           _emailController.text = email;
           _phoneController.text = phone;
           _preferredNameController.text = preferred;
+          _managerController.text = manager;
           _selectedDepartment = matchedDept;
           _selectedDesignation = matchedDesig;
         });
@@ -148,20 +214,7 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
   }
 
   void _saveProfile() async {
-    if (_firstNameController.text.trim().isEmpty ||
-        _surnameController.text.trim().isEmpty ||
-        _emailController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please fill in First Name, Surname, and Email Address',
-            style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+    if (!_validateFields()) return;
 
     try {
       final authProvider = context.read<AuthProvider>();
@@ -173,6 +226,7 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         'department': _selectedDepartment ?? '',
         'designation': _selectedDesignation ?? '',
         'preferredName': _preferredNameController.text.trim(),
+        'managedBy': _managerController.text.trim(),
       };
 
       final response = await http.put(
@@ -185,54 +239,12 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
       );
 
       if (response.statusCode == 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Profile information saved successfully!',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                ),
-              ),
-              backgroundColor: Color(0xFFC10D00),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
+        debugPrint('Profile saved successfully');
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Failed to save profile. Please try again.',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                ),
-              ),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
+        debugPrint('Failed to save profile: ${response.statusCode}');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Failed to save profile. Please try again.',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white,
-              ),
-            ),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
+      debugPrint('Error saving profile: $e');
     }
   }
 
@@ -358,9 +370,17 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                               const SizedBox(height: 16),
                               _buildEditableField('Surname', _surnameController),
                               const SizedBox(height: 16),
-                              _buildEditableField('Email Address', _emailController),
+                              _buildEditableField(
+                                'Email Address',
+                                _emailController,
+                                errorText: _emailError,
+                              ),
                               const SizedBox(height: 16),
-                              _buildEditableField('Phone Number', _phoneController),
+                              _buildEditableField(
+                                'Phone Number',
+                                _phoneController,
+                                errorText: _phoneError,
+                              ),
                             ],
                           ),
                         ),
@@ -378,6 +398,7 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                                   setState(() {
                                     _selectedDepartment = newValue;
                                   });
+                                  _onFieldChanged();
                                 },
                               ),
                               const SizedBox(height: 16),
@@ -390,42 +411,23 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                                   setState(() {
                                     _selectedDesignation = newValue;
                                   });
+                                  _onFieldChanged();
                                 },
                               ),
                               const SizedBox(height: 16),
                               _buildEditableField('Preferred Name', _preferredNameController),
+                              const SizedBox(height: 16),
+                              _buildEditableField(
+                                'Manager',
+                                _managerController,
+                                readOnly: true,
+                              ),
                             ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _saveProfile,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFC10D00),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'SAVE',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),
@@ -438,7 +440,12 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
     );
   }
 
-  Widget _buildEditableField(String label, TextEditingController controller) {
+  Widget _buildEditableField(
+    String label,
+    TextEditingController controller, {
+    String? errorText,
+    bool readOnly = false,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -454,20 +461,33 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: readOnly
+                ? Colors.white.withValues(alpha: 0.05)
+                : Colors.white.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+            border: Border.all(
+              color: errorText != null
+                  ? Colors.redAccent
+                  : Colors.white.withValues(alpha: 0.3),
+            ),
           ),
           child: TextField(
             controller: controller,
-            style: const TextStyle(
-              color: Colors.white,
+            readOnly: readOnly,
+            style: TextStyle(
+              color: readOnly ? Colors.white70 : Colors.white,
               fontSize: 16,
               fontFamily: 'Poppins',
             ),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(
+              errorText: errorText,
+              errorStyle: const TextStyle(
+                color: Colors.redAccent,
+                fontSize: 12,
+                height: 0.8,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 12,
               ),

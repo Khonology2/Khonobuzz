@@ -613,6 +613,7 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
             'phoneNumber': onboarding_info.get('phoneNumber') or user_info.get('phoneNumber') or '',
             'department': onboarding_info.get('department') or user_info.get('department') or '',
             'designation': onboarding_info.get('designation') or user_info.get('designation') or '',
+            'managedBy': onboarding_info.get('managedBy') or user_info.get('manager') or onboarding_info.get('manager') or '',
         }
 
         return JSONResponse(
@@ -659,12 +660,14 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
         department = data.get('department') or ''
         designation = data.get('designation') or ''
         phone_number = data.get('phoneNumber') or ''
+        managed_by = data.get('managedBy') or data.get('manager') or ''
         full_name = (f"{first_name} {last_name}".strip() or preferred_name or '').strip()
 
         # 2. Update 'users' collection
         user_update = {
             'department': department,
             'designation': designation,
+            'manager': managed_by,
             'updated_at': datetime.utcnow(),
         }
         if full_name:
@@ -694,6 +697,7 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
             'department': department,
             'designation': designation,
             'phoneNumber': phone_number,
+            'managedBy': managed_by,
             'updated_at': datetime.utcnow(),
             'email': normalized_email,
         }
