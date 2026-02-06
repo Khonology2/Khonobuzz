@@ -1,482 +1,590 @@
+// ignore_for_file: deprecated_member_use, unnecessary_const, unused_element, no_leading_underscores_for_local_identifiers
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import 'package:http/http.dart' as http;
 import '../providers/auth_provider.dart';
-import '../providers/user_provider.dart';
-import '../models/managed_user.dart';
-import 'admin_profile_screen_new.dart';
+import '../widgets/floating_circles_particle_animation.dart';
+import '../widgets/version_control.dart';
+import 'dart:convert';
+import '../config/api_config.dart';
 
 class AdminProfileScreen extends StatefulWidget {
   const AdminProfileScreen({super.key});
 
   @override
-  State<AdminProfileScreen> createState() => _AdminProfileScreenState();
+  AdminProfileScreenState createState() => AdminProfileScreenState();
 }
 
-class _AdminProfileScreenState extends State<AdminProfileScreen> {
-  bool _showOnboardingAlert = false;
+class AdminProfileScreenState extends State<AdminProfileScreen> {
+  // Text editing controllers
+  late TextEditingController _firstNameController;
+  late TextEditingController _surnameController;
+  late TextEditingController _emailController;
+  late TextEditingController _phoneController;
+  late TextEditingController _departmentController;
+  late TextEditingController _preferredNameController;
+  late TextEditingController _designationController;
+
+  // Dropdown options
+  final List<String> _departments = const [
+    'Management',
+    'Operations',
+    'Finance',
+    'HR',
+    'Sales',
+  ];
+  String? _selectedDepartment;
+
+  final List<String> _designations = const [
+    'Director',
+    'Developer',
+    'Support Analyst',
+    'Learner',
+    'UX Designer',
+    'AWS Cloud Engineer',
+    'Tester',
+    'Finance',
+    'Business Analyst',
+    'Manager',
+    'Delivery Manager',
+    'Analyst',
+    'Sales Person',
+    'HR',
+    'Junior Analyst',
+  ];
+  String? _selectedDesignation;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    // Initialize controllers with empty fields for user input
+    _firstNameController = TextEditingController();
+    _surnameController = TextEditingController();
+    _emailController = TextEditingController();
+    _phoneController = TextEditingController();
+    _departmentController = TextEditingController();
+    _preferredNameController = TextEditingController();
+    _designationController = TextEditingController();
+
+    // Initialize dropdown selections
+    _selectedDepartment = null;
+    _selectedDesignation = null;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUserData();
+    });
   }
 
-  Future<void> _loadData() async {
-    final userProvider = context.read<UserProvider>();
-    await userProvider.fetchUsers();
+  Future<void> _loadUserData() async {
+    final authProvider = context.read<AuthProvider>();
 
-    final pendingUsers = userProvider.users
-        .where((u) => u.status == 'Pending')
-        .toList();
-    final activeUsersWithoutAssignments = userProvider.users
-        .where(
-          (u) =>
-              u.status == 'Active' &&
-              ((u.moduleAccess?.isEmpty ?? true) ||
-                  (u.entity?.isEmpty ?? true)),
-        )
-        .toList();
+    try {
+      final email = authProvider.userEmail ?? '';
+      if (email.isEmpty) return;
+      final url = Uri.parse(ApiConfig.userByEmailEndpoint(email));
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'Authorization': 'Bearer ${authProvider.userToken}',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
 
-    if (pendingUsers.isNotEmpty || activeUsersWithoutAssignments.isNotEmpty) {
-      setState(() {
-        _showOnboardingAlert = true;
-      });
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        Map<String, dynamic> userMap = {};
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['user'] is Map<String, dynamic>) {
+            userMap = decoded['user'] as Map<String, dynamic>;
+          } else {
+            userMap = decoded;
+          }
+        }
+
+        final firstName = (userMap['firstName'] ?? userMap['name'] ?? '').toString();
+        final lastName = (userMap['lastName'] ?? userMap['surname'] ?? '').toString();
+        final phone = (userMap['phoneNumber'] ?? '').toString();
+        final deptRaw = (userMap['department'] ?? '').toString().trim();
+        final desigRaw = (userMap['designation'] ?? '').toString().trim();
+        final preferred = (userMap['preferredName'] ?? '').toString();
+
+        // Robust matching for dropdowns
+        String? matchedDept;
+        if (deptRaw.isNotEmpty) {
+          matchedDept = _departments.firstWhere(
+            (d) => d.toLowerCase() == deptRaw.toLowerCase(),
+            orElse: () => '',
+          );
+          if (matchedDept.isEmpty) matchedDept = null;
+        }
+
+        String? matchedDesig;
+        if (desigRaw.isNotEmpty) {
+          matchedDesig = _designations.firstWhere(
+            (d) => d.toLowerCase() == desigRaw.toLowerCase(),
+            orElse: () => '',
+          );
+          if (matchedDesig.isEmpty) matchedDesig = null;
+        }
+
+        setState(() {
+          _firstNameController.text = firstName;
+          _surnameController.text = lastName;
+          _emailController.text = email;
+          _phoneController.text = phone;
+          _preferredNameController.text = preferred;
+          _selectedDepartment = matchedDept;
+          _selectedDesignation = matchedDesig;
+        });
+      } else {
+        debugPrint('Failed to fetch user info (${response.statusCode})');
+      }
+    } catch (e) {
+      debugPrint('Error loading user data: $e');
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    final userProvider = context.watch<UserProvider>();
-    final authProvider = context.watch<AuthProvider>();
+  void dispose() {
+    _firstNameController.dispose();
+    _surnameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _departmentController.dispose();
+    _preferredNameController.dispose();
+    _designationController.dispose();
+    super.dispose();
+  }
 
-    final pendingUsers = userProvider.users
-        .where((u) => u.status == 'Pending')
-        .toList();
-    final activeUsersWithoutAssignments = userProvider.users
-        .where(
-          (u) =>
-              u.status == 'Active' &&
-              ((u.moduleAccess?.isEmpty ?? true) ||
-                  (u.entity?.isEmpty ?? true)),
-        )
-        .toList();
+  void _saveProfile() async {
+      // Validate required fields
+      if (_firstNameController.text.trim().isEmpty ||
+          _surnameController.text.trim().isEmpty ||
+          _emailController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Please fill in First Name, Surname, and Email Address',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A1A),
-        elevation: 0,
-        title: const Text(
-          'Admin Profile',
-          style: TextStyle(
-            color: Colors.white,
-            fontFamily: 'Poppins',
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: _loadData,
-          ),
-        ],
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          // Use two-column layout for wider screens
-          if (constraints.maxWidth > 800) {
-            return Row(
-              children: [
-                // Left column - Admin profile and stats
-                Expanded(
-                  flex: 1,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildProfileHeader(authProvider),
-                        const SizedBox(height: 24),
-                        _buildStatsCards(
-                          pendingUsers.length,
-                          activeUsersWithoutAssignments.length,
-                        ),
-                        const SizedBox(height: 24),
-                        _buildQuickActions(),
-                      ],
-                    ),
+      // Save profile to database via API
+      try {
+        final authProvider = context.read<AuthProvider>();
+
+        // Create user profile data object
+        final Map<String, dynamic> profileData = {
+          'firstName': _firstNameController.text.trim(),
+          'surname': _surnameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'phoneNumber': _phoneController.text.trim(),
+          'department': _selectedDepartment ?? '',
+          'designation': _selectedDesignation ?? '',
+          'preferredName': _preferredNameController.text.trim(),
+        };
+
+        debugPrint('=== SAVING PROFILE TO DATABASE ===');
+        debugPrint('User Email: ${authProvider.userEmail}');
+        debugPrint('Profile Data: $profileData');
+        debugPrint('Saving to onboarding collection...');
+
+        // Make API call to save profile data
+        final response = await http.put(
+          Uri.parse('${ApiConfig.baseUrl}/api/admin/users/${authProvider.userEmail}/profile'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${authProvider.userToken}',
+          },
+          body: json.encode(profileData),
+        );
+
+        if (response.statusCode == 200) {
+          debugPrint('Profile saved successfully to database');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Profile information saved successfully!',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
                   ),
                 ),
-                // Right column - Onboarding alerts and user management
-                Expanded(
-                  flex: 1,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (_showOnboardingAlert &&
-                            (pendingUsers.isNotEmpty ||
-                                activeUsersWithoutAssignments.isNotEmpty))
-                          OnboardingAlertPanel(
-                            pendingUsers: pendingUsers,
-                            activeUsersWithoutAssignments:
-                                activeUsersWithoutAssignments,
-                            onClose: () {
-                              setState(() {
-                                _showOnboardingAlert = false;
-                              });
-                            },
-                          ),
-                        if (_showOnboardingAlert &&
-                            (pendingUsers.isNotEmpty ||
-                                activeUsersWithoutAssignments.isNotEmpty))
-                          const SizedBox(height: 16),
-                        Expanded(
-                          child: _buildRecentUsers(
-                            userProvider.users.take(10).toList(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            );
-          } else {
-            // Single column layout for smaller screens
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildProfileHeader(authProvider),
-                  const SizedBox(height: 24),
-                  _buildStatsCards(
-                    pendingUsers.length,
-                    activeUsersWithoutAssignments.length,
-                  ),
-                  const SizedBox(height: 24),
-                  _buildQuickActions(),
-                  const SizedBox(height: 24),
-                  if (_showOnboardingAlert &&
-                      (pendingUsers.isNotEmpty ||
-                          activeUsersWithoutAssignments.isNotEmpty))
-                    OnboardingAlertPanel(
-                      pendingUsers: pendingUsers,
-                      activeUsersWithoutAssignments:
-                          activeUsersWithoutAssignments,
-                      onClose: () {
-                        setState(() {
-                          _showOnboardingAlert = false;
-                        });
-                      },
-                    ),
-                  if (_showOnboardingAlert &&
-                      (pendingUsers.isNotEmpty ||
-                          activeUsersWithoutAssignments.isNotEmpty))
-                    const SizedBox(height: 16),
-                  _buildRecentUsers(userProvider.users.take(10).toList()),
-                ],
+                backgroundColor: const Color(0xFFC10D00),
+                duration: const Duration(seconds: 2),
               ),
             );
           }
-        },
-      ),
+        } else {
+          debugPrint('Failed to save profile: ${response.statusCode}');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Failed to save profile. Please try again.',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                  ),
+                ),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('Error saving profile: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to save profile. Please try again.',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                ),
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    }
+
+    Widget _buildEditableField(String label, TextEditingController controller) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+          ),
+          child: TextField(
+            controller: controller,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontFamily: 'Poppins',
+            ),
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildProfileHeader(AuthProvider authProvider) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFC10D00).withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: const Color(0xFFC10D00),
-                child: Text(
-                  authProvider.userEmail?.substring(0, 2).toUpperCase() ?? 'AD',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Poppins',
-                  ),
+  Widget _buildDropdownField(
+    String label,
+    TextEditingController controller,
+    String? initialValue,
+    List<String> items,
+    void Function(String?) onChanged,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+          ),
+          child: DropdownButtonFormField<String>(
+            value: initialValue,
+            dropdownColor: Colors.grey[800],
+            style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.grey[800]!.withValues(alpha: 0.5),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(25.0),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12.0,
+              ),
+            ),
+            hint: Text(
+              'Select $label',
+              style: TextStyle(color: Colors.grey[600], fontFamily: 'Poppins'),
+            ),
+            items: items.map((String item) {
+              return DropdownMenuItem<String>(value: item, child: Text(item));
+            }).toList(),
+            onChanged: onChanged,
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please select a $label';
+              }
+              return null;
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage(
+              'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
+            ),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Stack(
+          children: [
+            FloatingCirclesParticleAnimation(),
+
+            // Back button at top left
+            Positioned(
+              top: 40,
+              left: 16,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+
+            // Admin Profile Header at top
+            Positioned(
+              top: 100,
+              left: 16,
+              right: 16,
+              child: Container(
+                width: 400,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
                   children: [
-                    const Text(
-                      'Administrator',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Poppins',
+                    CircleAvatar(
+                      radius: 40,
+                      backgroundColor: const Color(0xFFC10D00),
+                      child: Text(
+                        authProvider.userEmail?.substring(0, 2).toUpperCase() ??
+                            'AD',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Poppins',
+                        ),
                       ),
                     ),
-                    Text(
-                      authProvider.userEmail ?? 'admin@example.com',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                        fontFamily: 'Poppins',
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Administrator',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                          Text(
+                            authProvider.userEmail ?? 'admin@example.com',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+            ),
 
-  Widget _buildStatsCards(int pendingCount, int assignmentsCount) {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.withOpacity(0.5)),
-            ),
-            child: Column(
-              children: [
-                const Icon(Icons.person_add, color: Colors.orange, size: 24),
-                const SizedBox(height: 8),
-                Text(
-                  '$pendingCount',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Poppins',
+            // Editable Fields Widget - Separate from profile widget
+            Positioned(
+              top: 280,
+              left: 16,
+              right: 16,
+              child: Container(
+                width: 400,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFC10D00).withValues(alpha: 0.3),
                   ),
                 ),
-                const Text(
-                  'Pending Approval',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFC10D00).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: const Color(0xFFC10D00).withOpacity(0.5),
-              ),
-            ),
-            child: Column(
-              children: [
-                const Icon(
-                  Icons.assignment,
-                  color: Color(0xFFC10D00),
-                  size: 24,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '$assignmentsCount',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-                const Text(
-                  'Need Assignments',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Two-column layout for fields
+                    Row(
+                      children: [
+                        // Left column
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildEditableField(
+                                'First Name',
+                                _firstNameController,
+                              ),
+                              const SizedBox(height: 16),
+                              _buildEditableField(
+                                'Surname',
+                                _surnameController,
+                              ),
+                              const SizedBox(height: 16),
+                              _buildEditableField(
+                                'Email Address',
+                                _emailController,
+                              ),
+                              const SizedBox(height: 16),
+                              _buildEditableField(
+                                'Phone Number',
+                                _phoneController,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Right column
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildDropdownField(
+                                'Department',
+                                _departmentController,
+                                _selectedDepartment,
+                                _departments,
+                                (String? newValue) {
+                                  setState(() {
+                                    _selectedDepartment = newValue;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              _buildDropdownField(
+                                'Designation',
+                                _designationController,
+                                _selectedDesignation,
+                                _designations,
+                                (String? newValue) {
+                                  setState(() {
+                                    _selectedDesignation = newValue;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              _buildEditableField(
+                                'Preferred Name',
+                                _preferredNameController,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
 
-  Widget _buildQuickActions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Quick Actions',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Poppins',
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  // Navigate to user management
-                },
-                icon: const Icon(Icons.people, size: 18),
-                label: const Text('Manage Users'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFC10D00),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                    // Save button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _saveProfile,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFC10D00),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'SAVE',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  // Navigate to module access
-                },
-                icon: const Icon(Icons.security, size: 18),
-                label: const Text('Module Access'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[700],
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
+
+            const VersionControlOverlay(),
           ],
         ),
-      ],
-    );
-  }
-
-  Widget _buildRecentUsers(List<ManagedUser> users) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: const Text(
-              'Recent Users',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Poppins',
-              ),
-            ),
-          ),
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: users.length,
-            separatorBuilder: (_, __) =>
-                const Divider(height: 1, color: Colors.grey),
-            itemBuilder: (context, index) {
-              final user = users[index];
-              return ListTile(
-                leading: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: user.status == 'Active'
-                      ? Colors.green
-                      : user.status == 'Pending'
-                      ? Colors.orange
-                      : Colors.grey,
-                  child: Text(
-                    user.firstName.isNotEmpty
-                        ? user.firstName[0].toUpperCase()
-                        : 'U',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                title: Text(
-                  '${user.firstName} ${user.lastName}'.trim(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-                subtitle: Text(
-                  user.email,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: user.status == 'Active'
-                        ? Colors.green.withOpacity(0.2)
-                        : user.status == 'Pending'
-                        ? Colors.orange.withOpacity(0.2)
-                        : Colors.grey.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    user.status,
-                    style: TextStyle(
-                      color: user.status == 'Active'
-                          ? Colors.green
-                          : user.status == 'Pending'
-                          ? Colors.orange
-                          : Colors.grey,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
       ),
     );
   }

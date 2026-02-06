@@ -7,7 +7,7 @@ import '../screens/admin_profile_screen.dart';
 
 class ProfileIcon extends StatefulWidget {
   final bool hasOnboardingAlerts;
-  
+
   const ProfileIcon({super.key, this.hasOnboardingAlerts = false});
 
   @override
@@ -19,23 +19,23 @@ class _ProfileIconState extends State<ProfileIcon> {
 
   String _formatDisplayName(String fullName) {
     final nameParts = fullName.trim().split(' ');
-    
+
     if (nameParts.isEmpty) {
       return 'User';
     }
-    
+
     if (nameParts.length == 1) {
       // Only one name part, return as is
       return nameParts[0];
     }
-    
+
     // Multiple name parts, format as "R.Nkosinathi"
     final firstName = nameParts[0];
     final lastName = nameParts.sublist(1).join(' ');
-    
+
     final firstInitial = firstName.isNotEmpty ? firstName[0].toUpperCase() : '';
     final formattedLastName = lastName.isNotEmpty ? lastName : '';
-    
+
     return '$firstInitial.$formattedLastName';
   }
 
@@ -43,13 +43,14 @@ class _ProfileIconState extends State<ProfileIcon> {
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
     final userProvider = context.watch<UserProvider>();
-    
+
     // Get current user from the users list
-    final currentUser = userProvider.users.where(
-      (user) => user.email == authProvider.userEmail,
-    ).firstOrNull;
-    
-    final fullName = currentUser?.name ?? authProvider.userEmail?.split('@')[0] ?? 'User';
+    final currentUser = userProvider.users
+        .where((user) => user.email == authProvider.userEmail)
+        .firstOrNull;
+
+    final fullName =
+        currentUser?.name ?? authProvider.userEmail?.split('@')[0] ?? 'User';
     final displayName = _formatDisplayName(fullName);
 
     return Positioned(
@@ -61,16 +62,20 @@ class _ProfileIconState extends State<ProfileIcon> {
           onTap: () {
             final authProvider = context.read<AuthProvider>();
             final userRole = authProvider.userRole?.toLowerCase() ?? '';
-            
+
             if (userRole == 'admin') {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const AdminProfileScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const AdminProfileScreen(),
+                ),
               );
             } else {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const StaffProfileScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const StaffProfileScreen(),
+                ),
               );
             }
           },
@@ -84,8 +89,8 @@ class _ProfileIconState extends State<ProfileIcon> {
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: _isHovering 
-                  ? const Color(0xFFD41A0A) 
+              color: _isHovering
+                  ? const Color(0xFFD41A0A)
                   : const Color(0xFFC10D00),
               borderRadius: BorderRadius.circular(24),
               boxShadow: [

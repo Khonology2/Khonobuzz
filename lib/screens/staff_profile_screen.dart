@@ -1,12 +1,15 @@
-// ignore_for_file: avoid_print, use_build_context_synchronously, deprecated_member_use
+// ignore_for_file: avoid_print, use_build_context_synchronously, deprecated_member_use, unused_import
 
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import '../models/managed_user.dart';
-import '../utils/pdh_firebase.dart' show updateOnboardingUserPartial;
+import '../widgets/floating_circles_particle_animation.dart';
+import '../widgets/version_control.dart';
+import 'dart:convert';
+import '../config/api_config.dart';
 
 class StaffProfileScreen extends StatefulWidget {
   const StaffProfileScreen({super.key});
@@ -16,21 +19,26 @@ class StaffProfileScreen extends StatefulWidget {
 }
 
 class _StaffProfileScreenState extends State<StaffProfileScreen> {
-  Timer? _debounceTimer;
-  bool _isLoading = false;
-  ManagedUser? _currentUser;
-
   final TextEditingController _firstNameController = TextEditingController();
-  final TextEditingController _lastNameController = TextEditingController();
+  final TextEditingController _surnameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _managerController = TextEditingController();
+  final TextEditingController _departmentController = TextEditingController();
+  final TextEditingController _preferredNameController = TextEditingController();
+  final TextEditingController _designationController = TextEditingController();
 
-  String? _selectedRole;
   String? _selectedDepartment;
+  String? _selectedDesignation;
 
-  // Job title and department options from onboarding screen
-  static const List<String> _jobTitleOptions = [
+  final List<String> _departments = const [
+    'Management',
+    'Operations',
+    'Finance',
+    'HR',
+    'Sales',
+  ];
+
+  final List<String> _designations = const [
     'Director',
     'Developer',
     'Support Analyst',
@@ -38,7 +46,6 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
     'UX Designer',
     'AWS Cloud Engineer',
     'Tester',
-    'RMB Small Talk Developer',
     'Finance',
     'Business Analyst',
     'Manager',
@@ -49,436 +56,491 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
     'Junior Analyst',
   ];
 
-  static const List<String> _departmentOptions = [
-    'Management',
-    'Operations',
-    'Finance',
-    'HR',
-    'Sales',
-  ];
-
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUserData();
+    });
   }
 
   @override
   void dispose() {
-    _debounceTimer?.cancel();
     _firstNameController.dispose();
-    _lastNameController.dispose();
+    _surnameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
-    _managerController.dispose();
+    _departmentController.dispose();
+    _preferredNameController.dispose();
+    _designationController.dispose();
     super.dispose();
   }
 
   Future<void> _loadUserData() async {
     final authProvider = context.read<AuthProvider>();
-    final userProvider = context.read<UserProvider>();
 
     try {
-      // Get current user from the users list
-      final currentUser = userProvider.users
-          .where((user) => user.email == authProvider.userEmail)
-          .firstOrNull;
+      final email = authProvider.userEmail ?? '';
+      if (email.isEmpty) return;
+      final url = Uri.parse(ApiConfig.userByEmailEndpoint(email));
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'Authorization': 'Bearer ${authProvider.userToken}',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
 
-      if (currentUser != null) {
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        Map<String, dynamic> userMap = {};
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['user'] is Map<String, dynamic>) {
+            userMap = decoded['user'] as Map<String, dynamic>;
+          } else {
+            userMap = decoded;
+          }
+        }
+
+        final firstName = (userMap['firstName'] ?? userMap['name'] ?? '').toString();
+        final lastName = (userMap['lastName'] ?? userMap['surname'] ?? '').toString();
+        final phone = (userMap['phoneNumber'] ?? '').toString();
+        final deptRaw = (userMap['department'] ?? '').toString().trim();
+        final desigRaw = (userMap['designation'] ?? '').toString().trim();
+        final preferred = (userMap['preferredName'] ?? '').toString();
+
+        // Robust matching for dropdowns
+        String? matchedDept;
+        if (deptRaw.isNotEmpty) {
+          matchedDept = _departments.firstWhere(
+            (d) => d.toLowerCase() == deptRaw.toLowerCase(),
+            orElse: () => '',
+          );
+          if (matchedDept.isEmpty) matchedDept = null;
+        }
+
+        String? matchedDesig;
+        if (desigRaw.isNotEmpty) {
+          matchedDesig = _designations.firstWhere(
+            (d) => d.toLowerCase() == desigRaw.toLowerCase(),
+            orElse: () => '',
+          );
+          if (matchedDesig.isEmpty) matchedDesig = null;
+        }
+
         setState(() {
-          _currentUser = currentUser;
-          _firstNameController.text = currentUser.firstName;
-          _lastNameController.text = currentUser.lastName;
-          _emailController.text = currentUser.email;
-          _phoneController.text = currentUser.phoneNumber ?? '';
-          _managerController.text = currentUser.manager ?? '';
-
-          // Set dropdown values from user management data
-          _selectedRole = _jobTitleOptions.contains(currentUser.designation)
-              ? currentUser.designation
-              : null;
-          _selectedDepartment =
-              _departmentOptions.contains(currentUser.department)
-              ? currentUser.department
-              : null;
+          _firstNameController.text = firstName;
+          _surnameController.text = lastName;
+          _emailController.text = email;
+          _phoneController.text = phone;
+          _preferredNameController.text = preferred;
+          _selectedDepartment = matchedDept;
+          _selectedDesignation = matchedDesig;
         });
+      } else {
+        debugPrint('Failed to fetch user info (${response.statusCode})');
       }
     } catch (e) {
-      print('Error loading user data: $e');
+      debugPrint('Error loading user data: $e');
     }
   }
 
-  void _autoSave(String field, String value) {
-    if (_currentUser == null || _isLoading) return;
+  void _saveProfile() async {
+    if (_firstNameController.text.trim().isEmpty ||
+        _surnameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please fill in First Name, Surname, and Email Address',
+            style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
-    _debounceTimer?.cancel();
-    setState(() {
-      _isLoading = true;
-    });
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final Map<String, dynamic> profileData = {
+        'firstName': _firstNameController.text.trim(),
+        'surname': _surnameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phoneNumber': _phoneController.text.trim(),
+        'department': _selectedDepartment ?? '',
+        'designation': _selectedDesignation ?? '',
+        'preferredName': _preferredNameController.text.trim(),
+      };
 
-    _debounceTimer = Timer(const Duration(seconds: 1), () async {
-      try {
-        if (_currentUser == null) return;
+      final response = await http.put(
+        Uri.parse('${ApiConfig.baseUrl}/api/admin/users/${authProvider.userEmail}/profile'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${authProvider.userToken}',
+        },
+        body: json.encode(profileData),
+      );
 
-        // Create update map for the specific field
-        final Map<String, dynamic> updateData = {};
-
-        switch (field) {
-          case 'firstName':
-            updateData['firstName'] = value;
-            break;
-          case 'lastName':
-            updateData['lastName'] = value;
-            break;
-          case 'role':
-            updateData['designation'] = value;
-            break;
-          case 'department':
-            updateData['department'] = value;
-            break;
-          case 'phone':
-            updateData['phoneNumber'] = value;
-            break;
-        }
-
-        await updateOnboardingUserPartial(_currentUser!.id, updateData);
-
-        // Refresh user data
-        await context.read<UserProvider>().fetchUsers();
-
+      if (response.statusCode == 200) {
         if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Profile information saved successfully!',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                ),
+              ),
+              backgroundColor: Color(0xFFC10D00),
+              duration: Duration(seconds: 2),
+            ),
+          );
         }
-      } catch (e) {
-        print('Auto-save error: $e');
+      } else {
         if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Failed to save profile. Please try again.',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                ),
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
         }
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Failed to save profile. Please try again.',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+              ),
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A1A),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: null,
-      ),
-      body: Stack(
-        children: [
-          // Background image
-          Positioned.fill(
-            child: Image.asset(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage(
               'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
-              fit: BoxFit.cover,
             ),
+            fit: BoxFit.cover,
           ),
+        ),
+        child: Stack(
+          children: [
+            FloatingCirclesParticleAnimation(),
 
-          // Content
-          Positioned.fill(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 64.0,
+            Positioned(
+              top: 40,
+              left: 16,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                child: IconButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                ),
+              ),
+            ),
+
+            Positioned(
+              top: 100,
+              left: 16,
+              right: 16,
+              child: Container(
+                width: 400,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
                   children: [
-                    _buildProfileHeader(),
-
-                    const SizedBox(height: 24.0),
-
-                    // Basic Information Section
-                    _buildCardSection(
-                      title: 'Basic Information',
-                      children: [
-                        _buildInputLabel('First Name'),
-                        const SizedBox(height: 4),
-                        _buildTextField(
-                          controller: _firstNameController,
-                          hintText: 'First Name',
-                          onChanged: (value) => _autoSave('firstName', value),
-                        ),
-                        const SizedBox(height: 8),
-                        _buildInputLabel('Last Name'),
-                        const SizedBox(height: 4),
-                        _buildTextField(
-                          controller: _lastNameController,
-                          hintText: 'Last Name',
-                          onChanged: (value) => _autoSave('lastName', value),
-                        ),
-                        const SizedBox(height: 8),
-                        _buildInputLabel('Job Title / Role'),
-                        const SizedBox(height: 4),
-                        _buildJobTitleDropdown(),
-                        const SizedBox(height: 8),
-                        _buildInputLabel('Department'),
-                        const SizedBox(height: 4),
-                        _buildDepartmentDropdown(),
-                        const SizedBox(height: 8),
-                        _buildInputLabel('Email Address'),
-                        const SizedBox(height: 4),
-                        _buildTextField(
-                          controller: _emailController,
-                          hintText: 'Work Email',
-                          keyboardType: TextInputType.emailAddress,
-                          enabled: false,
-                        ),
-                        const SizedBox(height: 8),
-                        _buildInputLabel('Phone Number (Optional)'),
-                        const SizedBox(height: 4),
-                        _buildTextField(
-                          controller: _phoneController,
-                          hintText: 'Phone Number',
-                          keyboardType: TextInputType.phone,
-                          onChanged: (value) => _autoSave('phone', value),
-                        ),
-                        const SizedBox(height: 8),
-                        _buildInputLabel('Manager'),
-                        const SizedBox(height: 4),
-                        _buildTextField(
-                          controller: _managerController,
-                          hintText: 'Manager',
-                          enabled: false,
-                        ),
-                      ],
-                    ),
-
-                    // Auto-save indicator
-                    if (_isLoading)
-                      const Center(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFFC10D00),
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Saving...',
-                              style: TextStyle(
-                                color: Color(0xFFC10D00),
-                                fontFamily: 'Poppins',
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
+                    CircleAvatar(
+                      radius: 40,
+                      backgroundColor: const Color(0xFFC10D00),
+                      child: Text(
+                        authProvider.userEmail?.substring(0, 2).toUpperCase() ?? 'ST',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Poppins',
                         ),
                       ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Staff',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                          Text(
+                            authProvider.userEmail ?? 'staff@example.com',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
-          ),
-        ],
+
+            Positioned(
+              top: 280,
+              left: 16,
+              right: 16,
+              child: Container(
+                width: 400,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildEditableField('First Name', _firstNameController),
+                              const SizedBox(height: 16),
+                              _buildEditableField('Surname', _surnameController),
+                              const SizedBox(height: 16),
+                              _buildEditableField('Email Address', _emailController),
+                              const SizedBox(height: 16),
+                              _buildEditableField('Phone Number', _phoneController),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildDropdownField(
+                                'Department',
+                                _departmentController,
+                                _selectedDepartment,
+                                _departments,
+                                (String? newValue) {
+                                  setState(() {
+                                    _selectedDepartment = newValue;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              _buildDropdownField(
+                                'Designation',
+                                _designationController,
+                                _selectedDesignation,
+                                _designations,
+                                (String? newValue) {
+                                  setState(() {
+                                    _selectedDesignation = newValue;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              _buildEditableField('Preferred Name', _preferredNameController),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _saveProfile,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFC10D00),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'SAVE',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const VersionControlOverlay(),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildProfileHeader() {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 500),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-      ),
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(
-            child: Text(
-              'Profile',
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontFamily: 'Poppins',
-              ),
-            ),
+  Widget _buildEditableField(String label, TextEditingController controller) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w500,
           ),
-          const SizedBox(height: 12.0),
-          const Text(
-            'These fields allow you to set up your identity, preferences, and development context.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12.0,
-              color: Colors.white70,
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+          ),
+          child: TextField(
+            controller: controller,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
               fontFamily: 'Poppins',
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCardSection({
-    required String title,
-    required List<Widget> children,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16.0),
-      padding: const EdgeInsets.all(12.0),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontFamily: 'Poppins',
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
               ),
             ),
           ),
-          const SizedBox(height: 12.0),
-          ...children.map((child) {
-            // Apply bottom padding only if the child is a TextFormField
-            if (child.runtimeType.toString().contains('TextField') ||
-                child.runtimeType.toString().contains('Dropdown')) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 6.0),
-                child: child,
-              );
-            }
-            return child;
-          }),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildInputLabel(String label) {
-    return Text(
-      label,
-      style: const TextStyle(
-        color: Colors.white70,
-        fontSize: 14,
-        fontFamily: 'Poppins',
-      ),
+  Widget _buildDropdownField(
+    String label,
+    TextEditingController controller,
+    String? initialValue,
+    List<String> items,
+    void Function(String?) onChanged,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+          ),
+          child: DropdownButtonFormField<String>(
+            value: initialValue,
+            dropdownColor: Colors.grey[800],
+            style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.grey[800]!.withValues(alpha: 0.5),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(25.0),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12.0,
+              ),
+            ),
+            hint: Text(
+              'Select $label',
+              style: TextStyle(color: Colors.grey[600], fontFamily: 'Poppins'),
+            ),
+            items: items.map((String item) {
+              return DropdownMenuItem<String>(value: item, child: Text(item));
+            }).toList(),
+            onChanged: onChanged,
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please select a $label';
+              }
+              return null;
+            },
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hintText,
-    bool enabled = true,
-    TextInputType? keyboardType,
-    Function(String)? onChanged,
-  }) {
-    return TextFormField(
-      controller: controller,
-      enabled: enabled,
-      keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
-      decoration: InputDecoration(
-        hintText: hintText,
-        hintStyle: TextStyle(color: Colors.grey[600], fontFamily: 'Poppins'),
-        filled: true,
-        fillColor: Colors.grey[800]!.withValues(alpha: 0.3),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(25.0),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16.0,
-          vertical: 12.0,
-        ),
-      ),
-      onChanged: onChanged,
-    );
-  }
 
-  Widget _buildJobTitleDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _selectedRole,
-      dropdownColor: Colors.grey[800],
-      style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
-      decoration: InputDecoration(
-        hintText: 'Select Job Title',
-        hintStyle: TextStyle(color: Colors.grey[600], fontFamily: 'Poppins'),
-        filled: true,
-        fillColor: Colors.grey[800]!.withValues(alpha: 0.3),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(25.0),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16.0,
-          vertical: 12.0,
-        ),
-      ),
-      items: _jobTitleOptions.map((String value) {
-        return DropdownMenuItem<String>(value: value, child: Text(value));
-      }).toList(),
-      onChanged: (String? newValue) {
-        setState(() {
-          _selectedRole = newValue;
-        });
-        if (newValue != null) {
-          _autoSave('role', newValue);
-        }
-      },
-    );
-  }
 
-  Widget _buildDepartmentDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _selectedDepartment,
-      dropdownColor: Colors.grey[800],
-      style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
-      decoration: InputDecoration(
-        hintText: 'Select Department',
-        hintStyle: TextStyle(color: Colors.grey[600], fontFamily: 'Poppins'),
-        filled: true,
-        fillColor: Colors.grey[800]!.withValues(alpha: 0.3),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(25.0),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16.0,
-          vertical: 12.0,
-        ),
-      ),
-      items: _departmentOptions.map((String value) {
-        return DropdownMenuItem<String>(value: value, child: Text(value));
-      }).toList(),
-      onChanged: (String? newValue) {
-        setState(() {
-          _selectedDepartment = newValue;
-        });
-        if (newValue != null) {
-          _autoSave('department', newValue);
-        }
-      },
-    );
-  }
+
 }

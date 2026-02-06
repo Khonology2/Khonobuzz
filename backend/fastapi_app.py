@@ -606,6 +606,13 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
             'status': user_info.get('status', 'Pending'),
             'moduleAccess': module_access_raw or '',
             'moduleAccessRole': module_access_role_raw or '',
+            'firstName': onboarding_info.get('firstName') or user_info.get('firstName') or user_info.get('name', '').split(' ')[0],
+            'lastName': onboarding_info.get('lastName') or onboarding_info.get('surname') or user_info.get('lastName') or (user_info.get('name', '').split(' ')[1] if ' ' in user_info.get('name', '') else ''),
+            'surname': onboarding_info.get('surname') or onboarding_info.get('lastName') or user_info.get('lastName') or '',
+            'preferredName': onboarding_info.get('preferredName') or user_info.get('preferredName') or '',
+            'phoneNumber': onboarding_info.get('phoneNumber') or user_info.get('phoneNumber') or '',
+            'department': onboarding_info.get('department') or user_info.get('department') or '',
+            'designation': onboarding_info.get('designation') or user_info.get('designation') or '',
         }
 
         return JSONResponse(
@@ -617,6 +624,100 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"error": str(e)},
+        )
+
+@app.put("/api/admin/users/{email}/profile")
+async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)):
+    """
+    Update a user's profile information in both 'users' and 'onboarding' collections.
+    This endpoint is used by Admin and Staff profile screens.
+    """
+    try:
+        normalized_email = email.lower().strip()
+        
+        # 1. Find the user in the 'users' collection
+        users_ref = db.collection('users')
+        query = users_ref.where('email', '==', normalized_email).limit(1).stream()
+        user_id = None
+        user_doc_ref = None
+        
+        for doc in query:
+            user_id = doc.id
+            user_doc_ref = users_ref.document(user_id)
+            break
+            
+        if not user_id:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"error": "User not found"}
+            )
+
+        # Extract update fields
+        first_name = data.get('firstName') or data.get('name') or ''
+        last_name = data.get('surname') or data.get('lastName') or ''
+        preferred_name = data.get('preferredName') or ''
+        department = data.get('department') or ''
+        designation = data.get('designation') or ''
+        phone_number = data.get('phoneNumber') or ''
+        full_name = (f"{first_name} {last_name}".strip() or preferred_name or '').strip()
+
+        # 2. Update 'users' collection
+        user_update = {
+            'department': department,
+            'designation': designation,
+            'updated_at': datetime.utcnow(),
+        }
+        if full_name:
+            user_update['name'] = full_name
+            
+        if user_doc_ref:
+            user_doc_ref.update(user_update)
+
+        # 3. Update 'onboarding' collection
+        onboarding_query = (
+            db.collection('onboarding')
+            .where('user_id', '==', user_id)
+            .limit(1)
+            .stream()
+        )
+        onboarding_doc_ref = None
+        for ondoc in onboarding_query:
+            onboarding_doc_ref = ondoc.reference
+            break
+
+        onboarding_update = {
+            'firstName': first_name,
+            'lastName': last_name,
+            'surname': last_name if last_name else data.get('surname', ''),
+            'preferredName': preferred_name,
+            'fullName': full_name,
+            'department': department,
+            'designation': designation,
+            'phoneNumber': phone_number,
+            'updated_at': datetime.utcnow(),
+            'email': normalized_email,
+        }
+
+        if onboarding_doc_ref:
+            onboarding_doc_ref.update(onboarding_update)
+        else:
+            # Create onboarding doc if it doesn't exist
+            db.collection('onboarding').add({
+                **onboarding_update,
+                'user_id': user_id,
+                'created_at': datetime.utcnow(),
+            })
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "Profile updated successfully"}
+        )
+        
+    except Exception as e:
+        print(f"[ERROR] admin_update_user_profile: {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": str(e)}
         )
 
 @app.post("/api/auth/register")
