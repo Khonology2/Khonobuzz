@@ -148,28 +148,42 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
     try {
       final email = authProvider.userEmail ?? '';
       if (email.isEmpty) return;
-      final url = Uri.parse(ApiConfig.userByEmailEndpoint(email));
-      final response = await http
-          .get(
-            url,
-            headers: {
-              'Authorization': 'Bearer ${authProvider.userToken}',
-              'Accept': 'application/json',
-            },
-          )
-          .timeout(const Duration(seconds: 8));
 
-      if (response.statusCode == 200) {
-        final decoded = json.decode(response.body);
-        Map<String, dynamic> userMap = {};
-        if (decoded is Map<String, dynamic>) {
-          if (decoded['user'] is Map<String, dynamic>) {
-            userMap = decoded['user'] as Map<String, dynamic>;
-          } else {
-            userMap = decoded;
+      Map<String, dynamic>? userMap;
+
+      // Check if we have cached data from login prefetch
+      if (authProvider.cachedProfileData != null) {
+        userMap = authProvider.cachedProfileData!;
+        debugPrint('[StaffProfileScreen] Using cached profile data');
+      } else {
+        // Fetch fresh data if no cache available
+        final url = Uri.parse(ApiConfig.userByEmailEndpoint(email));
+        final response = await http
+            .get(
+              url,
+              headers: {
+                'Authorization': 'Bearer ${authProvider.userToken}',
+                'Accept': 'application/json',
+              },
+            )
+            .timeout(const Duration(seconds: 8));
+
+        if (response.statusCode == 200) {
+          final decoded = json.decode(response.body);
+          if (decoded is Map<String, dynamic>) {
+            if (decoded['user'] is Map<String, dynamic>) {
+              userMap = decoded['user'] as Map<String, dynamic>;
+            } else {
+              userMap = decoded;
+            }
           }
+        } else {
+          debugPrint('Failed to fetch user info (${response.statusCode})');
+          return;
         }
+      }
 
+      if (userMap != null) {
         final firstName = (userMap['firstName'] ?? userMap['name'] ?? '')
             .toString();
         final lastName = (userMap['lastName'] ?? userMap['surname'] ?? '')
@@ -230,8 +244,6 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
             profileImagePublicId.isNotEmpty ? profileImagePublicId : null,
           );
         }
-      } else {
-        debugPrint('Failed to fetch user info (${response.statusCode})');
       }
     } catch (e) {
       debugPrint('Error loading user data: $e');

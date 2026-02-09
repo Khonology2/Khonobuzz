@@ -20,6 +20,7 @@ class AuthProvider extends ChangeNotifier {
   String? _userProfileImageUrl; // Store current user's profile image URL
   String? _userProfilePublicId; // Store current user's profile image public ID
   bool _isSpecialSession = false; // Track special session state
+  Map<String, dynamic>? _cachedProfileData; // Cache for prefetched profile data
 
   bool get isAuthenticated => _isAuthenticated;
   String? get userEmail => _userEmail;
@@ -37,6 +38,8 @@ class AuthProvider extends ChangeNotifier {
   String? get userProfilePublicId =>
       _userProfilePublicId; // Getter for profile image public ID
   bool get isSpecialSession => _isSpecialSession; // Getter for special session
+  Map<String, dynamic>? get cachedProfileData =>
+      _cachedProfileData; // Getter for cached profile data
 
   AuthProvider() {
     _loadAuthState();
@@ -442,11 +445,65 @@ class AuthProvider extends ChangeNotifier {
         await Future.wait([
           if (_userModuleAccess == null) fetchCurrentUserModuleAccess(),
           if (_userToken == null || _userToken!.isEmpty) fetchUserToken(),
+          fetchUserProfileData(), // Prefetch detailed profile data
         ]);
       } catch (e) {
         debugPrint('[AuthProvider] Post-login warmup failed: $e');
       }
     });
+  }
+
+  // Prefetch detailed user profile data for faster profile screen loading
+  Future<void> fetchUserProfileData() async {
+    try {
+      final email = _userEmail;
+      if (email == null || email.isEmpty) {
+        debugPrint('[AuthProvider] Cannot fetch profile data: no user email');
+        return;
+      }
+
+      final url = Uri.parse(ApiConfig.userByEmailEndpoint(email));
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'Authorization': 'Bearer ${_userToken ?? ''}',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        Map<String, dynamic> userMap = {};
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['user'] is Map<String, dynamic>) {
+            userMap = decoded['user'] as Map<String, dynamic>;
+          } else {
+            userMap = decoded;
+          }
+        }
+
+        // Update AuthProvider with profile image data if available
+        final profileImageUrl = userMap['profileImageUrl'] as String?;
+        final profileImagePublicId = userMap['profileImagePublicId'] as String?;
+
+        if (profileImageUrl != null && profileImageUrl.isNotEmpty ||
+            profileImagePublicId != null && profileImagePublicId.isNotEmpty) {
+          await updateUserProfileImage(profileImageUrl, profileImagePublicId);
+          debugPrint('[AuthProvider] Profile data prefetched successfully');
+        }
+
+        // Store other profile data for potential future use
+        _cachedProfileData = userMap;
+      } else {
+        debugPrint(
+          '[AuthProvider] Failed to prefetch profile data: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      debugPrint('[AuthProvider] Error prefetching profile data: $e');
+    }
   }
 
   Future<bool> _attemptFallbackLogin(String email) async {
