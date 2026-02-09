@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../providers/auth_provider.dart';
 import '../widgets/floating_circles_particle_animation.dart';
 import '../widgets/version_control.dart';
+import '../widgets/profile_image_upload.dart';
 import 'dart:convert';
 import '../config/api_config.dart';
 
@@ -26,6 +27,10 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
   late TextEditingController _departmentController;
   late TextEditingController _preferredNameController;
   late TextEditingController _designationController;
+
+  // Profile image state
+  String? _profileImageUrl;
+  String? _profileImagePublicId;
   late TextEditingController _managerController;
 
   String? _selectedDepartment;
@@ -68,14 +73,16 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
 
     setState(() {
       if (phone.isNotEmpty && phone.length != 10) {
-        _phoneError = 'Please enter a valid 10-digit phone number\nExample: 0123456789';
+        _phoneError =
+            'Please enter a valid 10-digit phone number\nExample: 0123456789';
         isValid = false;
       } else {
         _phoneError = null;
       }
 
       if (email.isNotEmpty && !email.contains('@khonology')) {
-        _emailError = 'Please enter a valid company email\nExample: name@khonology.com';
+        _emailError =
+            'Please enter a valid company email\nExample: name@khonology.com';
         isValid = false;
       } else {
         _emailError = null;
@@ -159,8 +166,10 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
           }
         }
 
-        final firstName = (userMap['firstName'] ?? userMap['name'] ?? '').toString();
-        final lastName = (userMap['lastName'] ?? userMap['surname'] ?? '').toString();
+        final firstName = (userMap['firstName'] ?? userMap['name'] ?? '')
+            .toString();
+        final lastName = (userMap['lastName'] ?? userMap['surname'] ?? '')
+            .toString();
         final phone = (userMap['phoneNumber'] ?? '').toString();
         final deptRaw = (userMap['department'] ?? '').toString().trim();
         final desigRaw = (userMap['designation'] ?? '').toString().trim();
@@ -228,47 +237,49 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
   }
 
   void _saveProfile() async {
-      if (!_validateFields()) return;
+    if (!_validateFields()) return;
 
-      try {
-        final authProvider = context.read<AuthProvider>();
+    try {
+      final authProvider = context.read<AuthProvider>();
 
-        // Create user profile data object
-        final Map<String, dynamic> profileData = {
-          'firstName': _firstNameController.text.trim(),
-          'surname': _surnameController.text.trim(),
-          'email': _emailController.text.trim(),
-          'phoneNumber': _phoneController.text.trim(),
-          'department': _selectedDepartment ?? '',
-          'designation': _selectedDesignation ?? '',
-          'preferredName': _preferredNameController.text.trim(),
-          'managedBy': _managerController.text.trim(),
-        };
+      // Create user profile data object
+      final Map<String, dynamic> profileData = {
+        'firstName': _firstNameController.text.trim(),
+        'surname': _surnameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phoneNumber': _phoneController.text.trim(),
+        'department': _selectedDepartment ?? '',
+        'designation': _selectedDesignation ?? '',
+        'preferredName': _preferredNameController.text.trim(),
+        'managedBy': _managerController.text.trim(),
+      };
 
-        debugPrint('=== SAVING PROFILE TO DATABASE ===');
-        debugPrint('User Email: ${authProvider.userEmail}');
-        debugPrint('Profile Data: $profileData');
-        debugPrint('Saving to onboarding collection...');
+      debugPrint('=== SAVING PROFILE TO DATABASE ===');
+      debugPrint('User Email: ${authProvider.userEmail}');
+      debugPrint('Profile Data: $profileData');
+      debugPrint('Saving to onboarding collection...');
 
-        // Make API call to save profile data
-        final response = await http.put(
-          Uri.parse('${ApiConfig.baseUrl}/api/admin/users/${authProvider.userEmail}/profile'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ${authProvider.userToken}',
-          },
-          body: json.encode(profileData),
-        );
+      // Make API call to save profile data
+      final response = await http.put(
+        Uri.parse(
+          '${ApiConfig.baseUrl}/api/admin/users/${authProvider.userEmail}/profile',
+        ),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${authProvider.userToken}',
+        },
+        body: json.encode(profileData),
+      );
 
-        if (response.statusCode == 200) {
-          debugPrint('Profile saved successfully to database');
-        } else {
-          debugPrint('Failed to save profile: ${response.statusCode}');
-        }
-      } catch (e) {
-        debugPrint('Error saving profile: $e');
+      if (response.statusCode == 200) {
+        debugPrint('Profile saved successfully to database');
+      } else {
+        debugPrint('Failed to save profile: ${response.statusCode}');
       }
+    } catch (e) {
+      debugPrint('Error saving profile: $e');
     }
+  }
 
   Widget _buildEditableField(
     String label,
@@ -375,7 +386,19 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
               style: TextStyle(color: Colors.grey[600], fontFamily: 'Poppins'),
             ),
             items: items.map((String item) {
-              return DropdownMenuItem<String>(value: item, child: Text(item));
+              return DropdownMenuItem<String>(
+                value: item,
+                child: Expanded(
+                  child: Text(
+                    item,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Poppins',
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              );
             }).toList(),
             onChanged: onChanged,
             validator: (value) {
@@ -444,19 +467,24 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
                 ),
                 child: Row(
                   children: [
-                    CircleAvatar(
+                    ProfileImageUpload(
+                      currentImageUrl: _profileImageUrl,
+                      currentPublicId: _profileImagePublicId,
+                      userId:
+                          context.read<AuthProvider>().userEmail ?? 'unknown',
                       radius: 40,
-                      backgroundColor: const Color(0xFFC10D00),
-                      child: Text(
-                        authProvider.userEmail?.substring(0, 2).toUpperCase() ??
-                            'AD',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Poppins',
-                        ),
-                      ),
+                      onImageUploaded: (imageUrl, publicId) {
+                        setState(() {
+                          _profileImageUrl = imageUrl;
+                          _profileImagePublicId = publicId;
+                        });
+                      },
+                      onImageRemoved: () {
+                        setState(() {
+                          _profileImageUrl = null;
+                          _profileImagePublicId = null;
+                        });
+                      },
                     ),
                     const SizedBox(width: 16),
                     Expanded(

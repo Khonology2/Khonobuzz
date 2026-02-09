@@ -30,9 +30,9 @@ except ImportError:
         verify_token,
     )
 try:
-    from .imagekit_service import imagekit_service
+    from .cloudinary_service import cloudinary_service
 except ImportError:
-    from imagekit_service import imagekit_service
+    from cloudinary_service import cloudinary_service
 load_dotenv()
 DEBUG_MODE = os.environ.get('DEBUG', 'True').lower() == 'true'
 LOG_LEVEL = logging.DEBUG if DEBUG_MODE else logging.INFO
@@ -614,6 +614,8 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
             'department': onboarding_info.get('department') or user_info.get('department') or '',
             'designation': onboarding_info.get('designation') or user_info.get('designation') or '',
             'managedBy': onboarding_info.get('managedBy') or user_info.get('manager') or onboarding_info.get('manager') or '',
+            'profileImageUrl': onboarding_info.get('profileImageUrl', ''),
+            'profileImagePublicId': onboarding_info.get('profileImagePublicId', ''),
         }
 
         return JSONResponse(
@@ -1503,37 +1505,73 @@ from typing import Union
 @app.post("/users/profile-image")
 async def upload_profile_image(file: UploadFile = File(...), user_id: str = Query(..., description="User ID for folder organization")):
     """
-    Upload a profile image to ImageKit using the upload_profile_image method.
+    Upload a profile image to Cloudinary using the upload_profile_image method.
     
     Args:
         file: Image file (multipart/form-data)
         user_id: User ID for organizing files in folders
         
     Returns:
-        JSON response with ImageKit CDN URL and file ID
+        JSON response with Cloudinary CDN URL and file ID
     """
     try:
         info_log(f"Profile image upload request for user_id: {user_id}")
+        info_log(f"File details: {file.filename}, Content-Type: {file.content_type}, Size: {file.size}")
+        info_log(f"File object type: {type(file)}")
         
-        # Use the new upload_profile_image method
-        result = imagekit_service.upload_profile_image(file, user_id)
+        # Use the new Cloudinary upload_profile_image method
+        info_log("About to call cloudinary_service.upload_profile_image...")
+        result = await cloudinary_service.upload_profile_image(file, user_id)
+        info_log(f"Cloudinary service returned: {type(result)}")
         
         if result['success']:
             info_log(f"Profile image uploaded successfully for user_id: {user_id}")
+            info_log(f"Image URL: {result['url']}")
+            info_log(f"Public ID: {result['public_id']}")
+            
+            # Also update user's onboarding record with profile image info
+            try:
+                # Find user in users collection to get user_id
+                users_ref = db.collection('users')
+                query = users_ref.where('email', '==', user_id).limit(1).stream()
+                db_user_id = None
+                
+                for doc in query:
+                    db_user_id = doc.id
+                    break
+                
+                if db_user_id:
+                    # Update onboarding collection with profile image info
+                    onboarding_query = (
+                        db.collection('onboarding')
+                        .where('user_id', '==', db_user_id)
+                        .limit(1)
+                        .stream()
+                    )
+                    
+                    for ondoc in onboarding_query:
+                        onboarding_update = {
+                            'profileImageUrl': result['url'],
+                            'profileImagePublicId': result['public_id'],
+                            'updated_at': datetime.utcnow(),
+                        }
+                        ondoc.reference.update(onboarding_update)
+                        info_log(f"Updated onboarding record for user {db_user_id} with profile image URL")
+                        break
+                        
+            except Exception as db_error:
+                error_log(f"Failed to update onboarding record: {str(db_error)}")
+                # Continue anyway since Cloudinary upload succeeded
+            
             return JSONResponse(
                 status_code=200,
-                content={
-                    "url": result['url'],
-                    "file_id": result['file_id']
-                }
+                content=result
             )
         else:
-            error_log(f"Profile image upload failed for user_id: {user_id}: {result['error']}")
+            error_log(f"Profile image upload failed for user_id: {user_id}: {result.get('error', 'Unknown error')}")
             return JSONResponse(
-                status_code=400,
-                content={
-                    "error": result['error']
-                }
+                status_code=500,
+                content={"error": result.get('error', 'Failed to upload profile image')}
             )
             
     except Exception as e:
@@ -1544,14 +1582,35 @@ async def upload_profile_image(file: UploadFile = File(...), user_id: str = Quer
         )
 
 @app.delete("/api/delete/profile-picture")
-async def delete_profile_picture(public_id: str = Query(..., description="ImageKit file ID")):
+async def delete_profile_picture(public_id: str = Query(..., description="Cloudinary public ID")):
     """
-    Delete a profile picture from ImageKit
+    Delete a profile picture from Cloudinary
     """
     try:
-        result = imagekit_service.delete_image(public_id)
+        result = cloudinary_service.delete_profile_image(public_id)
         
-        if result:
+        if result['success']:
+            # Also clear profile image info from onboarding collection
+            try:
+                # Find all onboarding records with this public_id and clear them
+                onboarding_query = (
+                    db.collection('onboarding')
+                    .where('profileImagePublicId', '==', public_id)
+                    .stream()
+                )
+                
+                for ondoc in onboarding_query:
+                    ondoc.reference.update({
+                        'profileImageUrl': '',
+                        'profileImagePublicId': '',
+                        'updated_at': datetime.utcnow(),
+                    })
+                    info_log(f"Cleared profile image info from onboarding record for public_id: {public_id}")
+                    
+            except Exception as db_error:
+                error_log(f"Failed to clear onboarding record: {str(db_error)}")
+                # Continue anyway since Cloudinary deletion succeeded
+            
             return JSONResponse(
                 status_code=200,
                 content={"success": True, "message": "Profile picture deleted successfully"}
@@ -1559,7 +1618,7 @@ async def delete_profile_picture(public_id: str = Query(..., description="ImageK
         else:
             return JSONResponse(
                 status_code=500,
-                content={"error": "Failed to delete profile picture", "message": "Deletion failed"}
+                content={"error": "Failed to delete profile picture", "message": result.get('message', 'Deletion failed')}
             )
             
     except Exception as e:

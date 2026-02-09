@@ -21,6 +21,8 @@ class ModuleScreen extends StatefulWidget {
 class _ModuleScreenState extends State<ModuleScreen> {
   bool _isLoadingModuleAccess = false;
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _tokenController = TextEditingController();
+  bool _isGeneratingToken = false;
 
   @override
   void initState() {
@@ -332,13 +334,193 @@ class _ModuleScreenState extends State<ModuleScreen> {
                               crossAxisAlignment: CrossAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 24.0),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      TextField(
+                                        controller: _tokenController,
+                                        readOnly: true,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontFamily: 'Poppins',
+                                        ),
+                                        decoration: InputDecoration(
+                                          labelText: 'SOW Builder Token',
+                                          labelStyle: const TextStyle(
+                                            color: Colors.white70,
+                                            fontFamily: 'Poppins',
+                                          ),
+                                          suffixIcon: IconButton(
+                                            icon: const Icon(
+                                              Icons.copy,
+                                              color: Colors.white70,
+                                            ),
+                                            tooltip: 'Copy token',
+                                            onPressed: () {
+                                              final text = _tokenController.text
+                                                  .trim();
+                                              if (text.isEmpty) {
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'No token to copy',
+                                                      style: TextStyle(
+                                                        fontFamily: 'Poppins',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                                return;
+                                              }
+                                              Clipboard.setData(
+                                                ClipboardData(text: text),
+                                              );
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Token copied to clipboard',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Poppins',
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                          filled: true,
+                                          fillColor: const Color(0xFF2C3E50),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              8.0,
+                                            ),
+                                            borderSide: const BorderSide(
+                                              color: Colors.white24,
+                                            ),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              8.0,
+                                            ),
+                                            borderSide: const BorderSide(
+                                              color: primaryAccent,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12.0),
+                                      SizedBox(
+                                        height: 44.0,
+                                        child: ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: primaryAccent,
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8.0),
+                                            ),
+                                          ),
+                                          onPressed: _isGeneratingToken
+                                              ? null
+                                              : () async {
+                                                  final messenger =
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      );
+                                                  final authProvider = context
+                                                      .read<AuthProvider>();
+                                                  if (authProvider.userEmail ==
+                                                      null) {
+                                                    messenger.showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                          'You must be logged in to generate a token.',
+                                                        ),
+                                                      ),
+                                                    );
+                                                    return;
+                                                  }
+
+                                                  setState(() {
+                                                    _isGeneratingToken = true;
+                                                  });
+                                                  try {
+                                                    await authProvider
+                                                        .fetchUserToken();
+                                                    final token =
+                                                        authProvider.userToken;
+                                                    if (token == null ||
+                                                        token.isEmpty) {
+                                                      messenger.showSnackBar(
+                                                        const SnackBar(
+                                                          content: Text(
+                                                            'Failed to generate token. Please try again.',
+                                                          ),
+                                                        ),
+                                                      );
+                                                    } else {
+                                                      _tokenController.text =
+                                                          token;
+                                                      messenger.showSnackBar(
+                                                        const SnackBar(
+                                                          content: Text(
+                                                            'Token generated successfully.',
+                                                          ),
+                                                        ),
+                                                      );
+                                                    }
+                                                  } catch (e) {
+                                                    messenger.showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          'Error generating token: $e',
+                                                        ),
+                                                      ),
+                                                    );
+                                                  } finally {
+                                                    if (mounted) {
+                                                      setState(() {
+                                                        _isGeneratingToken =
+                                                            false;
+                                                      });
+                                                    }
+                                                  }
+                                                },
+                                          child: _isGeneratingToken
+                                              ? const SizedBox(
+                                                  width: 20,
+                                                  height: 20,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<
+                                                          Color
+                                                        >(Colors.white),
+                                                  ),
+                                                )
+                                              : const Text(
+                                                  'Generate SOW Token',
+                                                ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                                 if (topRow.isNotEmpty)
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     crossAxisAlignment:
                                         CrossAxisAlignment.center,
                                     mainAxisSize: MainAxisSize.min,
-                                    children: topRow,
+                                    children: topRow
+                                        .map((child) => Expanded(child: child))
+                                        .toList(),
                                   ),
                                 if (topRow.isNotEmpty && bottomRow.isNotEmpty)
                                   const SizedBox(height: 18.0),
@@ -348,7 +530,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.center,
                                     mainAxisSize: MainAxisSize.min,
-                                    children: bottomRow,
+                                    children: bottomRow
+                                        .map((child) => Expanded(child: child))
+                                        .toList(),
                                   ),
                               ],
                             );

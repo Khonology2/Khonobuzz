@@ -17,6 +17,8 @@ class AuthProvider extends ChangeNotifier {
   _currentScreenIndex; // Track current screen index for refresh persistence
   String? _userModuleAccess; // Store current user's module access
   String? _userToken; // Store current user's encrypted token
+  String? _userProfileImageUrl; // Store current user's profile image URL
+  String? _userProfilePublicId; // Store current user's profile image public ID
   bool _isSpecialSession = false; // Track special session state
 
   bool get isAuthenticated => _isAuthenticated;
@@ -30,6 +32,10 @@ class AuthProvider extends ChangeNotifier {
       _currentScreenIndex; // Getter for current screen index
   String? get userModuleAccess => _userModuleAccess; // Getter for module access
   String? get userToken => _userToken; // Getter for user token
+  String? get userProfileImageUrl =>
+      _userProfileImageUrl; // Getter for profile image URL
+  String? get userProfilePublicId =>
+      _userProfilePublicId; // Getter for profile image public ID
   bool get isSpecialSession => _isSpecialSession; // Getter for special session
 
   AuthProvider() {
@@ -49,11 +55,7 @@ class AuthProvider extends ChangeNotifier {
       final attemptStart = DateTime.now().millisecondsSinceEpoch;
       try {
         final response = await http
-            .post(
-              url,
-              headers: headers,
-              body: body,
-            )
+            .post(url, headers: headers, body: body)
             .timeout(
               timeout,
               onTimeout: () {
@@ -62,8 +64,7 @@ class AuthProvider extends ChangeNotifier {
                 );
               },
             );
-        final elapsed =
-            DateTime.now().millisecondsSinceEpoch - attemptStart;
+        final elapsed = DateTime.now().millisecondsSinceEpoch - attemptStart;
         debugPrint(
           '[AuthProvider] POST ${url.path} attempt ${attempt + 1} '
           'completed in ${elapsed}ms with status ${response.statusCode}',
@@ -74,16 +75,14 @@ class AuthProvider extends ChangeNotifier {
         }
       } on TimeoutException catch (e) {
         lastError = e;
-        final elapsed =
-            DateTime.now().millisecondsSinceEpoch - attemptStart;
+        final elapsed = DateTime.now().millisecondsSinceEpoch - attemptStart;
         debugPrint(
           '[AuthProvider] POST ${url.path} attempt ${attempt + 1} '
           'timed out after ${elapsed}ms: ${e.message}',
         );
       } catch (e) {
         lastError = e;
-        final elapsed =
-            DateTime.now().millisecondsSinceEpoch - attemptStart;
+        final elapsed = DateTime.now().millisecondsSinceEpoch - attemptStart;
         debugPrint(
           '[AuthProvider] POST ${url.path} attempt ${attempt + 1} '
           'failed after ${elapsed}ms: $e',
@@ -102,9 +101,7 @@ class AuthProvider extends ChangeNotifier {
     if (lastError is TimeoutException) {
       throw lastError;
     }
-    throw Exception(
-      lastError?.toString() ?? 'Request failed after retries',
-    );
+    throw Exception(lastError?.toString() ?? 'Request failed after retries');
   }
 
   Future<void> _loadAuthState() async {
@@ -114,7 +111,10 @@ class AuthProvider extends ChangeNotifier {
     _userRole = prefs.getString('userRole');
     _initialScreenIndex = prefs.getInt('initialScreenIndex');
     _currentScreenIndex = prefs.getInt('currentScreenIndex');
+    _userModuleAccess = prefs.getString('userModuleAccess');
     _userToken = prefs.getString('userToken');
+    _userProfileImageUrl = prefs.getString('userProfileImageUrl');
+    _userProfilePublicId = prefs.getString('userProfilePublicId');
     _isSpecialSession = prefs.getBool('_spSess') ?? false;
     notifyListeners();
   }
@@ -129,9 +129,7 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     // Modified: added role and all onboarding parameters
 
-    final url = Uri.parse(
-      ApiConfig.authRegisterEndpoint,
-    );
+    final url = Uri.parse(ApiConfig.authRegisterEndpoint);
 
     // Debug logging
     debugPrint('[AuthProvider] Attempting to register/login with URL: $url');
@@ -259,6 +257,7 @@ class AuthProvider extends ChangeNotifier {
         await Future.wait([
           fetchCurrentUserModuleAccess(),
           if (_userToken == null) fetchUserToken(),
+          fetchUserProfileData(), // Fetch profile image data
         ]);
 
         return true; // Indicate success
@@ -274,9 +273,7 @@ class AuthProvider extends ChangeNotifier {
         return false; // Indicate failure
       }
     } on TimeoutException catch (e) {
-      debugPrint(
-        '[AuthProvider] Registration/login timed out: ${e.message}',
-      );
+      debugPrint('[AuthProvider] Registration/login timed out: ${e.message}');
       _isAuthenticated = false;
       _userAlreadyOnboarded = false;
       notifyListeners();
@@ -300,9 +297,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final start = DateTime.now().millisecondsSinceEpoch;
-      final headers = <String, String>{
-        'Content-Type': 'application/json',
-      };
+      final headers = <String, String>{'Content-Type': 'application/json'};
       if (isSpecialAccess) {
         headers['X-Session-Type'] = 'special';
       }
@@ -334,14 +329,19 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = true;
         _isSpecialSession = isSpecialAccess;
         _userEmail = userPayload['email'] as String;
-        _userRole = isSpecialAccess ? 'Admin' : (userPayload['role'] ?? 'Staff');
+        _userRole = isSpecialAccess
+            ? 'Admin'
+            : (userPayload['role'] ?? 'Staff');
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
 
         // Extract module access from user payload if available (faster than separate API call)
         final moduleAccessRaw = userPayload['moduleAccess'] as String?;
         final moduleAccessRoleRaw = userPayload['moduleAccessRole'] as String?;
-        _userModuleAccess = _deriveModuleAccessFromRole(moduleAccessRaw, moduleAccessRoleRaw);
+        _userModuleAccess = _deriveModuleAccessFromRole(
+          moduleAccessRaw,
+          moduleAccessRoleRaw,
+        );
 
         // Batch all SharedPreferences writes
         final writeTasks = <Future>[
@@ -353,7 +353,8 @@ class AuthProvider extends ChangeNotifier {
         ];
 
         // Get token from response if available
-        if (responseData.containsKey('token') && responseData['token'] != null) {
+        if (responseData.containsKey('token') &&
+            responseData['token'] != null) {
           _userToken = responseData['token'] as String?;
           if (_userToken != null && _userToken!.isNotEmpty) {
             writeTasks.add(prefs.setString('userToken', _userToken!));
@@ -396,16 +397,17 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      if (!isSpecialAccess && (e.toString().contains('SocketException') || 
-          e.toString().contains('Failed host lookup') ||
-          e.toString().contains('Connection refused') ||
-          e.toString().contains('timeout'))) {
+      if (!isSpecialAccess &&
+          (e.toString().contains('SocketException') ||
+              e.toString().contains('Failed host lookup') ||
+              e.toString().contains('Connection refused') ||
+              e.toString().contains('timeout'))) {
         final success = await _attemptFallbackLogin(email);
         if (success) {
           return true;
         }
       }
-      
+
       _isAuthenticated = false;
       notifyListeners();
       return false;
@@ -418,6 +420,7 @@ class AuthProvider extends ChangeNotifier {
         await Future.wait([
           if (_userModuleAccess == null) fetchCurrentUserModuleAccess(),
           if (_userToken == null || _userToken!.isEmpty) fetchUserToken(),
+          fetchUserProfileData(), // Fetch profile image data
         ]);
       } catch (e) {
         debugPrint('[AuthProvider] Post-login warmup failed: $e');
@@ -485,6 +488,52 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
+  // Fetch user profile data including profile image from onboarding collection
+  Future<void> fetchUserProfileData() async {
+    if (_userEmail == null) return;
+
+    try {
+      final response = await http
+          .get(Uri.parse(ApiConfig.userByEmailEndpoint(_userEmail!)))
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        final userData = responseData['user'] as Map<String, dynamic>?;
+
+        if (userData != null) {
+          final profileImageUrl = userData['profileImageUrl'] as String?;
+          final profileImagePublicId =
+              userData['profileImagePublicId'] as String?;
+
+          if (profileImageUrl != null && profileImagePublicId != null) {
+            await updateUserProfileImage(profileImageUrl, profileImagePublicId);
+            debugPrint(
+              '[AuthProvider] Profile image loaded from onboarding: $profileImageUrl',
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[AuthProvider] Error fetching user profile data: $e');
+    }
+  }
+
+  // Update user's profile image
+  Future<void> updateUserProfileImage(
+    String? imageUrl,
+    String? publicId,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    _userProfileImageUrl = imageUrl;
+    _userProfilePublicId = publicId;
+    await Future.wait([
+      if (imageUrl != null) prefs.setString('userProfileImageUrl', imageUrl),
+      if (publicId != null) prefs.setString('userProfilePublicId', publicId),
+    ]);
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     _isAuthenticated = false;
@@ -494,14 +543,21 @@ class AuthProvider extends ChangeNotifier {
     _currentScreenIndex = null;
     _userModuleAccess = null;
     _userToken = null;
+    _userProfileImageUrl = null;
+    _userProfilePublicId = null;
     _isSpecialSession = false;
-    await prefs.remove('isAuthenticated');
-    await prefs.remove('userEmail');
-    await prefs.remove('userRole');
-    await prefs.remove('initialScreenIndex');
-    await prefs.remove('currentScreenIndex');
-    await prefs.remove('userToken');
-    await prefs.remove('_spSess');
+    await Future.wait([
+      prefs.remove('isAuthenticated'),
+      prefs.remove('userEmail'),
+      prefs.remove('userRole'),
+      prefs.remove('initialScreenIndex'),
+      prefs.remove('currentScreenIndex'),
+      prefs.remove('userModuleAccess'),
+      prefs.remove('userToken'),
+      prefs.remove('userProfileImageUrl'),
+      prefs.remove('userProfilePublicId'),
+      prefs.remove('_spSess'),
+    ]);
     notifyListeners();
   }
 
@@ -522,21 +578,24 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // Derives moduleAccess from moduleAccessRole if moduleAccess is empty or incomplete
-  static String? _deriveModuleAccessFromRole(String? moduleAccess, String? moduleAccessRole) {
+  static String? _deriveModuleAccessFromRole(
+    String? moduleAccess,
+    String? moduleAccessRole,
+  ) {
     // If moduleAccess already has values, use it
     if (moduleAccess != null && moduleAccess.trim().isNotEmpty) {
       return moduleAccess;
     }
-    
+
     // If moduleAccessRole is empty, return null
     if (moduleAccessRole == null || moduleAccessRole.trim().isEmpty) {
       return null;
     }
-    
+
     // Extract module names from moduleAccessRole
     final parts = moduleAccessRole.split(',');
     final List<String> moduleNames = [];
-    
+
     for (var part in parts) {
       final trimmed = part.trim();
       if (trimmed.startsWith('PDH')) {
@@ -551,7 +610,8 @@ class AuthProvider extends ChangeNotifier {
         if (!moduleNames.contains('Automated Recruitment Workflow')) {
           moduleNames.add('Automated Recruitment Workflow');
         }
-      } else if (trimmed.startsWith('Proposal & SOW Builder') || trimmed.startsWith('SOW Builder')) {
+      } else if (trimmed.startsWith('Proposal & SOW Builder') ||
+          trimmed.startsWith('SOW Builder')) {
         if (!moduleNames.contains('Proposal & SOW Builder')) {
           moduleNames.add('Proposal & SOW Builder');
         }
@@ -561,7 +621,7 @@ class AuthProvider extends ChangeNotifier {
         }
       }
     }
-    
+
     return moduleNames.isEmpty ? null : moduleNames.join(',');
   }
 
@@ -618,9 +678,12 @@ class AuthProvider extends ChangeNotifier {
 
           final moduleAccessRaw = foundUser?['moduleAccess'] as String?;
           final moduleAccessRoleRaw = foundUser?['moduleAccessRole'] as String?;
-          
+
           // Derive moduleAccess from moduleAccessRole if moduleAccess is empty
-          _userModuleAccess = _deriveModuleAccessFromRole(moduleAccessRaw, moduleAccessRoleRaw);
+          _userModuleAccess = _deriveModuleAccessFromRole(
+            moduleAccessRaw,
+            moduleAccessRoleRaw,
+          );
           notifyListeners();
           debugPrint('[AuthProvider] Module access loaded from API');
         } catch (_) {
@@ -649,34 +712,37 @@ class AuthProvider extends ChangeNotifier {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
-    
+
     // Direct match
     if (accessList.contains(moduleName)) {
       return true;
     }
-    
+
     // Check for partial matches (e.g., "PDH" matches "Personal Development Hub")
     final moduleNameLower = moduleName.toLowerCase();
     for (var access in accessList) {
       final accessLower = access.toLowerCase();
       // Check if moduleName is contained in access or vice versa
-      if (accessLower.contains(moduleNameLower) || moduleNameLower.contains(accessLower)) {
+      if (accessLower.contains(moduleNameLower) ||
+          moduleNameLower.contains(accessLower)) {
         // Additional validation for specific module mappings
-        if (moduleNameLower == 'pdh' && 
-            (accessLower.contains('personal development hub') || accessLower == 'pdh')) {
+        if (moduleNameLower == 'pdh' &&
+            (accessLower.contains('personal development hub') ||
+                accessLower == 'pdh')) {
           return true;
         }
-        if (moduleNameLower.contains('skills heatmap') && 
-            (accessLower.contains('skills heatmap') || accessLower.contains('resource & capacity'))) {
+        if (moduleNameLower.contains('skills heatmap') &&
+            (accessLower.contains('skills heatmap') ||
+                accessLower.contains('resource & capacity'))) {
           return true;
         }
-        if (moduleNameLower.contains('recruitment') && 
+        if (moduleNameLower.contains('recruitment') &&
             accessLower.contains('recruitment')) {
           return true;
         }
       }
     }
-    
+
     return false;
   }
 
