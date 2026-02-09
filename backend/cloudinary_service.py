@@ -1,58 +1,54 @@
 import os
+import io
 from dotenv import load_dotenv
-from imagekitio import ImageKit
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 import logging
+import hashlib
 
 # Load environment variables
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-class ImageKitService:
+class CloudinaryService:
     def __init__(self):
+        self.is_initialized = False
         try:
-            # Initialize ImageKit with environment variables
-            self.imagekit = ImageKit(
-                private_key=os.getenv('IMAGEKIT_PRIVATE_KEY'),
-                public_key=os.getenv('IMAGEKIT_PUBLIC_KEY'),
-                url_endpoint=os.getenv('IMAGEKIT_URL_ENDPOINT')
+            # Initialize Cloudinary with environment variables
+            cloudinary.config(
+                cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+                api_key=os.getenv('CLOUDINARY_API_KEY'),
+                api_secret=os.getenv('CLOUDINARY_API_SECRET')
             )
-            logger.info("ImageKit service initialized successfully")
+            self.is_initialized = True
+            logger.info("Cloudinary service initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize ImageKit: {e}")
-            # Try alternative initialization
-            try:
-                self.imagekit = ImageKit(
-                    private_key=os.getenv('IMAGEKIT_PRIVATE_KEY'),
-                    public_key=os.getenv('IMAGEKIT_PUBLIC_KEY'),
-                    url_endpoint=os.getenv('IMAGEKIT_URL_ENDPOINT')
-                )
-                logger.info("ImageKit service initialized successfully (alternative method)")
-            except Exception as e2:
-                logger.error(f"Failed to initialize ImageKit with alternative method: {e2}")
-                self.imagekit = None
+            logger.error(f"Failed to initialize Cloudinary: {e}")
+            self.is_initialized = False
     
     def upload_profile_image(self, file, user_id):
         """
-        Upload a profile image to ImageKit with proper validation and folder structure
+        Upload a profile image to Cloudinary with proper validation and folder structure
         
         Args:
-            file: File object (from multipart/form-data)
+            file: UploadFile object (from FastAPI multipart/form-data)
             user_id: User ID for folder organization
             
         Returns:
             dict: {
                 'success': bool,
                 'url': str (if successful),
-                'file_id': str (if successful),
+                'public_id': str (if successful),
                 'error': str (if failed)
             }
         """
         try:
-            if not self.imagekit:
+            if not self.is_initialized:
                 return {
                     'success': False,
-                    'error': 'ImageKit service not initialized'
+                    'error': 'Cloudinary service not initialized'
                 }
             
             # Validate file
@@ -62,19 +58,21 @@ class ImageKitService:
                     'error': 'No file provided'
                 }
             
+            # Get file content from UploadFile object
+            file.file.seek(0)  # Reset file position
+            file_content = file.file.read()
+            
+            # Reset file position again in case it's needed elsewhere
+            file.file.seek(0)
+            
             # Check file size (5MB limit)
-            file.seek(0, 2)  # Seek to end
-            file_size = file.tell()
-            file.seek(0)  # Reset to beginning
+            file_size = len(file_content)
             
             if file_size > 5 * 1024 * 1024:  # 5MB
                 return {
                     'success': False,
                     'error': 'File size exceeds 5MB limit'
                 }
-            
-            # Read file content
-            file_content = file.read()
             
             # Validate file type (basic check for image signatures)
             image_signatures = {
@@ -101,33 +99,39 @@ class ImageKitService:
             folder_path = f"profile_pictures/{user_id}"
             
             # Generate safe filename
-            import hashlib
             file_hash = hashlib.md5(file_content).hexdigest()[:8]
             file_extension = content_type.split('/')[-1]
             safe_filename = f"profile_{file_hash}.{file_extension}"
             
-            # Upload to ImageKit
-            upload_response = self.imagekit.upload_file(
-                file=file_content,
-                file_name=safe_filename,
-                options={
-                    "folder": folder_path,
-                    "use_unique_file_name": False,
-                    "response_fields": ["url", "file_id"]
+            # Upload to Cloudinary
+            upload_response = cloudinary.uploader.upload(
+                file_content,
+                public_id=safe_filename,
+                folder=folder_path,
+                resource_type="image",
+                format=file_extension,
+                overwrite=True,
+                responsive_breakpoints={
+                    "create_derived": True,
+                    "bytes_step": 20000,
+                    "min_width": 200,
+                    "max_width": 1000,
+                    "max_images": 5
                 }
             )
             
             # Check upload response
-            if upload_response and hasattr(upload_response, 'url') and upload_response.url:
+            if upload_response and 'secure_url' in upload_response:
+                logger.info(f"Profile image uploaded successfully for user_id: {user_id}")
                 return {
                     'success': True,
-                    'url': upload_response.url,
-                    'file_id': upload_response.file_id if hasattr(upload_response, 'file_id') else ''
+                    'url': upload_response['secure_url'],
+                    'public_id': upload_response['public_id']
                 }
             else:
                 return {
                     'success': False,
-                    'error': 'Upload failed - invalid response from ImageKit'
+                    'error': 'Upload failed - invalid response from Cloudinary'
                 }
                 
         except Exception as e:
@@ -139,47 +143,48 @@ class ImageKitService:
     
     def upload_image(self, image_file, folder='profile_pictures'):
         """
-        Upload an image to ImageKit
+        Upload an image to Cloudinary
         
         Args:
             image_file: File object or file path
-            folder: ImageKit folder name (default: 'profile_pictures')
+            folder: Cloudinary folder name (default: 'profile_pictures')
             
         Returns:
-            dict: Upload response containing url and file_id
+            dict: Upload response containing url and public_id
         """
         try:
-            if not self.imagekit:
+            if not self.is_initialized:
                 return {
                     'success': False,
-                    'error': 'ImageKit not initialized',
+                    'error': 'Cloudinary not initialized',
                     'message': 'Failed to upload image'
                 }
             
-            # Upload to ImageKit
-            upload_info = self.imagekit.upload_file(
-                file=image_file,
-                file_name=f"profile_{hash(image_file) if hasattr(image_file, '__hash__') else str(hash(str(image_file)))}.jpg",
-                options={}
+            # Upload to Cloudinary
+            upload_info = cloudinary.uploader.upload(
+                image_file,
+                folder=folder,
+                resource_type="image",
+                overwrite=True
             )
             
             # Check if upload was successful
-            if upload_info and hasattr(upload_info, 'url') and upload_info.url:
+            if upload_info and 'secure_url' in upload_info:
                 return {
                     'success': True,
-                    'secure_url': upload_info.url,
-                    'file_id': upload_info.file_id if hasattr(upload_info, 'file_id') else '',
+                    'secure_url': upload_info['secure_url'],
+                    'public_id': upload_info['public_id'],
                     'message': 'Image uploaded successfully'
                 }
             else:
                 return {
                     'success': False,
-                    'error': 'Invalid response from ImageKit',
+                    'error': 'Invalid response from Cloudinary',
                     'message': 'Failed to upload image'
                 }
                 
         except Exception as e:
-            logger.error(f"ImageKit upload error: {e}")
+            logger.error(f"Cloudinary upload error: {e}")
             return {
                 'success': False,
                 'error': str(e),
@@ -200,24 +205,24 @@ class ImageKitService:
             str: Optimized image URL
         """
         try:
-            if not self.imagekit:
+            if not self.is_initialized:
                 return image_url
             
             # Create transformation parameters
             transformations = []
             if width:
-                transformations.append(f"w-{width}")
+                transformations.append(f"w_{width}")
             if height:
-                transformations.append(f"h-{height}")
-            transformations.append(f"q-{quality}")
+                transformations.append(f"h_{height}")
+            transformations.append(f"q_{quality}")
             
             if transformations:
                 transformation_string = ",".join(transformations)
                 # Add transformations to URL
                 if "?" in image_url:
-                    return f"{image_url}&tr={transformation_string}"
+                    return f"{image_url}&{transformation_string}"
                 else:
-                    return f"{image_url}?tr={transformation_string}"
+                    return f"{image_url}?{transformation_string}"
             
             return image_url
             
@@ -225,26 +230,23 @@ class ImageKitService:
             logger.error(f"Error creating optimized URL: {e}")
             return image_url
     
-    def delete_image(self, file_id):
+    def delete_image(self, public_id):
         """
-        Delete an image from ImageKit
+        Delete an image from Cloudinary
         
         Args:
-            file_id: ImageKit file ID
+            public_id: Cloudinary public ID
             
         Returns:
             bool: True if successful, False otherwise
         """
         try:
-            if not self.imagekit:
-                return False
-            
-            delete_response = self.imagekit.delete_file(file_id)
-            return delete_response and hasattr(delete_response, 'response') and delete_response.response == 204
+            delete_response = cloudinary.api.delete_resources([public_id], resource_type="image")
+            return delete_response and 'deleted' in delete_response and delete_response['deleted']
             
         except Exception as e:
             logger.error(f"Error deleting image: {e}")
             return False
 
 # Create global instance
-imagekit_service = ImageKitService()
+cloudinary_service = CloudinaryService()

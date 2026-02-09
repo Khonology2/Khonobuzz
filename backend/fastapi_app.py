@@ -30,9 +30,9 @@ except ImportError:
         verify_token,
     )
 try:
-    from .imagekit_service import imagekit_service
+    from .cloudinary_service import cloudinary_service
 except ImportError:
-    from imagekit_service import imagekit_service
+    from cloudinary_service import cloudinary_service
 load_dotenv()
 DEBUG_MODE = os.environ.get('DEBUG', 'True').lower() == 'true'
 LOG_LEVEL = logging.DEBUG if DEBUG_MODE else logging.INFO
@@ -661,6 +661,8 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
         designation = data.get('designation') or ''
         phone_number = data.get('phoneNumber') or ''
         managed_by = data.get('managedBy') or data.get('manager') or ''
+        profile_image_url = data.get('profileImageUrl') or ''
+        profile_image_public_id = data.get('profileImagePublicId') or ''
         full_name = (f"{first_name} {last_name}".strip() or preferred_name or '').strip()
 
         # 2. Update 'users' collection
@@ -698,6 +700,8 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
             'designation': designation,
             'phoneNumber': phone_number,
             'managedBy': managed_by,
+            'profileImageUrl': profile_image_url,
+            'profileImagePublicId': profile_image_public_id,
             'updated_at': datetime.utcnow(),
             'email': normalized_email,
         }
@@ -1503,28 +1507,30 @@ from typing import Union
 @app.post("/users/profile-image")
 async def upload_profile_image(file: UploadFile = File(...), user_id: str = Query(..., description="User ID for folder organization")):
     """
-    Upload a profile image to ImageKit using the upload_profile_image method.
+    Upload a profile image to Cloudinary using the upload_profile_image method.
     
     Args:
         file: Image file (multipart/form-data)
         user_id: User ID for organizing files in folders
         
     Returns:
-        JSON response with ImageKit CDN URL and file ID
+        JSON response with Cloudinary CDN URL and public ID
     """
     try:
         info_log(f"Profile image upload request for user_id: {user_id}")
         
         # Use the new upload_profile_image method
-        result = imagekit_service.upload_profile_image(file, user_id)
+        result = cloudinary_service.upload_profile_image(file, user_id)
         
         if result['success']:
             info_log(f"Profile image uploaded successfully for user_id: {user_id}")
             return JSONResponse(
                 status_code=200,
                 content={
+                    "success": True,
                     "url": result['url'],
-                    "file_id": result['file_id']
+                    "public_id": result['public_id'],
+                    "message": "Profile image uploaded successfully"
                 }
             )
         else:
@@ -1532,24 +1538,29 @@ async def upload_profile_image(file: UploadFile = File(...), user_id: str = Quer
             return JSONResponse(
                 status_code=400,
                 content={
-                    "error": result['error']
+                    "success": False,
+                    "error": result['error'],
+                    "message": "Failed to upload profile image"
                 }
             )
-            
     except Exception as e:
-        error_log(f"Unexpected error during profile image upload: {str(e)}")
+        error_log(f"Profile image upload exception for user_id: {user_id}: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"error": "Internal server error during upload"}
+            content={
+                "success": False,
+                "error": str(e),
+                "message": "Internal server error during profile image upload"
+            }
         )
 
 @app.delete("/api/delete/profile-picture")
-async def delete_profile_picture(public_id: str = Query(..., description="ImageKit file ID")):
+async def delete_profile_picture(public_id: str = Query(..., description="Cloudinary public ID")):
     """
-    Delete a profile picture from ImageKit
+    Delete a profile picture from Cloudinary
     """
     try:
-        result = imagekit_service.delete_image(public_id)
+        result = cloudinary_service.delete_image(public_id)
         
         if result:
             return JSONResponse(
