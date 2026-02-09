@@ -116,6 +116,14 @@ class AuthProvider extends ChangeNotifier {
     _userProfileImageUrl = prefs.getString('userProfileImageUrl');
     _userProfilePublicId = prefs.getString('userProfilePublicId');
     _isSpecialSession = prefs.getBool('_spSess') ?? false;
+
+    debugPrint(
+      '[AuthProvider] _loadAuthState - userProfileImageUrl: $_userProfileImageUrl',
+    );
+    debugPrint(
+      '[AuthProvider] _loadAuthState - userProfilePublicId: $_userProfilePublicId',
+    );
+
     notifyListeners();
   }
 
@@ -342,6 +350,17 @@ class AuthProvider extends ChangeNotifier {
           moduleAccessRoleRaw,
         );
 
+        // Extract profile image data from login response
+        debugPrint('[AuthProvider] Login response userPayload: $userPayload');
+        _userProfileImageUrl = userPayload['profileImageUrl'] as String?;
+        _userProfilePublicId = userPayload['profileImagePublicId'] as String?;
+        debugPrint(
+          '[AuthProvider] Extracted profileImageUrl: $_userProfileImageUrl',
+        );
+        debugPrint(
+          '[AuthProvider] Extracted profileImagePublicId: $_userProfilePublicId',
+        );
+
         // Batch all SharedPreferences writes
         final writeTasks = <Future>[
           prefs.setBool('isAuthenticated', true),
@@ -349,6 +368,10 @@ class AuthProvider extends ChangeNotifier {
           prefs.setString('userRole', _userRole!),
           prefs.setInt('initialScreenIndex', 9),
           prefs.setInt('currentScreenIndex', 9),
+          if (_userProfileImageUrl != null)
+            prefs.setString('userProfileImageUrl', _userProfileImageUrl!),
+          if (_userProfilePublicId != null)
+            prefs.setString('userProfilePublicId', _userProfilePublicId!),
         ];
 
         // Get token from response if available

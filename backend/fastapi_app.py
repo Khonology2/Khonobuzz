@@ -614,6 +614,8 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
             'department': onboarding_info.get('department') or user_info.get('department') or '',
             'designation': onboarding_info.get('designation') or user_info.get('designation') or '',
             'managedBy': onboarding_info.get('managedBy') or user_info.get('manager') or onboarding_info.get('manager') or '',
+            'profileImageUrl': onboarding_info.get('profileImageUrl') or '',
+            'profileImagePublicId': onboarding_info.get('profileImagePublicId') or '',
         }
 
         return JSONResponse(
@@ -1377,6 +1379,8 @@ async def login_user(user_login: UserLogin, request: Request):
                 "status": user_status,
                 "moduleAccess": final_module_access or '',
                 "moduleAccessRole": module_access_role,
+                "profileImageUrl": onboarding_data.get('profileImageUrl', ''),
+                "profileImagePublicId": onboarding_data.get('profileImagePublicId', ''),
             }
         }
         if encrypted_token:

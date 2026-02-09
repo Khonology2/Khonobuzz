@@ -222,6 +222,14 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
               ? profileImagePublicId
               : null;
         });
+
+        // Update AuthProvider with profile image data
+        if (profileImageUrl.isNotEmpty || profileImagePublicId.isNotEmpty) {
+          await authProvider.updateUserProfileImage(
+            profileImageUrl.isNotEmpty ? profileImageUrl : null,
+            profileImagePublicId.isNotEmpty ? profileImagePublicId : null,
+          );
+        }
       } else {
         debugPrint('Failed to fetch user info (${response.statusCode})');
       }
@@ -244,6 +252,8 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         'designation': _selectedDesignation ?? '',
         'preferredName': _preferredNameController.text.trim(),
         'managedBy': _managerController.text.trim(),
+        'profileImageUrl': authProvider.userProfileImageUrl ?? '',
+        'profileImagePublicId': authProvider.userProfilePublicId ?? '',
       };
 
       final response = await http.put(
