@@ -257,7 +257,6 @@ class AuthProvider extends ChangeNotifier {
         await Future.wait([
           fetchCurrentUserModuleAccess(),
           if (_userToken == null) fetchUserToken(),
-          fetchUserProfileData(), // Fetch profile image data
         ]);
 
         return true; // Indicate success
@@ -420,7 +419,6 @@ class AuthProvider extends ChangeNotifier {
         await Future.wait([
           if (_userModuleAccess == null) fetchCurrentUserModuleAccess(),
           if (_userToken == null || _userToken!.isEmpty) fetchUserToken(),
-          fetchUserProfileData(), // Fetch profile image data
         ]);
       } catch (e) {
         debugPrint('[AuthProvider] Post-login warmup failed: $e');
@@ -488,52 +486,6 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // Fetch user profile data including profile image from onboarding collection
-  Future<void> fetchUserProfileData() async {
-    if (_userEmail == null) return;
-
-    try {
-      final response = await http
-          .get(Uri.parse(ApiConfig.userByEmailEndpoint(_userEmail!)))
-          .timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        final userData = responseData['user'] as Map<String, dynamic>?;
-
-        if (userData != null) {
-          final profileImageUrl = userData['profileImageUrl'] as String?;
-          final profileImagePublicId =
-              userData['profileImagePublicId'] as String?;
-
-          if (profileImageUrl != null && profileImagePublicId != null) {
-            await updateUserProfileImage(profileImageUrl, profileImagePublicId);
-            debugPrint(
-              '[AuthProvider] Profile image loaded from onboarding: $profileImageUrl',
-            );
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('[AuthProvider] Error fetching user profile data: $e');
-    }
-  }
-
-  // Update user's profile image
-  Future<void> updateUserProfileImage(
-    String? imageUrl,
-    String? publicId,
-  ) async {
-    final prefs = await SharedPreferences.getInstance();
-    _userProfileImageUrl = imageUrl;
-    _userProfilePublicId = publicId;
-    await Future.wait([
-      if (imageUrl != null) prefs.setString('userProfileImageUrl', imageUrl),
-      if (publicId != null) prefs.setString('userProfilePublicId', publicId),
-    ]);
-    notifyListeners();
-  }
-
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     _isAuthenticated = false;
@@ -566,6 +518,21 @@ class AuthProvider extends ChangeNotifier {
     SharedPreferences.getInstance().then((prefs) {
       prefs.remove('initialScreenIndex');
     });
+    notifyListeners();
+  }
+
+  // Update user's profile image
+  Future<void> updateUserProfileImage(
+    String? imageUrl,
+    String? publicId,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    _userProfileImageUrl = imageUrl;
+    _userProfilePublicId = publicId;
+    await Future.wait([
+      if (imageUrl != null) prefs.setString('userProfileImageUrl', imageUrl),
+      if (publicId != null) prefs.setString('userProfilePublicId', publicId),
+    ]);
     notifyListeners();
   }
 
