@@ -9,10 +9,7 @@ import '../models/managed_user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 
-enum OnboardingAlertStage {
-  pendingApproval,
-  assignmentsNeeded,
-}
+enum OnboardingAlertStage { pendingApproval, assignmentsNeeded }
 
 class OnboardingAlertPanel extends StatefulWidget {
   final List<ManagedUser> pendingUsers;
@@ -79,9 +76,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
     final isSpecialSession = authProvider.isSpecialSession;
 
     try {
-      final headers = <String, String>{
-        'Content-Type': 'application/json',
-      };
+      final headers = <String, String>{'Content-Type': 'application/json'};
 
       if (isSpecialSession) {
         headers['X-Session-Type'] = 'special';
@@ -134,10 +129,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
         SnackBar(
           content: Text(
             'User approved for $fullName. Assign module access and entity next.',
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white,
-            ),
+            style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
           ),
           backgroundColor: const Color(0xFFC10D00),
         ),
@@ -147,10 +139,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
         SnackBar(
           content: Text(
             'Failed to approve user. Please try again.',
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white,
-            ),
+            style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
           ),
           backgroundColor: Colors.red.shade700,
         ),
@@ -179,9 +168,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
 
     return Container(
       width: 400,
-      constraints: const BoxConstraints(
-        maxHeight: 360,
-      ),
+      constraints: const BoxConstraints(maxHeight: 360),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
@@ -198,7 +185,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
           children: [
             Positioned.fill(
               child: Image.asset(
-                'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
+                'assets/images/nathi_bg.png',
                 fit: BoxFit.cover,
               ),
             ),
@@ -237,10 +224,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                       ),
                       IconButton(
                         onPressed: widget.onClose,
-                        icon: const Icon(
-                          Icons.close,
-                          color: Colors.white70,
-                        ),
+                        icon: const Icon(Icons.close, color: Colors.white70),
                       ),
                     ],
                   ),
@@ -270,8 +254,8 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                             color: Colors.black.withValues(alpha: 0.4),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: stage ==
-                                      OnboardingAlertStage.pendingApproval
+                              color:
+                                  stage == OnboardingAlertStage.pendingApproval
                                   ? Colors.orangeAccent
                                   : const Color(0xFFC10D00),
                             ),
@@ -301,7 +285,8 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: stage ==
+                                      color:
+                                          stage ==
                                               OnboardingAlertStage
                                                   .pendingApproval
                                           ? Colors.orange.shade700
@@ -369,20 +354,19 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                                         ? null
                                         : () => _approveUser(user),
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                          const Color(0xFFC10D00),
+                                      backgroundColor: const Color(0xFFC10D00),
                                       foregroundColor: Colors.white,
                                     ),
                                     child: _processingUserId == user.id
                                         ? const SizedBox(
                                             width: 16,
                                             height: 16,
-                                            child:
-                                                CircularProgressIndicator(
+                                            child: CircularProgressIndicator(
                                               strokeWidth: 2,
                                               valueColor:
-                                                  AlwaysStoppedAnimation<
-                                                      Color>(Colors.white),
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Colors.white,
+                                                  ),
                                             ),
                                           )
                                         : const Text(
@@ -409,4 +393,3 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
     );
   }
 }
-

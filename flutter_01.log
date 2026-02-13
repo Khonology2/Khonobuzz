@@ -1,0 +1,95 @@
+Flutter crash report.
+Please report a bug at https://github.com/flutter/flutter/issues.
+
+## command
+
+flutter run -d edge
+
+## exception
+
+PathAccessException: PathAccessException: Deletion failed, path = 'build\f537d389bd7fe17e116f8b847863fcdd.cache.dill.track.dill' (OS Error: The process cannot access the file because it is being used by another process, errno = 32)
+
+```
+#0      _Directory._deleteSync (dart:io/directory_impl.dart:225:7)
+#1      FileSystemEntity.deleteSync (dart:io/file_system_entity.dart:425:7)
+#2      _File._deleteSync (dart:io/file_impl.dart:365:50)
+#3      FileSystemEntity.deleteSync (dart:io/file_system_entity.dart:425:7)
+#4      ForwardingFileSystemEntity.deleteSync (package:file/src/forwarding/forwarding_file_system_entity.dart:70:16)
+#5      ForwardingFileSystemEntity.deleteSync (package:file/src/forwarding/forwarding_file_system_entity.dart:70:16)
+#6      ErrorHandlingFileSystem.deleteIfExists (package:flutter_tools/src/base/error_handling_io.dart:90:14)
+#7      ErrorHandlingFile.copySync.<anonymous closure> (package:flutter_tools/src/base/error_handling_io.dart:330:35)
+#8      _runSync (package:flutter_tools/src/base/error_handling_io.dart:552:14)
+#9      ErrorHandlingFile.copySync (package:flutter_tools/src/base/error_handling_io.dart:313:5)
+#10     ResidentRunner.cacheInitialDillCompilation (package:flutter_tools/src/resident_runner.dart:1318:18)
+#11     ResidentWebRunner.run.<anonymous closure> (package:flutter_tools/src/isolated/resident_web_runner.dart:334:11)
+<asynchronous suspension>
+#12     asyncGuard.<anonymous closure> (package:flutter_tools/src/base/async_guard.dart:108:24)
+<asynchronous suspension>
+```
+
+## flutter doctor
+
+```
+[32m[✓][39m Flutter (Channel stable, 3.38.9, on Microsoft
+    Windows [Version 10.0.26200.7462], locale en-ZA)
+    [5,2s]
+    [32m•[39m Flutter version 3.38.9 on channel stable at
+      C:\flutter
+    [32m•[39m Upstream repository
+      https://github.com/flutter/flutter.git
+    [32m•[39m Framework revision 67323de285 (2 weeks ago),
+      2026-01-28 13:43:12 -0800
+    [32m•[39m Engine revision 587c18f873
+    [32m•[39m Dart version 3.10.8
+    [32m•[39m DevTools version 2.51.1
+    [32m•[39m Feature flags: enable-web, enable-linux-desktop,
+      enable-macos-desktop, enable-windows-desktop,
+      enable-android, enable-ios, cli-animations,
+      enable-native-assets, omit-legacy-version-file,
+      enable-lldb-debugging
+
+[32m[✓][39m Windows Version (Windows 11 or higher, 25H2, 2009)
+    [13,0s]
+
+[32m[✓][39m Android toolchain - develop for Android devices
+    (Android SDK version 36.1.0-rc1) [26,1s]
+    [32m•[39m Android SDK at C:\SDK
+    [32m•[39m Emulator version 36.2.12.0 (build_id 14214601)
+      (CL:N/A)
+    [32m•[39m Platform android-36, build-tools 36.1.0-rc1
+    [32m•[39m ANDROID_HOME = C:\SDK
+    [32m•[39m Java binary at: C:\Java\jdk-21\bin\java
+      This JDK is specified by the JAVA_HOME
+      environment variable.
+      To manually set the JDK path, use: `flutter
+      config --jdk-dir="path/to/jdk"`.
+    [32m•[39m Java version Java(TM) SE Runtime Environment
+      (build 21.0.8+12-LTS-250)
+    [32m•[39m All Android licenses accepted.
+
+[32m[✓][39m Chrome - develop for the web [2,4s]
+    [32m•[39m Chrome at C:\Program
+      Files\Google\Chrome\Application\chrome.exe
+
+[31m[✗][39m Visual Studio - develop Windows apps [2,4s]
+    [31m✗[39m Visual Studio not installed; this is necessary
+      to develop Windows apps.
+      Download at
+      https://visualstudio.microsoft.com/downloads/.
+      Please install the "Desktop development with
+      C++" workload, including all of its default
+      components
+
+[32m[✓][39m Connected device (3 available) [1 807ms]
+    [32m•[39m Windows (desktop) • windows • windows-x64    •
+      Microsoft Windows [Version 10.0.26200.7462]
+    [32m•[39m Chrome (web)      • chrome  • web-javascript •
+      Google Chrome 144.0.7559.134
+    [32m•[39m Edge (web)        • edge    • web-javascript •
+      Microsoft Edge 144.0.3719.104
+
+[32m[✓][39m Network resources [1 515ms]
+    [32m•[39m All expected network resources are available.
+
+[33m![39m Doctor found issues in 1 category.
+```

@@ -31,18 +31,15 @@ class _AnimatedBubblyButton extends StatefulWidget {
 class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
     with TickerProviderStateMixin {
   late AnimationController _btnController;
-  Animation<Offset> _btnOffset =
-      const AlwaysStoppedAnimation<Offset>(Offset.zero);
+  Animation<Offset> _btnOffset = const AlwaysStoppedAnimation<Offset>(
+    Offset.zero,
+  );
   late AnimationController _pulseController;
-  Animation<double> _pulseScale =
-      const AlwaysStoppedAnimation<double>(1.0);
-  Animation<double> _ringRadius =
-      const AlwaysStoppedAnimation<double>(0.0);
-  Animation<double> _ringOpacity =
-      const AlwaysStoppedAnimation<double>(0.0);
+  Animation<double> _pulseScale = const AlwaysStoppedAnimation<double>(1.0);
+  Animation<double> _ringRadius = const AlwaysStoppedAnimation<double>(0.0);
+  Animation<double> _ringOpacity = const AlwaysStoppedAnimation<double>(0.0);
   late AnimationController _clickController;
-  Animation<double> _clickProgress =
-      const AlwaysStoppedAnimation<double>(0.0);
+  Animation<double> _clickProgress = const AlwaysStoppedAnimation<double>(0.0);
 
   @override
   void initState() {
@@ -62,19 +59,29 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
     );
     _pulseScale = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.9, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween<double>(
+          begin: 0.9,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 70,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.9)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 0.9,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 30,
       ),
     ]).animate(_pulseController);
     _ringRadius = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween<double>(begin: 0.0, end: 50.0), weight: 70),
-      TweenSequenceItem(tween: Tween<double>(begin: 50.0, end: 0.0), weight: 30),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 50.0),
+        weight: 70,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 50.0, end: 0.0),
+        weight: 30,
+      ),
     ]).animate(_pulseController);
     _ringOpacity = TweenSequence<double>([
       TweenSequenceItem(tween: Tween<double>(begin: 0.5, end: 0.0), weight: 70),
@@ -85,8 +92,10 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
       vsync: this,
       duration: const Duration(milliseconds: 750),
     );
-    _clickProgress =
-        CurvedAnimation(parent: _clickController, curve: Curves.easeInOut);
+    _clickProgress = CurvedAnimation(
+      parent: _clickController,
+      curve: Curves.easeInOut,
+    );
 
     _btnController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
@@ -126,7 +135,9 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
                     borderRadius: BorderRadius.circular(50.0),
                     boxShadow: [
                       BoxShadow(
-                        color: widget.color.withValues(alpha: _ringOpacity.value),
+                        color: widget.color.withValues(
+                          alpha: _ringOpacity.value,
+                        ),
                         offset: const Offset(0, 0),
                         blurRadius: 0,
                         spreadRadius: _ringRadius.value,
@@ -157,7 +168,10 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
             onPressed: () {
               _clickController.forward(from: 0);
               if (widget.onPressed != null) {
-                Future.delayed(const Duration(milliseconds: 250), widget.onPressed!);
+                Future.delayed(
+                  const Duration(milliseconds: 250),
+                  widget.onPressed!,
+                );
               }
             },
             padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -193,14 +207,22 @@ class _BubblesPainter extends CustomPainter {
       final y = (0.0 - size.height * (0.8 * p));
       final r = (size.height * 0.12) * (1.0 - p);
       paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
-      canvas.drawCircle(Offset(x * size.width, y + size.height * 0.1), r, paint);
+      canvas.drawCircle(
+        Offset(x * size.width, y + size.height * 0.1),
+        r,
+        paint,
+      );
     }
     for (final x in bottomXs) {
       final p = progress;
       final y = size.height + size.height * (0.8 * p);
       final r = (size.height * 0.12) * (1.0 - p);
       paint.color = color.withValues(alpha: 0.5 * (1.0 - p));
-      canvas.drawCircle(Offset(x * size.width, y - size.height * 0.1), r, paint);
+      canvas.drawCircle(
+        Offset(x * size.width, y - size.height * 0.1),
+        r,
+        paint,
+      );
     }
   }
 
@@ -217,17 +239,16 @@ class LobbyScreenState extends State<LobbyScreen> {
   @override
   void initState() {
     super.initState();
-    _videoController = VideoPlayerController.asset(
-      'assets/images/animated_rocket.mp4',
-    )
-      ..setLooping(true)
-      ..initialize().then((_) {
-        if (mounted) {
-          setState(() {
-            _videoController?.play();
+    _videoController =
+        VideoPlayerController.asset('assets/images/animated_rocket.mp4')
+          ..setLooping(true)
+          ..initialize().then((_) {
+            if (mounted) {
+              setState(() {
+                _videoController?.play();
+              });
+            }
           });
-        }
-      });
 
     Future.delayed(const Duration(milliseconds: 500), () {
       setState(() {
@@ -253,9 +274,7 @@ class LobbyScreenState extends State<LobbyScreen> {
             height: double.infinity,
             decoration: const BoxDecoration(
               image: DecorationImage(
-                image: AssetImage(
-                  'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
-                ),
+                image: AssetImage('assets/images/nathi_bg.png'),
                 fit: BoxFit.cover,
               ),
             ),
@@ -282,8 +301,7 @@ class LobbyScreenState extends State<LobbyScreen> {
                             child: FittedBox(
                               fit: BoxFit.cover,
                               child: SizedBox(
-                                width:
-                                    _videoController?.value.size.width ?? 0,
+                                width: _videoController?.value.size.width ?? 0,
                                 height:
                                     _videoController?.value.size.height ?? 0,
                                 child: VideoPlayer(_videoController!),
@@ -294,10 +312,7 @@ class LobbyScreenState extends State<LobbyScreen> {
                       else
                         const SizedBox(height: 72),
                       const SizedBox(height: 24),
-                      Image.asset(
-                        'assets/images/khono.png',
-                        height: 100,
-                      ),
+                      Image.asset('assets/images/khono.png', height: 100),
                       const SizedBox(height: 16),
                       const Text(
                         'Please be patient while Khonology Admin attends to your onboarding request...',

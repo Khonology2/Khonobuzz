@@ -58,9 +58,7 @@ class AdminProfileScreenState extends State<AdminProfileScreen>
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage(
-              'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
-            ),
+            image: AssetImage('assets/images/nathi_bg.png'),
             fit: BoxFit.cover,
           ),
         ),
@@ -84,7 +82,11 @@ class AdminProfileScreenState extends State<AdminProfileScreen>
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFC10D00).withValues(alpha: 0.3)),
+                          border: Border.all(
+                            color: const Color(
+                              0xFFC10D00,
+                            ).withValues(alpha: 0.3),
+                          ),
                         ),
                         child: Column(
                           children: [
@@ -94,7 +96,10 @@ class AdminProfileScreenState extends State<AdminProfileScreen>
                                   radius: 40,
                                   backgroundColor: const Color(0xFFC10D00),
                                   child: Text(
-                                    authProvider.userEmail?.substring(0, 2).toUpperCase() ?? 'AD',
+                                    authProvider.userEmail
+                                            ?.substring(0, 2)
+                                            .toUpperCase() ??
+                                        'AD',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 24,
@@ -106,7 +111,8 @@ class AdminProfileScreenState extends State<AdminProfileScreen>
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const Text(
                                         'Administrator',
@@ -118,7 +124,8 @@ class AdminProfileScreenState extends State<AdminProfileScreen>
                                         ),
                                       ),
                                       Text(
-                                        authProvider.userEmail ?? 'admin@example.com',
+                                        authProvider.userEmail ??
+                                            'admin@example.com',
                                         style: const TextStyle(
                                           color: Colors.white70,
                                           fontSize: 16,

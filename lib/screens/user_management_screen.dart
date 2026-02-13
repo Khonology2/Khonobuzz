@@ -112,7 +112,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   void dispose() {
     _debounceTimer?.cancel();
     _searchController.dispose();
-     _scrollController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -264,17 +264,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
 
       try {
-        await updateOnboardingUserPartial(
-          userId,
-          {
-            'role': newRole,
-            'status': newStatus,
-            'entity': entity,
-            'department': department,
-            'designation': designation,
-            if (adminField != null) ...adminField,
-          },
-        );
+        await updateOnboardingUserPartial(userId, {
+          'role': newRole,
+          'status': newStatus,
+          'entity': entity,
+          'department': department,
+          'designation': designation,
+          if (adminField != null) ...adminField,
+        });
       } catch (e) {
         debugPrint('Onboarding sync failed for user update: $e');
       }
@@ -383,8 +380,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         TextButton(
                           onPressed: () {
                             setState(() {
-                              final allIds =
-                                  _filteredUsers.map((u) => u.id).toSet();
+                              final allIds = _filteredUsers
+                                  .map((u) => u.id)
+                                  .toSet();
                               if (_selectedUserIds.length == allIds.length) {
                                 _selectedUserIds.clear();
                                 _isSelectionMode = false;
@@ -426,10 +424,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
-              fit: BoxFit.cover,
-            ),
+            child: Image.asset('assets/images/nathi_bg.png', fit: BoxFit.cover),
           ),
 
           Positioned.fill(
@@ -998,7 +993,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           if (newValue != null && newValue != selectedRole) {
                             // Store current expanded state before setState
                             final currentExpandedUserId = expandedUserId;
-                            
+
                             setState(() {
                               selectedRole = newValue;
                               user.role = newValue;
@@ -1081,10 +1076,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
-                          if (newValue != null && newValue != selectedStatusLocal) {
+                          if (newValue != null &&
+                              newValue != selectedStatusLocal) {
                             // Store current expanded state before setState
                             final currentExpandedUserId = expandedUserId;
-                            
+
                             setState(() {
                               selectedStatusLocal = newValue;
                               user.status = newValue;
@@ -1346,9 +1342,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       },
                       child: Container(
                         height: 40.0,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8.0,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
                         decoration: BoxDecoration(
                           color: const Color(0xFF2C3E50),
                           borderRadius: BorderRadius.circular(4.0),
@@ -1429,15 +1423,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 
-  Future<void> _updateUserManager(
-    ManagedUser user,
-    ManagedUser manager,
-  ) async {
+  Future<void> _updateUserManager(ManagedUser user, ManagedUser manager) async {
     final authProvider = context.read<AuthProvider>();
     final adminEmail = authProvider.userEmail?.trim() ?? '';
     final isSpecialSession = authProvider.isSpecialSession;
 
-    final managerFullName = '${manager.firstName} ${manager.lastName}'.trim().isNotEmpty
+    final managerFullName =
+        '${manager.firstName} ${manager.lastName}'.trim().isNotEmpty
         ? '${manager.firstName} ${manager.lastName}'.trim()
         : manager.name;
 
@@ -1474,12 +1466,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       try {
         await updatePDHUserPartial(
           user.id,
-          {
-            'manager': managerFullName,
-          },
-          onboardingFields: {
-            'manager': managerFullName,
-          },
+          {'manager': managerFullName},
+          onboardingFields: {'manager': managerFullName},
         );
       } catch (e) {
         debugPrint('PDH manager sync failed: $e');
@@ -1488,24 +1476,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       try {
         await updateSkillsHeatmapUserPartial(
           user.id,
-          {
-            'manager': managerFullName,
-          },
-          onboardingFields: {
-            'manager': managerFullName,
-          },
+          {'manager': managerFullName},
+          onboardingFields: {'manager': managerFullName},
         );
       } catch (e) {
         debugPrint('Skills Heatmap manager sync failed: $e');
       }
 
       try {
-        await updateOnboardingUserPartial(
-          user.id,
-          {
-            'manager': managerFullName,
-          },
-        );
+        await updateOnboardingUserPartial(user.id, {
+          'manager': managerFullName,
+        });
       } catch (e) {
         debugPrint('Onboarding manager sync failed: $e');
       }
@@ -1514,17 +1495,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       final backendUser = decoded?['user'] as Map<String, dynamic>?;
       if (backendUser != null && mounted) {
         final updatedUser = ManagedUser.fromApi(backendUser);
-        final userProvider =
-            Provider.of<UserProvider>(context, listen: false);
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
         userProvider.updateUser(updatedUser);
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Manager set to $managerFullName for ${user.name}.',
-            ),
+            content: Text('Manager set to $managerFullName for ${user.name}.'),
           ),
         );
       }
@@ -2427,10 +2405,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
           content: Text(
             'Are you sure you want to delete $selectedCount user(s)?',
-            style: const TextStyle(
-              color: Colors.white,
-              fontFamily: 'Poppins',
-            ),
+            style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
           ),
           actions: [
             TextButton(
@@ -2515,7 +2490,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       userProvider.removeUsers(successfullyDeletedUserIds);
     }
 
-    if (failureCount > 0 && failedUserIds.isNotEmpty && errorMessages.isNotEmpty) {
+    if (failureCount > 0 &&
+        failedUserIds.isNotEmpty &&
+        errorMessages.isNotEmpty) {
       debugPrint(
         'Failed to delete $failureCount user(s): ${failedUserIds.join(', ')}. '
         'Errors: ${errorMessages.join(' | ')}',
@@ -2526,19 +2503,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     if (mounted) {
       String message = '';
       if (successfullyDeletedUserIds.isNotEmpty) {
-        message += 'Successfully deleted ${successfullyDeletedUserIds.length} user(s).';
+        message +=
+            'Successfully deleted ${successfullyDeletedUserIds.length} user(s).';
       }
       if (failureCount > 0) {
         message += ' Failed to delete $failureCount user(s).';
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             message,
             style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
           ),
-          backgroundColor: successfullyDeletedUserIds.isNotEmpty 
+          backgroundColor: successfullyDeletedUserIds.isNotEmpty
               ? (failureCount > 0 ? Colors.orange : Colors.green)
               : Colors.red,
         ),

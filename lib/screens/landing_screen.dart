@@ -98,9 +98,11 @@ class _LandingScreenState extends State<LandingScreen>
     });
 
     Future.delayed(const Duration(milliseconds: 500), () {
-      setState(() {
-        _logoOpacity = 1.0;
-      });
+      if (mounted) {
+        setState(() {
+          _logoOpacity = 1.0;
+        });
+      }
     });
 
     Future.delayed(const Duration(milliseconds: 1500), () {
@@ -121,8 +123,8 @@ class _LandingScreenState extends State<LandingScreen>
 
     try {
       debugPrint('LandingScreen: Checking for Microsoft redirect result...');
-      final credential =
-          await fb_auth.FirebaseAuth.instance.getRedirectResult();
+      final credential = await fb_auth.FirebaseAuth.instance
+          .getRedirectResult();
 
       if (credential.user != null) {
         debugPrint(
@@ -190,9 +192,7 @@ class _LandingScreenState extends State<LandingScreen>
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage(
-              'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
-            ),
+            image: AssetImage('assets/images/nathi_bg.png'),
             fit: BoxFit.cover,
           ),
         ),
@@ -351,13 +351,9 @@ class _LandingScreenState extends State<LandingScreen>
 
   Future<void> _pingBackend() async {
     try {
-      debugPrint(
-        '[LandingScreen] Starting backend warm-up and user prefetch',
-      );
+      debugPrint('[LandingScreen] Starting backend warm-up and user prefetch');
       final userProvider = context.read<UserProvider>();
-      debugPrint(
-        '[LandingScreen] Obtained UserProvider instance for prefetch',
-      );
+      debugPrint('[LandingScreen] Obtained UserProvider instance for prefetch');
       final uri = Uri.parse(ApiConfig.baseUrl);
       debugPrint('[LandingScreen] Pinging backend at: ${uri.toString()}');
       final response = await http.get(uri).timeout(const Duration(seconds: 5));
@@ -369,9 +365,7 @@ class _LandingScreenState extends State<LandingScreen>
       );
       userProvider.fetchUsers(forceRefresh: true);
     } catch (e) {
-      debugPrint(
-        '[LandingScreen] Backend warm-up or user prefetch failed: $e',
-      );
+      debugPrint('[LandingScreen] Backend warm-up or user prefetch failed: $e');
     }
   }
 }

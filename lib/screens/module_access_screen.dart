@@ -28,7 +28,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     'Hiring Manager',
     'Candidate',
   ];
-  final List<String> _moduleRoleOptionsSOWBuilder = ['Admin', 'Manager', 'Finance'];
+  final List<String> _moduleRoleOptionsSOWBuilder = [
+    'Admin',
+    'Manager',
+    'Finance',
+  ];
   final List<String> _moduleRoleOptionsDeliverables = [
     'System admin',
     'Client',
@@ -235,7 +239,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     String? newModuleRole,
     String? newRecruitmentRole,
     String? newSOWBuilderRole,
-     String? newDeliverablesRole,
+    String? newDeliverablesRole,
   ) async {
     final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
     setState(() {
@@ -282,20 +286,20 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     if (sowBuilderSelected) {
       sanitizedSOWBuilderRole =
           (newSOWBuilderRole != null &&
-                  newSOWBuilderRole.trim().isNotEmpty &&
-                  newSOWBuilderRole != _notAssignedValue)
-              ? newSOWBuilderRole.trim()
-              : '';
+              newSOWBuilderRole.trim().isNotEmpty &&
+              newSOWBuilderRole != _notAssignedValue)
+          ? newSOWBuilderRole.trim()
+          : '';
     }
 
     String sanitizedDeliverablesRole = '';
     if (deliverablesSelected) {
       sanitizedDeliverablesRole =
           (newDeliverablesRole != null &&
-                  newDeliverablesRole.trim().isNotEmpty &&
-                  newDeliverablesRole != _notAssignedValue)
-              ? newDeliverablesRole.trim()
-              : '';
+              newDeliverablesRole.trim().isNotEmpty &&
+              newDeliverablesRole != _notAssignedValue)
+          ? newDeliverablesRole.trim()
+          : '';
     }
 
     List<String> combinedParts = [];
@@ -434,10 +438,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               'Deliverables & Sprint Sign-Off Hub - ',
             )) {
               final extractedRole = trimmedPart
-                  .replaceFirst(
-                    'Deliverables & Sprint Sign-Off Hub - ',
-                    '',
-                  )
+                  .replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '')
                   .trim();
 
               final roleLower = extractedRole.toLowerCase();
@@ -1005,7 +1006,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 setStateDialog(() {
                                   deliverablesSelected = value ?? false;
                                   if (!deliverablesSelected) {
-                                    selectedDeliverablesRole = _notAssignedValue;
+                                    selectedDeliverablesRole =
+                                        _notAssignedValue;
                                   }
                                 });
                               },
@@ -1103,12 +1105,14 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           });
 
                           try {
-                            final userProvider =
-                                Provider.of<UserProvider>(context,
-                                    listen: false);
+                            final userProvider = Provider.of<UserProvider>(
+                              context,
+                              listen: false,
+                            );
                             final selectedUsers = userProvider.users
-                                .where((user) =>
-                                    _selectedUserIds.contains(user.id))
+                                .where(
+                                  (user) => _selectedUserIds.contains(user.id),
+                                )
                                 .toList();
 
                             for (final user in selectedUsers) {
@@ -1225,8 +1229,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         TextButton(
                           onPressed: () {
                             setState(() {
-                              final allIds =
-                                  _filteredUsers.map((u) => u.id).toSet();
+                              final allIds = _filteredUsers
+                                  .map((u) => u.id)
+                                  .toSet();
                               if (_selectedUserIds.length == allIds.length) {
                                 _selectedUserIds.clear();
                                 _isSelectionMode = false;
@@ -1271,10 +1276,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_ce144728-8a69-4c91-9aa3-069deb283a9c.png',
-              fit: BoxFit.cover,
-            ),
+            child: Image.asset('assets/images/nathi_bg.png', fit: BoxFit.cover),
           ),
           Positioned.fill(
             child: ScrollbarTheme(
@@ -1735,8 +1737,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
     String? selectedModuleRole =
         (user.moduleRole == null || user.moduleRole!.isEmpty)
-            ? _notAssignedValue
-            : user.moduleRole;
+        ? _notAssignedValue
+        : user.moduleRole;
 
     String? selectedRecruitmentRole = _selectedRecruitmentRoles[user.id];
 
@@ -1812,14 +1814,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         final parts = user.moduleAccessRole!.split(', ');
         for (var part in parts) {
           final trimmedPart = part.trim();
-          if (trimmedPart.startsWith(
-            'Deliverables & Sprint Sign-Off Hub - ',
-          )) {
+          if (trimmedPart.startsWith('Deliverables & Sprint Sign-Off Hub - ')) {
             final extractedRole = trimmedPart
-                .replaceFirst(
-                  'Deliverables & Sprint Sign-Off Hub - ',
-                  '',
-                )
+                .replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '')
                 .trim();
 
             final roleLower = extractedRole.toLowerCase();
@@ -2250,7 +2247,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     child: DropdownButton<String?>(
                       value: deliverablesSelected
                           ? (_selectedDeliverablesRoles[user.id] ??
-                              selectedDeliverablesRole)
+                                selectedDeliverablesRole)
                           : _notAssignedValue,
                       isExpanded: true,
                       dropdownColor: const Color(0xFF2C3E50),
@@ -2362,7 +2359,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     child: DropdownButton<String?>(
                       value: sowBuilderSelected
                           ? (_selectedSOWBuilderRoles[user.id] ??
-                              selectedSOWBuilderRole)
+                                selectedSOWBuilderRole)
                           : _notAssignedValue,
                       isExpanded: true,
                       dropdownColor: const Color(0xFF2C3E50),

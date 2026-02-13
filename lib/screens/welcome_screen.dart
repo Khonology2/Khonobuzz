@@ -11,7 +11,7 @@ class WelcomeScreen extends StatelessWidget {
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/Niice_Wrld_A_dark,_abstract_background_with_a_black_background_and_a_red_lin_5c0b8290-cc74-4ad3-97c2-749fd1c67f0d.png'),
+            image: AssetImage('assets/images/nathi_bg.png'),
             fit: BoxFit.cover,
           ),
         ),
@@ -19,10 +19,7 @@ class WelcomeScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset(
-                'assets/images/logo.png',
-                height: 150,
-              ),
+              Image.asset('assets/images/logo.png', height: 150),
               const SizedBox(height: 50),
               const AnimatedTextSwitcher(),
               const SizedBox(height: 50),
@@ -30,12 +27,17 @@ class WelcomeScreen extends StatelessWidget {
                 onPressed: () {
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (context) => const LandingScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const LandingScreen(),
+                    ),
                   );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFC10D00),
-                  padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 50,
+                    vertical: 15,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
