@@ -27,3 +27,4 @@ key.properties
 # Environment variables
 .env
 **/.env
+node_modules
