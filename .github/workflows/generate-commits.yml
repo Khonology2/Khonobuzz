@@ -1,0 +1,102 @@
+name: Generate Daily Commits
+ 
+on:
+  push:
+    branches: ['*'] # Include ALL branches, including new ones created by developers
+  workflow_dispatch: # Allow manual trigger
+ 
+permissions:
+  contents: write # Allow workflow to push commits back to repository
+ 
+jobs:
+  generate-commits:
+    runs-on: ubuntu-latest
+ 
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Fetch all history for complete commit log
+ 
+    - name: Setup Node.js for commit processing
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+ 
+    - name: Generate daily commits JSON
+      run: |
+        # Get today's date in YYYY-MM-DD format
+        TODAY=$(date -u +"%Y-%m-%d")
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+ 
+        # Get commits from today only and format as proper JSON array using jq
+        COMMITS_JSON=$(git log --since="${TODAY}T00:00:00Z" --pretty=format:'%an|%s|%aI' --no-merges | \
+          jq -R -s '
+            split("\n") |
+            map(select(length > 0)) |
+            map(split("|") | {author: .[0], message: .[1], timestamp: .[2]})
+          ')
+ 
+        # Count commits
+        COMMIT_COUNT=$(git log --since="${TODAY}T00:00:00Z" --oneline --no-merges | wc -l)
+ 
+        # If no commits today, create empty array
+        if [ "$COMMIT_COUNT" -eq 0 ]; then
+          COMMITS_JSON="[]"
+          COMMIT_COUNT=0
+        fi
+ 
+        # Get current version in YYYY-MM-WD-N.SIT format
+        YEAR=$(date -u +"%Y")
+        MONTH=$(date -u +"%m")
+        WEEK_OF_MONTH=$(date -u +"%V") # Week number of year
+        WEEK_OF_MONTH_SINGLE=$(echo $WEEK_OF_MONTH | tail -c 2) # Last digit for single character
+        DAY_OF_WEEK=$(date -u +"%u") # 1=Monday, 7=Sunday
+        DAY_LETTER=$(date -u +"%A" | head -c 1) # First letter of weekday (M, T, W, T, F, S, S)
+        VERSION="${YEAR}.${MONTH}.${WEEK_OF_MONTH_SINGLE}${DAY_LETTER}${COMMIT_COUNT}.SIT"
+ 
+        # Create JSON structure using jq for proper formatting
+        jq -n \
+          --arg version "$VERSION" \
+          --arg generated_at "$TIMESTAMP" \
+          --argjson commits "$COMMITS_JSON" \
+          --arg total_commits "$COMMIT_COUNT" \
+          --arg date_range "$TODAY" \
+          '{
+            version: $version,
+            generated_at: $generated_at,
+            commits: $commits,
+            total_commits: ($total_commits | tonumber),
+            date_range: $date_range
+          }' > assets/data/daily-commits.json
+ 
+        echo "Generated commit data for $TODAY with $COMMIT_COUNT commits"
+ 
+    - name: Verify JSON is valid
+      run: |
+        if command -v jq &> /dev/null; then
+          jq . assets/data/daily-commits.json
+          echo "JSON is valid"
+        else
+          echo "jq not available, skipping validation"
+        fi
+ 
+    - name: Display generated data
+      run: |
+        echo "Generated commit data:"
+        cat assets/data/daily-commits.json | jq . 2>/dev/null || cat assets/data/daily-commits.json
+ 
+    - name: Commit and push changes (if any)
+      run: |
+        # Check if there are changes to commit
+        if git diff --quiet assets/data/daily-commits.json; then
+          echo "No changes to commit data"
+        else
+          echo "Committing updated commit data"
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add assets/data/daily-commits.json
+          git commit -m "Update daily commits data [${TODAY}]" || echo "No changes to commit"
+          git pull --rebase origin $GITHUB_REF_NAME || git pull origin $GITHUB_REF_NAME || echo "Pull failed, attempting push anyway"
+          git push || echo "Push failed - likely due to no changes or permissions"
+        fi

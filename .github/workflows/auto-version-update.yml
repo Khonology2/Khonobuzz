@@ -1,0 +1,159 @@
+name: Auto Version Control Update
+
+on:
+  push:
+    branches: [ main, develop, feature/*, hotfix/* ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      force_update:
+        description: 'Force version update'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Get current date and time
+      id: datetime
+      run: |
+        echo "year=$(date +'%Y')" >> $GITHUB_OUTPUT
+        echo "month=$(date +'%m')" >> $GITHUB_OUTPUT
+        echo "day_of_month=$(date +'%d')" >> $GITHUB_OUTPUT
+        echo "day_of_week=$(date +'%u')" >> $GITHUB_OUTPUT
+        echo "week_of_month=$(date +'%V')" >> $GITHUB_OUTPUT
+
+    - name: Calculate version components
+      id: version
+      run: |
+        # Get current date components
+        YEAR=$(date +'%Y')
+        MONTH=$(date +'%m')
+        DAY_OF_MONTH=$(date +'%d')
+        DAY_OF_WEEK=$(date +'%u') # 1=Monday, 7=Sunday
+        
+        # Calculate week of month (1-5)
+        WEEK_OF_MONTH=$(( (DAY_OF_MONTH - 1) / 7 + 1 ))
+        
+        # Convert week of month to letter (A=1, B=2, etc.)
+        WEEK_CODE=$(printf "\\x$(printf %02x $((64 + WEEK_OF_MONTH)))")
+        
+        # Convert day of week to letter (A=Monday, B=Tuesday, etc.)
+        DAY_CODE=$(printf "\\x$(printf %02x $((64 + DAY_OF_WEEK)))")
+        
+        # Get total commit count
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        
+        # Environment based on branch
+        if [[ "${{ github.ref_name }}" == "main" ]]; then
+          ENV="PROD"
+        elif [[ "${{ github.ref_name }}" == "develop" ]]; then
+          ENV="DEV"
+        else
+          ENV="SIT"
+        fi
+        
+        # Generate version string
+        VERSION_STRING="Ver. $YEAR.$MONTH.$WEEK_CODE$DAY_CODE$COMMIT_COUNT.$ENV"
+        
+        echo "year=$YEAR" >> $GITHUB_OUTPUT
+        echo "month=$MONTH" >> $GITHUB_OUTPUT
+        echo "week_code=$WEEK_CODE" >> $GITHUB_OUTPUT
+        echo "day_code=$DAY_CODE" >> $GITHUB_OUTPUT
+        echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+        echo "environment=$ENV" >> $GITHUB_OUTPUT
+        echo "version_string=$VERSION_STRING" >> $GITHUB_OUTPUT
+
+    - name: Update version control widget
+      run: |
+        # Update the version control widget with new version
+        VERSION_STRING="${{ steps.version.outputs.version_string }}"
+        YEAR="${{ steps.version.outputs.year }}"
+        MONTH="${{ steps.version.outputs.month }}"
+        WEEK_CODE="${{ steps.version.outputs.week_code }}"
+        DAY_CODE="${{ steps.version.outputs.day_code }}"
+        COMMIT_COUNT="${{ steps.version.outputs.commit_count }}"
+        ENVIRONMENT="${{ steps.version.outputs.environment }}"
+        
+        # Update version_control.dart
+        sed -i "s/static const int _versionYear = [0-9]*/static const int _versionYear = $YEAR/" lib/widgets/version_control.dart
+        sed -i "s/static const String _versionMonth = '[0-9]*'/static const String _versionMonth = '$MONTH'/" lib/widgets/version_control.dart
+        sed -i "s/static const String _versionWeekCode = '[A-Z]'/static const String _versionWeekCode = '$WEEK_CODE'/" lib/widgets/version_control.dart
+        sed -i "s/static const String _versionDayCode = '[A-Z]'/static const String _versionDayCode = '$DAY_CODE'/" lib/widgets/version_control.dart
+        sed -i "s/static const int _versionCommitNumber = [0-9]*/static const int _versionCommitNumber = $COMMIT_COUNT/" lib/widgets/version_control.dart
+        sed -i "s/static const String _versionEnvironment = '[A-Z]*'/static const String _versionEnvironment = '$ENVIRONMENT'/" lib/widgets/version_control.dart
+
+    - name: Generate commit data JSON
+      run: |
+        # Get recent commits (last 50 commits)
+        COMMITS_JSON=$(git log --oneline -50 --pretty=format:'{"author": "%an", "message": "%s", "timestamp": "%ct"},' | sed 's/,$//')
+        
+        # Create JSON structure
+        cat > assets/data/daily-commits.json << EOF
+        {
+          "version": "${{ steps.version.outputs.version_string }}",
+          "generated_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
+          "commits": [
+            $COMMITS_JSON
+          ],
+          "total_commits": ${{ steps.version.outputs.commit_count }},
+          "date_range": {
+            "start": "$(git log --reverse --format='%ct' | head -1 | xargs -I {} date -d @{} -u +'%Y-%m-%d')",
+            "end": "$(git log -1 --format='%ct' | xargs -I {} date -d @{} -u +'%Y-%m-%d')"
+          }
+        }
+        EOF
+
+    - name: Check for changes
+      id: changes
+      run: |
+        if [[ -n $(git status --porcelain) ]]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Commit and push changes
+      if: steps.changes.outputs.changed == 'true' || github.event.inputs.force_update == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add lib/widgets/version_control.dart
+        git add assets/data/daily-commits.json
+        git commit -m "feat: auto-update version to ${{ steps.version.outputs.version_string }}
+
+        - Updated version control widget
+        - Generated commit data JSON
+        - Total commits: ${{ steps.version.outputs.commit_count }}
+        - Environment: ${{ steps.version.outputs.environment }}"
+        git push
+
+    - name: Create summary
+      run: |
+        echo "## Version Control Update Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version**: ${{ steps.version.outputs.version_string }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Year**: ${{ steps.version.outputs.year }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Month**: ${{ steps.version.outputs.month }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Week Code**: ${{ steps.version.outputs.week_code }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Day Code**: ${{ steps.version.outputs.day_code }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit Count**: ${{ steps.version.outputs.commit_count }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ steps.version.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Changes Made**: ${{ steps.changes.outputs.changed }}" >> $GITHUB_STEP_SUMMARY

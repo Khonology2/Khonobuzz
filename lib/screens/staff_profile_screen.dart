@@ -8,7 +8,6 @@ import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import '../models/managed_user.dart';
 import '../widgets/floating_circles_particle_animation.dart';
-import '../widgets/version_control.dart';
 import '../widgets/profile_image_upload.dart';
 import 'dart:convert';
 import '../config/api_config.dart';
@@ -485,8 +484,6 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                 ),
               ),
             ),
-
-            const VersionControlOverlay(),
           ],
         ),
       ),

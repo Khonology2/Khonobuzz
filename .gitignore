@@ -28,3 +28,8 @@ key.properties
 .env
 **/.env
 node_modules
+
+# Generated localization files
+lib/generated/
+lib/l10n/*.dart
+.dart_tool/flutter_gen/gen_l10n/

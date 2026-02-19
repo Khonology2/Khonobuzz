@@ -7,7 +7,6 @@ import '../providers/user_provider.dart';
 import 'package:provider/provider.dart';
 import '../widgets/animations/loading_button.dart';
 import '../widgets/floating_circles_particle_animation.dart';
-import '../widgets/version_control.dart';
 
 class ManualLoginScreen extends StatefulWidget {
   const ManualLoginScreen({super.key});
@@ -462,7 +461,6 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                 ),
               ),
             ),
-            const VersionControlOverlay(),
           ],
         ),
       ),

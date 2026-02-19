@@ -1,0 +1,88 @@
+name: Version Control API
+
+on:
+  push:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  version-api:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Get version information
+      id: version
+      run: |
+        # Extract version from version_control.dart
+        YEAR=$(grep "static const int _versionYear" lib/widgets/version_control.dart | sed 's/.*= \([0-9]*\).*/\1/')
+        MONTH=$(grep "static const String _versionMonth" lib/widgets/version_control.dart | sed "s/.*= '\([0-9]*\)'.*/\1/")
+        WEEK_CODE=$(grep "static const String _versionWeekCode" lib/widgets/version_control.dart | sed "s/.*= '\([A-Z]\)'.*/\1/")
+        DAY_CODE=$(grep "static const String _versionDayCode" lib/widgets/version_control.dart | sed "s/.*= '\([A-Z]\)'.*/\1/")
+        COMMIT_COUNT=$(grep "static const int _versionCommitNumber" lib/widgets/version_control.dart | sed 's/.*= \([0-9]*\).*/\1/')
+        ENVIRONMENT=$(grep "static const String _versionEnvironment" lib/widgets/version_control.dart | sed "s/.*= '\([A-Z]*\)'.*/\1/")
+        
+        VERSION_STRING="Ver. $YEAR.$MONTH.$WEEK_CODE$DAY_CODE$COMMIT_COUNT.$ENVIRONMENT"
+        
+        echo "version_string=$VERSION_STRING" >> $GITHUB_OUTPUT
+        echo "year=$YEAR" >> $GITHUB_OUTPUT
+        echo "month=$MONTH" >> $GITHUB_OUTPUT
+        echo "week_code=$WEEK_CODE" >> $GITHUB_OUTPUT
+        echo "day_code=$DAY_CODE" >> $GITHUB_OUTPUT
+        echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+        echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+
+    - name: Create version API endpoint
+      run: |
+        # Create a simple API response
+        cat > version-api.json << EOF
+        {
+          "version": "${{ steps.version.outputs.version_string }}",
+          "components": {
+            "year": ${{ steps.version.outputs.year }},
+            "month": "${{ steps.version.outputs.month }}",
+            "week_code": "${{ steps.version.outputs.week_code }}",
+            "day_code": "${{ steps.version.outputs.day_code }}",
+            "commit_count": ${{ steps.version.outputs.commit_count }},
+            "environment": "${{ steps.version.outputs.environment }}"
+          },
+          "generated_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
+          "git_info": {
+            "branch": "${{ github.ref_name }}",
+            "commit_sha": "${{ github.sha }}",
+            "workflow_run": "${{ github.workflow }}",
+            "run_id": "${{ github.run_id }}"
+          }
+        }
+        EOF
+
+    - name: Upload version artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: version-info
+        path: version-api.json
+        retention-days: 30
+
+    - name: Display version info
+      run: |
+        echo "## Current Version Information" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version**: ${{ steps.version.outputs.version_string }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Year**: ${{ steps.version.outputs.year }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Month**: ${{ steps.version.outputs.month }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Week Code**: ${{ steps.version.outputs.week_code }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Day Code**: ${{ steps.version.outputs.day_code }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit Count**: ${{ steps.version.outputs.commit_count }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ steps.version.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit SHA**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

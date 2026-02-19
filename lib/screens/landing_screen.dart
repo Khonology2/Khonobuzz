@@ -7,9 +7,9 @@ import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
-import '../widgets/version_control.dart';
 import 'auth_screen.dart';
 import '../widgets/floating_circles_particle_animation.dart';
+import '../widgets/version_control_widget.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -209,7 +209,6 @@ class _LandingScreenState extends State<LandingScreen>
                 }
               },
             ),
-            const VersionControlOverlay(),
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -260,6 +259,15 @@ class _LandingScreenState extends State<LandingScreen>
                     ),
                   ),
                 ],
+              ),
+            ),
+            Positioned(
+              bottom: 20,
+              left: 0,
+              right: 0,
+              child: Align(
+                alignment: Alignment.center,
+                child: const VersionControlWidget(),
               ),
             ),
           ],
