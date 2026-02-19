@@ -123,7 +123,27 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
       return 'Daily Commits\n\nNo feature commits found for today';
     }
 
-    final commitsText = featureCommits
+    // Group by author and get the latest commit for each author
+    final latestCommitsByAuthor = <String, CommitInfo>{};
+    for (final commit in featureCommits) {
+      // Compare timestamps to get the latest commit per author
+      final currentLatest = latestCommitsByAuthor[commit.author];
+      if (currentLatest == null ||
+          DateTime.parse(
+            commit.timestamp,
+          ).isAfter(DateTime.parse(currentLatest.timestamp))) {
+        latestCommitsByAuthor[commit.author] = commit;
+      }
+    }
+
+    // Convert to list and sort by timestamp (most recent first)
+    final latestCommits = latestCommitsByAuthor.values.toList()
+      ..sort(
+        (a, b) =>
+            DateTime.parse(b.timestamp).compareTo(DateTime.parse(a.timestamp)),
+      );
+
+    final commitsText = latestCommits
         .map((commit) {
           return '${commit.author} - ${commit.message}';
         })
