@@ -4,7 +4,6 @@ import 'package:flutter_aad_oauth/flutter_aad_oauth.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/floating_circles_particle_animation.dart';
-import '../widgets/version_control.dart';
 
 class AdminProfileScreen extends StatefulWidget {
   final FlutterAadOauth? oauth;
@@ -200,7 +199,6 @@ class AdminProfileScreenState extends State<AdminProfileScreen>
                 ),
               ),
             ),
-            const VersionControlOverlay(),
           ],
         ),
       ),

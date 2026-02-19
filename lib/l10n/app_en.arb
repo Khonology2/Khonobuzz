@@ -1,0 +1,8 @@
+{
+  "@@locale": "en",
+  "versionControlTitle": "Version Control",
+  "loadingCommitData": "Loading commit data...",
+  "failedToLoadCommitData": "Failed to load commit data",
+  "noCommitsFound": "No commits found for today",
+  "dailyCommits": "Daily Commits"
+}

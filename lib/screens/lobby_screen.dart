@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'auth_screen.dart';
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart';
 import 'package:video_player/video_player.dart';
-import '../widgets/version_control.dart';
 
 class LobbyScreen extends StatefulWidget {
   final FlutterAadOauth? oauth;
@@ -355,7 +354,6 @@ class LobbyScreenState extends State<LobbyScreen> {
               ),
             ),
           ),
-          const VersionControlOverlay(),
         ],
       ),
     );

@@ -8,7 +8,6 @@ import 'lobby_screen.dart';
 import 'dart:async';
 import '../widgets/animations/loading_button.dart';
 import '../widgets/floating_circles_particle_animation.dart';
-import '../widgets/version_control.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final FlutterAadOauth? oauth;
@@ -618,7 +617,6 @@ class OnboardingScreenState extends State<OnboardingScreen>
                 ),
               ),
             ),
-            const VersionControlOverlay(),
           ],
         ),
       ),

@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import '../providers/auth_provider.dart';
 import '../widgets/floating_circles_particle_animation.dart';
-import '../widgets/version_control.dart';
 import '../widgets/profile_image_upload.dart';
 import 'dart:convert';
 import '../config/api_config.dart';
@@ -631,8 +630,6 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
                 ),
               ),
             ),
-
-            const VersionControlOverlay(),
           ],
         ),
       ),

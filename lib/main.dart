@@ -16,7 +16,6 @@ import 'screens/onboarding_alert_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
 import 'widgets/side_menu.dart';
-import 'widgets/version_control.dart';
 import 'widgets/profile_icon.dart';
 import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
 import 'firebase_options.dart'; // Import generated Firebase options
@@ -314,7 +313,6 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
           ProfileIcon(hasOnboardingAlerts: hasOnboardingAlerts),
-          const VersionControlOverlay(),
         ],
       ),
     );
