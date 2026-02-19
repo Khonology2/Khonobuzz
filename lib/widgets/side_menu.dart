@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../screens/landing_screen.dart'; // Added import for LandingScreen
+import 'version_control_widget.dart'; // Added import for VersionControlWidget
 
 class MenuItemWidget extends StatefulWidget {
   final String unselectedIconPath;
@@ -478,7 +479,21 @@ class _SideMenuState extends State<SideMenu> {
                   onTap: () => widget.onItemSelected(9),
                 ),
                 const Divider(color: Colors.white54),
-                // Logout item with hover functionality
+                // Version Control Widget at bottom of sidebar
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
+                  child: Center(
+                    child: const VersionControlWidget(
+                      fontSize: 10.0, // Smaller font for sidebar
+                    ),
+                  ),
+                ),
+                // Spacer to push logout to bottom
+                const Spacer(),
+                // Logout item with hover functionality - moved to very bottom
                 _LogoutMenuItem(
                   isExpanded: _isExpanded,
                   onTap: () {

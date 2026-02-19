@@ -2,6 +2,7 @@ name: Version Control Release
 
 on:
   push:
+    branches: ['*']  # Trigger on all branches
     tags:
       - 'v*'
   workflow_dispatch:

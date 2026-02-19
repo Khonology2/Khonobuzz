@@ -89,12 +89,12 @@
    - Navigate to landing screen
    - Look for version control at bottom center
    - **Hover over version text** (on web/desktop)
-   - **Check tooltip** shows commit data
+   - **Check tooltip** shows only feature commits in format: "GitHub username - feature commit message"
 
 4. **Verify Data Loading**
-   - Tooltip should show "Daily Commits" with author names
+   - Tooltip should show "Daily Commits" with only commits starting with "feature"
    - Version should update automatically every 5 seconds
-   - No "Loading commit data..." message after initial load
+   - Non-feature commits should not appear in tooltip
 
 #### Step 5: Test Error Scenarios
 

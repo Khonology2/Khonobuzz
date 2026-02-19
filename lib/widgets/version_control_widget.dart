@@ -7,13 +7,11 @@ import 'package:khonobuzz/services/commit_service.dart';
 class VersionControlWidget extends StatefulWidget {
   const VersionControlWidget({
     super.key,
-    this.version = 'Ver. 2026.02.CD1.0.SIT',
     this.fontSize = 12.0,
     this.textColor = Colors.white70,
     this.hoverColor = Colors.white,
   });
 
-  final String version;
   final double fontSize;
   final Color textColor;
   final Color hoverColor;
@@ -29,6 +27,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   late Animation<double> _scaleAnimation;
   late Timer _refreshTimer;
   String _tooltipMessage = 'Loading commit data...';
+  String _currentVersion = 'Ver. 2026.02.CD0.SIT';
 
   @override
   void initState() {
@@ -77,7 +76,31 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
       final commitData = await CommitService.loadCommitData();
 
       if (mounted) {
+        // Generate dynamic version: 2026.{MM}.{week-letter}{day-letter}{commit-count}.SIT
+        final now = DateTime.now();
+
+        // Get current month (MM format)
+        final monthStr = now.month.toString().padLeft(2, '0');
+
+        // Calculate week of the month (A=1st week, B=2nd week, C=3rd week, etc.)
+        final firstDayOfMonth = DateTime(now.year, now.month, 1);
+        final daysIntoMonth = now.difference(firstDayOfMonth).inDays;
+        final weekOfMonth = ((daysIntoMonth / 7).floor() + 1);
+        final weekLetter = String.fromCharCode(
+          64 + weekOfMonth,
+        ); // A=1, B=2, C=3, etc.
+
+        // Get day of week (A=Monday, B=Tuesday, C=Wednesday, D=Thursday, etc.)
+        final dayOfWeek = now.weekday; // 1=Monday, 7=Sunday
+        final dayLetter = String.fromCharCode(
+          64 + dayOfWeek,
+        ); // A=1, B=2, C=3, D=4, etc.
+
+        final dynamicVersion =
+            'Ver. 2026.${monthStr}.${weekLetter}${dayLetter}${commitData.totalCommits}.SIT';
+
         setState(() {
+          _currentVersion = dynamicVersion;
           _tooltipMessage = _generateTooltipMessage(commitData);
         });
       }
@@ -91,11 +114,16 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   }
 
   String _generateTooltipMessage(CommitData commitData) {
-    if (commitData.commits.isEmpty) {
-      return 'Daily Commits\n\nNo commits found for today';
+    // Filter commits that start with 'Feature' (case sensitive as specified)
+    final featureCommits = commitData.commits
+        .where((commit) => commit.message.startsWith('Feature'))
+        .toList();
+
+    if (featureCommits.isEmpty) {
+      return 'Daily Commits\n\nNo feature commits found for today';
     }
 
-    final commitsText = commitData.commits
+    final commitsText = featureCommits
         .map((commit) {
           return '${commit.author} - ${commit.message}';
         })
@@ -141,7 +169,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
             return Transform.scale(
               scale: _scaleAnimation.value,
               child: Text(
-                widget.version,
+                _currentVersion,
                 style: TextStyle(
                   fontSize: widget.fontSize,
                   color: _colorAnimation.value,
