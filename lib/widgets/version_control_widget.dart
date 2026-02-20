@@ -76,16 +76,32 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
       final commitData = await CommitService.loadCommitData();
 
       if (mounted) {
-        // Generate dynamic version: 2026.{MM}.{week-letter}{day-letter}{commit-count}.SIT
+        // Generate dynamic version: {YYYY}.{MM}.{week-letter}{day-letter}{commit-count}.SIT
         final now = DateTime.now();
+
+        // Get current year
+        final yearStr = now.year.toString();
 
         // Get current month (MM format)
         final monthStr = now.month.toString().padLeft(2, '0');
 
         // Calculate week of the month (A=1st week, B=2nd week, C=3rd week, etc.)
+        // Find the first day of the month and determine which week it falls into
         final firstDayOfMonth = DateTime(now.year, now.month, 1);
-        final daysIntoMonth = now.difference(firstDayOfMonth).inDays;
-        final weekOfMonth = ((daysIntoMonth / 7).floor() + 1);
+        final firstDayWeekday = firstDayOfMonth.weekday; // 1=Monday, 7=Sunday
+
+        // Calculate how many days to subtract to get to the previous Monday
+        // If first day is Monday (1), offset = 0
+        // If first day is Tuesday (2), offset = 1 (go back to Monday)
+        // If first day is Sunday (7), offset = 6 (go back to Monday)
+        final offsetToMonday = (firstDayWeekday - 1) % 7;
+        final firstMondayOfMonth = firstDayOfMonth.subtract(
+          Duration(days: offsetToMonday),
+        );
+
+        // Calculate which week of the month this date falls into
+        final daysSinceFirstMonday = now.difference(firstMondayOfMonth).inDays;
+        final weekOfMonth = (daysSinceFirstMonday / 7).floor() + 1;
         final weekLetter = String.fromCharCode(
           64 + weekOfMonth,
         ); // A=1, B=2, C=3, etc.
@@ -97,7 +113,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
         ); // A=1, B=2, C=3, D=4, etc.
 
         final dynamicVersion =
-            'Ver. 2026.$monthStr.$weekLetter$dayLetter${commitData.totalCommits}.SIT';
+            'Ver. $yearStr.$monthStr.$weekLetter$dayLetter${commitData.totalCommits}.SIT';
 
         setState(() {
           _currentVersion = dynamicVersion;
