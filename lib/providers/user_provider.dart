@@ -69,7 +69,8 @@ class UserProvider extends ChangeNotifier {
 
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
       final usersData = (decoded['users'] as List<dynamic>? ?? [])
-          .cast<Map<String, dynamic>>();
+          .whereType<Map<String, dynamic>>()
+          .toList();
 
       final users = usersData
           .map((user) => ManagedUser.fromApi(user))

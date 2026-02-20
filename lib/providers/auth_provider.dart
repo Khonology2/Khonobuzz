@@ -50,7 +50,7 @@ class AuthProvider extends ChangeNotifier {
     Map<String, String>? headers,
     Object? body,
     int maxRetries = 1,
-    Duration timeout = const Duration(seconds: 5),
+    Duration timeout = const Duration(seconds: 10),
   }) async {
     http.Response? lastResponse;
     Object? lastError;
@@ -710,21 +710,18 @@ class AuthProvider extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final usersData = json.decode(response.body);
-        final users = (usersData['users'] as List<dynamic>? ?? []);
+        final users = usersData['users'] as List<dynamic>? ?? [];
 
         try {
-          final foundUser =
-              users.firstWhere(
-                    (u) =>
-                        (u as Map<String, dynamic>)['email']
-                            ?.toString()
-                            .toLowerCase() ==
-                        _userEmail!.toLowerCase(),
-                  )
-                  as Map<String, dynamic>?;
+          final foundUser = users.firstWhere(
+            (u) =>
+                u is Map<String, dynamic> &&
+                u['email']?.toString().toLowerCase() ==
+                    _userEmail!.toLowerCase(),
+          );
 
-          final moduleAccessRaw = foundUser?['moduleAccess'] as String?;
-          final moduleAccessRoleRaw = foundUser?['moduleAccessRole'] as String?;
+          final moduleAccessRaw = foundUser['moduleAccess'] as String?;
+          final moduleAccessRoleRaw = foundUser['moduleAccessRole'] as String?;
 
           // Derive moduleAccess from moduleAccessRole if moduleAccess is empty
           _userModuleAccess = _deriveModuleAccessFromRole(
