@@ -1,16 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'screens/dashboard_screen.dart';
-import 'screens/resource_allocation_screen.dart';
-import 'screens/time_keeping_screen.dart';
-import 'screens/analytics_screen.dart';
-import 'screens/profile_screen.dart';
-import 'screens/project_data_screen.dart';
-import 'screens/projects_screen.dart';
-import 'screens/module_screen.dart';
 import 'screens/entity_management_screen.dart';
 import 'screens/user_management_screen.dart';
 import 'screens/module_access_screen.dart';
+import 'screens/module_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/onboarding_alert_screen.dart';
 import 'providers/auth_provider.dart';
@@ -61,9 +54,9 @@ class MyApp extends StatelessWidget {
         ),
         home: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
-            // Always use Modules screen (index 9) for authenticated users on login
+            // Always use Modules screen (index 3) for authenticated users on login
             // This ensures both Staff and Admin users land on Modules screen
-            final initialIndex = authProvider.isAuthenticated ? 9 : null;
+            final initialIndex = authProvider.isAuthenticated ? 3 : null;
 
             return authProvider.isAuthenticated
                 ? MainScreen(
@@ -94,7 +87,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 9; // Initialize to Modules screen (index 9)
+  int _selectedIndex = 3; // Initialize to Modules screen (index 3)
   bool _isAlertPanelOpen = false;
 
   // Check if current user is Admin
@@ -106,15 +99,15 @@ class _MainScreenState extends State<MainScreen> {
 
   // Check if screen index is Admin-only
   bool _isAdminOnlyScreen(int index) {
-    // Indices 6 (User Management), 7 (Entity Management), and 8 (Module Access) are Admin-only
-    return index == 6 || index == 7 || index == 8;
+    // Indices 0 (User Management), 1 (Entity Management), and 2 (Module Access) are Admin-only
+    return index == 0 || index == 1 || index == 2;
   }
 
   // Get allowed screen index for Staff users
   int _getAllowedScreenIndex(int requestedIndex) {
     if (!_isAdmin() && _isAdminOnlyScreen(requestedIndex)) {
       // Staff users trying to access Admin screens are redirected to Modules
-      return 9;
+      return 3;
     }
     return requestedIndex;
   }
@@ -122,10 +115,10 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    // Both Staff and Admin users should ALWAYS land on Modules screen (index 9) on login
-    // Ignore widget.initialIndex and always use Modules screen (index 9) to prevent
+    // Both Staff and Admin users should ALWAYS land on Modules screen (index 3) on login
+    // Ignore widget.initialIndex and always use Modules screen (index 3) to prevent
     // old stored screen indices from interfering with login redirects
-    final finalIndex = 9; // Always Modules screen on login
+    final finalIndex = 3; // Always Modules screen on login
 
     _selectedIndex = finalIndex;
 
@@ -148,17 +141,10 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   List<Widget> get _screens => [
-    const DashboardScreen(),
-    const ResourceAllocationScreen(),
-    const TimeKeepingScreen(),
-    const ProjectDataScreen(),
-    const AnalyticsScreen(),
-    const ProfileScreen(),
     const UserManagementScreen(),
     const EntityManagementScreen(),
     const ModuleAccessScreen(),
-    ModuleScreen(), // Modules screen at index 9
-    const ProjectsScreen(), // Projects screen at index 10
+    ModuleScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -168,9 +154,9 @@ class _MainScreenState extends State<MainScreen> {
     if (!_isAdmin() && _isAdminOnlyScreen(index)) {
       // Redirect Staff users to Modules screen if they try to access Admin screens
       setState(() {
-        _selectedIndex = 9;
+        _selectedIndex = 3;
       });
-      context.read<AuthProvider>().saveCurrentScreenIndex(9);
+      context.read<AuthProvider>().saveCurrentScreenIndex(3);
 
       // Show message to user
       ScaffoldMessenger.of(context).showSnackBar(

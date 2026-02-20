@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../screens/landing_screen.dart'; // Added import for LandingScreen
+import '../screens/landing_screen.dart';
 import 'version_control_widget.dart'; // Added import for VersionControlWidget
 
 class MenuItemWidget extends StatefulWidget {
@@ -381,56 +381,6 @@ class _SideMenuState extends State<SideMenu> {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                /*
-                MenuItemWidget(
-                  unselectedIconPath: 'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
-                  selectedIconPath: 'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
-                  title: 'Dashboard',
-                  isSelected: widget.selectedIndex == 0,
-                  isExpanded: _isExpanded,
-                  onTap: () => widget.onItemSelected(0),
-                ),
-                MenuItemWidget(
-                  unselectedIconPath: 'assets/images/Networking_Collaboration/Networking_Collaboration_White Badge__Red.png',
-                  selectedIconPath: 'assets/images/Networking_Collaboration/Collaboration_Red Badge_White.png',
-                  title: 'Resource Allocation',
-                  isSelected: widget.selectedIndex == 1,
-                  isExpanded: _isExpanded,
-                  onTap: () => widget.onItemSelected(1),
-                ),
-                MenuItemWidget(
-                  unselectedIconPath: 'assets/images/Time Allocation_Approval/Time Allocation_Approval_White Badge_Red.png',
-                  selectedIconPath: 'assets/images/Time Allocation_Approval/Allocation_Red Badge_White.png',
-                  title: 'Time Keeping',
-                  isSelected: widget.selectedIndex == 2,
-                  isExpanded: _isExpanded,
-                  onTap: () => widget.onItemSelected(2),
-                ),
-                MenuItemWidget(
-                  unselectedIconPath: 'assets/images/Project Management/Project Management_White Badge_Red.png',
-                  selectedIconPath: 'assets/images/Project Management/Project_Red Badge_White.png',
-                  title: 'Project Data',
-                  isSelected: widget.selectedIndex == 3,
-                  isExpanded: _isExpanded,
-                  onTap: () => widget.onItemSelected(3),
-                ),
-                MenuItemWidget(
-                  unselectedIconPath: 'assets/images/Business Growth_Development/Business Growth_Development_White Badge_Red.png',
-                  selectedIconPath: 'assets/images/Business Growth_Development/Growth_Development_Red Badge_White.png',
-                  title: 'Analytics',
-                  isSelected: widget.selectedIndex == 4,
-                  isExpanded: _isExpanded,
-                  onTap: () => widget.onItemSelected(4),
-                ),
-                MenuItemWidget(
-                  unselectedIconPath: 'assets/images/Account_User Profile/User Profile_White Badge_Red.png',
-                  selectedIconPath: 'assets/images/Account_User Profile/red_user_profile.png',
-                  title: 'Profile',
-                  isSelected: widget.selectedIndex == 5,
-                  isExpanded: _isExpanded,
-                  onTap: () => widget.onItemSelected(5),
-                ),
-                */
                 // User Management - Admin only
                 if (_isAdmin)
                   MenuItemWidget(
@@ -439,9 +389,9 @@ class _SideMenuState extends State<SideMenu> {
                     selectedIconPath:
                         'assets/images/HR_Team_Management/red_Management_Red_Badge_White.png',
                     title: 'User Management',
-                    isSelected: widget.selectedIndex == 6,
+                    isSelected: widget.selectedIndex == 0,
                     isExpanded: _isExpanded,
-                    onTap: () => widget.onItemSelected(6),
+                    onTap: () => widget.onItemSelected(0),
                   ),
                 // Entity Management - Admin only
                 if (_isAdmin)
@@ -451,9 +401,9 @@ class _SideMenuState extends State<SideMenu> {
                     selectedIconPath:
                         'assets/images/Task_Management/Task_Red Badge_White.png',
                     title: 'Entity Management',
-                    isSelected: widget.selectedIndex == 7,
+                    isSelected: widget.selectedIndex == 1,
                     isExpanded: _isExpanded,
-                    onTap: () => widget.onItemSelected(7),
+                    onTap: () => widget.onItemSelected(1),
                   ),
                 // Module Access - Admin only
                 if (_isAdmin)
@@ -463,9 +413,9 @@ class _SideMenuState extends State<SideMenu> {
                     selectedIconPath:
                         'assets/images/Concentration_Key_Focus/Concentration_Key_Focus_Red_Badge_White.png',
                     title: 'Module Access',
-                    isSelected: widget.selectedIndex == 8,
+                    isSelected: widget.selectedIndex == 2,
                     isExpanded: _isExpanded,
-                    onTap: () => widget.onItemSelected(8),
+                    onTap: () => widget.onItemSelected(2),
                   ),
                 // Modules - Available to all users (Staff and Admin)
                 MenuItemWidget(
@@ -474,9 +424,9 @@ class _SideMenuState extends State<SideMenu> {
                   selectedIconPath:
                       'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
                   title: 'Modules',
-                  isSelected: widget.selectedIndex == 9,
+                  isSelected: widget.selectedIndex == 3,
                   isExpanded: _isExpanded,
-                  onTap: () => widget.onItemSelected(9),
+                  onTap: () => widget.onItemSelected(3),
                 ),
                 const Divider(color: Colors.white54),
                 // Version Control Widget at bottom of sidebar
