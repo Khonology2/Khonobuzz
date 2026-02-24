@@ -60,10 +60,7 @@ class _MenuItemWidgetState extends State<MenuItemWidget> {
       onExit: (_) => setState(() => _isHovering = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        margin: EdgeInsets.symmetric(
-          horizontal: widget.isExpanded ? 8 : 4,
-          vertical: 2,
-        ),
+        margin: EdgeInsets.zero,
         decoration: BoxDecoration(
           color: widget.isSelected
               ? const Color(0xFFC10D00) // Solid red for selected
@@ -218,10 +215,7 @@ class _LogoutMenuItemState extends State<_LogoutMenuItem> {
       onExit: (_) => setState(() => _isHovering = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        margin: EdgeInsets.symmetric(
-          horizontal: widget.isExpanded ? 8 : 4,
-          vertical: 2,
-        ),
+        margin: EdgeInsets.zero,
         decoration: BoxDecoration(
           color: _isHovering
               ? const Color(0xFFC10D00).withAlpha(44) // Light red for hover
@@ -428,7 +422,6 @@ class _SideMenuState extends State<SideMenu> {
                   isExpanded: _isExpanded,
                   onTap: () => widget.onItemSelected(3),
                 ),
-                const Divider(color: Colors.white54),
                 // Version Control Widget at bottom of sidebar
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -443,7 +436,7 @@ class _SideMenuState extends State<SideMenu> {
                 ),
                 // Spacer to push logout to bottom
                 const Spacer(),
-                // Logout item with hover functionality - moved to very bottom
+                // Logout item with hover functionality - at very bottom
                 _LogoutMenuItem(
                   isExpanded: _isExpanded,
                   onTap: () {
