@@ -326,12 +326,12 @@ class _SideMenuState extends State<SideMenu> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       width: sidebarWidth,
-      color: const Color(0xFF2A2A2A),
+      color: const Color(0xFF1F2840),
       child: Column(
         children: [
           // Header with toggle button
           Container(
-            decoration: const BoxDecoration(color: Color(0xFF1A1A1A)),
+            decoration: const BoxDecoration(color: Color(0xFF1F2840)),
             child: Column(
               children: [
                 // Toggle button row - Fixed overflow issue
