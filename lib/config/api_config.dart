@@ -15,7 +15,7 @@ class ApiConfig {
 
       // Explicit overrides via query parameter
       if (queryParams['backend'] == 'prod') {
-        const hostedBackend = 'https://khonobuzz-backend-ac0j.onrender.com';
+        const hostedBackend = 'https://khonology-buzz-backend.onrender.com';
         if (kDebugMode) {
           print(
             '[ApiConfig] Web: backend=prod override detected, using: $hostedBackend',
@@ -35,7 +35,7 @@ class ApiConfig {
 
       // Hosted web builds (onrender) use the hosted backend
       if (host.contains('onrender.com') || host.contains('khonobuzz-web')) {
-        const hostedBackend = 'https://khonobuzz-backend-ac0j.onrender.com';
+        const hostedBackend = 'https://khonology-buzz-backend.onrender.com';
         if (kDebugMode) {
           print(
             '[ApiConfig] Web: detected hosted environment, using backend: $hostedBackend',
@@ -55,7 +55,7 @@ class ApiConfig {
     }
 
     if (!kDebugMode) {
-      final backendUrl = 'https://khonobuzz-backend-ac0j.onrender.com';
+      final backendUrl = 'https://khonology-buzz-backend.onrender.com';
       return backendUrl;
     }
 
