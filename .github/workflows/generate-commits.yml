@@ -1,8 +1,9 @@
 name: Generate Daily Commits
  
 on:
-  push:
-    branches: ['*'] # Include ALL branches, including new ones created by developers
+  schedule:
+    # Run daily at 4:30 PM UTC (2:30 PM SAST, 6:30 AM PST)
+    - cron: '30 16 * * *'
   workflow_dispatch: # Allow manual trigger
  
 permissions:
@@ -46,14 +47,21 @@ jobs:
           COMMIT_COUNT=0
         fi
  
-        # Get current version in YYYY-MM-WD-N.SIT format
+        # Get current version in YYYY-MM-WD-N.SIT format with 4-week cycle
         YEAR=$(date -u +"%Y")
         MONTH=$(date -u +"%m")
-        WEEK_OF_MONTH=$(date -u +"%V") # Week number of year
-        WEEK_OF_MONTH_SINGLE=$(echo $WEEK_OF_MONTH | tail -c 2) # Last digit for single character
+        DAY=$(date -u +"%d")
+        
+        # Calculate week of month using 4-week cycle (same as Flutter app)
+        # Week 1 = A, Week 2 = B, Week 3 = C, Week 4 = D, then cycles back to A
+        WEEK_OF_MONTH=$((($DAY - 1) / 7 + 1))
+        WEEK_LETTER=$(echo "ABCD" | cut -c$((($WEEK_OF_MONTH - 1) % 4 + 1)))
+        
+        # Get day of week letter (A=Monday, B=Tuesday, etc.)
         DAY_OF_WEEK=$(date -u +"%u") # 1=Monday, 7=Sunday
-        DAY_LETTER=$(date -u +"%A" | head -c 1) # First letter of weekday (M, T, W, T, F, S, S)
-        VERSION="${YEAR}.${MONTH}.${WEEK_OF_MONTH_SINGLE}${DAY_LETTER}${COMMIT_COUNT}.SIT"
+        DAY_LETTER=$(echo "ABCDEFG" | cut -c$DAY_OF_WEEK)
+        
+        VERSION="${YEAR}.${MONTH}.${WEEK_LETTER}${DAY_LETTER}${COMMIT_COUNT}.SIT"
  
         # Create JSON structure using jq for proper formatting
         jq -n \
