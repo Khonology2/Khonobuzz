@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-// ignore: unnecessary_import
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
@@ -22,8 +20,6 @@ class ModuleScreen extends StatefulWidget {
 class _ModuleScreenState extends State<ModuleScreen> {
   bool _isLoadingModuleAccess = false;
   final ScrollController _scrollController = ScrollController();
-  String? _generatedToken;
-  bool _isGeneratingToken = false;
 
   @override
   void initState() {
@@ -36,103 +32,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
   void dispose() {
     _scrollController.dispose();
     super.dispose();
-  }
-
-  Future<void> _generateToken() async {
-    if (!mounted) return;
-
-    setState(() {
-      _isGeneratingToken = true;
-    });
-
-    try {
-      // Get the current user's authentication token from AuthProvider
-      final authProvider = context.read<AuthProvider>();
-      final userToken = authProvider.userToken;
-
-      if (userToken == null || userToken.isEmpty) {
-        // If no token exists, try to fetch it
-        await authProvider.fetchUserToken();
-
-        // Wait a bit for the token to be set
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        final refreshedToken = authProvider.userToken;
-        if (refreshedToken == null || refreshedToken.isEmpty) {
-          if (mounted) {
-            setState(() {
-              _isGeneratingToken = false;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'No authentication token available. Please log in again.',
-                  style: TextStyle(fontFamily: 'Poppins'),
-                ),
-              ),
-            );
-          }
-          return;
-        }
-
-        if (mounted) {
-          setState(() {
-            _generatedToken = refreshedToken;
-            _isGeneratingToken = false;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _generatedToken = userToken;
-            _isGeneratingToken = false;
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isGeneratingToken = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to retrieve token: ${e.toString()}',
-              style: const TextStyle(fontFamily: 'Poppins'),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _copyTokenToClipboard() async {
-    if (_generatedToken == null) return;
-
-    try {
-      await Clipboard.setData(ClipboardData(text: _generatedToken!));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Token copied to clipboard!',
-              style: TextStyle(fontFamily: 'Poppins'),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to copy token: ${e.toString()}',
-              style: TextStyle(fontFamily: 'Poppins'),
-            ),
-          ),
-        );
-      }
-    }
   }
 
   Future<void> _loadModuleAccess() async {
@@ -364,8 +263,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Skills heatmap',
                                   ],
                                   buttonText: 'Launch',
-                                  url:
-                                      'https://resource-capacity.netlify.app/',
+                                  url: 'https://resource-capacity.netlify.app/',
                                   moduleKey: 'skills_heatmap',
                                 ),
                               );
@@ -429,141 +327,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                               crossAxisAlignment: CrossAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // Token Generation Section
-                                Container(
-                                  width: 600,
-                                  margin: const EdgeInsets.only(bottom: 40.0),
-                                  padding: const EdgeInsets.all(24.0),
-                                  decoration: BoxDecoration(
-                                    color: primaryDark.withValues(alpha: 0.8),
-                                    borderRadius: BorderRadius.circular(16.0),
-                                    border: Border.all(
-                                      color: Colors.white24,
-                                      width: 1.0,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.3,
-                                        ),
-                                        blurRadius: 20,
-                                        offset: const Offset(0, 10),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Text(
-                                        'API Token Generator',
-                                        style: TextStyle(
-                                          fontSize: 20.0,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                          fontFamily: 'Poppins',
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16.0),
-                                      const Text(
-                                        'Generate a unique token for API access. Click generate to create a new token.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 14.0,
-                                          color: Colors.white70,
-                                          fontFamily: 'Poppins',
-                                        ),
-                                      ),
-                                      const SizedBox(height: 20.0),
-                                      if (_generatedToken != null) ...[
-                                        Container(
-                                          padding: const EdgeInsets.all(16.0),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.3,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              8.0,
-                                            ),
-                                            border: Border.all(
-                                              color: primaryAccent.withValues(
-                                                alpha: 0.5,
-                                              ),
-                                              width: 1.0,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  _generatedToken!,
-                                                  style: const TextStyle(
-                                                    fontSize: 16.0,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: Colors.white,
-                                                    fontFamily: 'monospace',
-                                                    letterSpacing: 1.2,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12.0),
-                                              IconButton(
-                                                onPressed:
-                                                    _copyTokenToClipboard,
-                                                icon: const Icon(
-                                                  Icons.copy,
-                                                  color: primaryAccent,
-                                                ),
-                                                tooltip: 'Copy to clipboard',
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(height: 16.0),
-                                      ],
-                                      ElevatedButton.icon(
-                                        onPressed: _isGeneratingToken
-                                            ? null
-                                            : _generateToken,
-                                        icon: _isGeneratingToken
-                                            ? const SizedBox(
-                                                width: 20,
-                                                height: 20,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2.0,
-                                                  valueColor:
-                                                      AlwaysStoppedAnimation<
-                                                        Color
-                                                      >(Colors.white),
-                                                ),
-                                              )
-                                            : const Icon(Icons.refresh),
-                                        label: Text(
-                                          _isGeneratingToken
-                                              ? 'Generating...'
-                                              : 'Generate Token',
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: primaryAccent,
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 24.0,
-                                            vertical: 12.0,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              25.0,
-                                            ),
-                                          ),
-                                          textStyle: const TextStyle(
-                                            fontSize: 16.0,
-                                            fontWeight: FontWeight.bold,
-                                            fontFamily: 'Poppins',
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                                 if (topRow.isNotEmpty)
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
