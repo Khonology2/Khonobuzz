@@ -434,9 +434,7 @@ class _SideMenuState extends State<SideMenu> {
                     ),
                   ),
                 ),
-                // Spacer to push logout to bottom
-                const Spacer(),
-                // Logout item with hover functionality - at very bottom
+                // Logout item with hover functionality - directly after version control
                 _LogoutMenuItem(
                   isExpanded: _isExpanded,
                   onTap: () {
