@@ -85,26 +85,13 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
         // Get current month (MM format)
         final monthStr = now.month.toString().padLeft(2, '0');
 
-        // Calculate week of the month (A=1st week, B=2nd week, C=3rd week, etc.)
-        // Find the first day of the month and determine which week it falls into
-        final firstDayOfMonth = DateTime(now.year, now.month, 1);
-        final firstDayWeekday = firstDayOfMonth.weekday; // 1=Monday, 7=Sunday
-
-        // Calculate how many days to subtract to get to the previous Monday
-        // If first day is Monday (1), offset = 0
-        // If first day is Tuesday (2), offset = 1 (go back to Monday)
-        // If first day is Sunday (7), offset = 6 (go back to Monday)
-        final offsetToMonday = (firstDayWeekday - 1) % 7;
-        final firstMondayOfMonth = firstDayOfMonth.subtract(
-          Duration(days: offsetToMonday),
-        );
-
-        // Calculate which week of the month this date falls into
-        final daysSinceFirstMonday = now.difference(firstMondayOfMonth).inDays;
-        final weekOfMonth = (daysSinceFirstMonday / 7).floor() + 1;
+        // Calculate week of the month using a 4-week cycle
+        // Week 1 = A, Week 2 = B, Week 3 = C, Week 4 = D, then cycles back to A
+        final weekOfMonth =
+            ((now.day - 1) ~/ 7) + 1; // 1-4 based on day of month
         final weekLetter = String.fromCharCode(
-          64 + weekOfMonth,
-        ); // A=1, B=2, C=3, etc.
+          64 + ((weekOfMonth - 1) % 4) + 1, // Cycle through A-D
+        ); // A=1, B=2, C=3, D=4, then back to A
 
         // Get day of week (A=Monday, B=Tuesday, C=Wednesday, D=Thursday, etc.)
         final dayOfWeek = now.weekday; // 1=Monday, 7=Sunday

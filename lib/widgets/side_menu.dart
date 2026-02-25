@@ -422,7 +422,9 @@ class _SideMenuState extends State<SideMenu> {
                   isExpanded: _isExpanded,
                   onTap: () => widget.onItemSelected(3),
                 ),
-                // Version Control Widget at bottom of sidebar
+                // Small spacing before logout button
+                const SizedBox(height: 310.0),
+                // Version Control Widget positioned above logout button
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16.0,
@@ -434,7 +436,7 @@ class _SideMenuState extends State<SideMenu> {
                     ),
                   ),
                 ),
-                // Logout item with hover functionality - directly after version control
+                // Logout item with hover functionality - directly below version control
                 _LogoutMenuItem(
                   isExpanded: _isExpanded,
                   onTap: () {
