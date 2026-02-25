@@ -1,8 +1,22 @@
 import 'package:flutter/foundation.dart'
     show kIsWeb, kDebugMode, defaultTargetPlatform, TargetPlatform;
+import 'dart:io' show Platform;
 
 class ApiConfig {
+  // Environment variable names
+  static const String _backendUrlEnv = 'BACKEND_URL';
+  static const String _corsOriginEnv = 'CORS_ORIGIN';
+
   static String get baseUrl {
+    // First, check for environment variables (works for mobile/desktop and some web deployments)
+    final envBackendUrl = _getEnvVar(_backendUrlEnv);
+    if (envBackendUrl != null && envBackendUrl.isNotEmpty) {
+      if (kDebugMode) {
+        print('[ApiConfig] Using backend URL from environment: $envBackendUrl');
+      }
+      return envBackendUrl;
+    }
+
     if (kIsWeb) {
       final uri = Uri.base;
       final host = uri.host;
@@ -15,7 +29,10 @@ class ApiConfig {
 
       // Explicit overrides via query parameter
       if (queryParams['backend'] == 'prod') {
-        const hostedBackend = 'https://khonology-buzz-backend.onrender.com';
+        const hostedBackend = String.fromEnvironment(
+          _backendUrlEnv,
+          defaultValue: 'https://khonology-buzz-backend.onrender.com',
+        );
         if (kDebugMode) {
           print(
             '[ApiConfig] Web: backend=prod override detected, using: $hostedBackend',
@@ -24,7 +41,10 @@ class ApiConfig {
         return hostedBackend;
       }
       if (queryParams['backend'] == 'local') {
-        const localBackend = 'http://localhost:5000';
+        const localBackend = String.fromEnvironment(
+          'LOCAL_BACKEND_URL',
+          defaultValue: 'http://localhost:5000',
+        );
         if (kDebugMode) {
           print(
             '[ApiConfig] Web: backend=local override detected, using: $localBackend',
@@ -35,7 +55,10 @@ class ApiConfig {
 
       // Hosted web builds (onrender) use the hosted backend
       if (host.contains('onrender.com') || host.contains('khonobuzz-web')) {
-        const hostedBackend = 'https://khonology-buzz-backend.onrender.com';
+        const hostedBackend = String.fromEnvironment(
+          _backendUrlEnv,
+          defaultValue: 'https://khonology-buzz-backend.onrender.com',
+        );
         if (kDebugMode) {
           print(
             '[ApiConfig] Web: detected hosted environment, using backend: $hostedBackend',
@@ -45,7 +68,10 @@ class ApiConfig {
       }
 
       // Default for local web development is the local backend
-      const localBackend = 'http://localhost:5000';
+      const localBackend = String.fromEnvironment(
+        'LOCAL_BACKEND_URL',
+        defaultValue: 'http://localhost:5000',
+      );
       if (kDebugMode) {
         print(
           '[ApiConfig] Web: detected local development, using backend: $localBackend (host=$host)',
@@ -55,14 +81,20 @@ class ApiConfig {
     }
 
     if (!kDebugMode) {
-      final backendUrl = 'https://khonology-buzz-backend.onrender.com';
+      final backendUrl = String.fromEnvironment(
+        _backendUrlEnv,
+        defaultValue: 'https://khonology-buzz-backend.onrender.com',
+      );
       return backendUrl;
     }
 
     try {
       final isAndroid = defaultTargetPlatform == TargetPlatform.android;
       if (isAndroid) {
-        final backendUrl = 'http://10.0.2.2:5000';
+        final backendUrl = String.fromEnvironment(
+          'ANDROID_BACKEND_URL',
+          defaultValue: 'http://10.0.2.2:5000',
+        );
         if (kDebugMode) {
           print('[ApiConfig] Android platform detected, using: $backendUrl');
         }
@@ -76,6 +108,24 @@ class ApiConfig {
       );
     }
     return 'http://localhost:5000';
+  }
+
+  // Helper method to get environment variables
+  static String? _getEnvVar(String name) {
+    try {
+      return Platform.environment[name];
+    } catch (e) {
+      // Platform.environment might not be available on all platforms
+      return null;
+    }
+  }
+
+  // CORS origin for reference (not used in frontend, but documented)
+  static String get corsOrigin {
+    return String.fromEnvironment(
+      _corsOriginEnv,
+      defaultValue: 'https://khonobuzz-web-app-llfi.onrender.com',
+    );
   }
 
   // API endpoints
