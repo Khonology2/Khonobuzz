@@ -323,8 +323,7 @@ class _SideMenuState extends State<SideMenu> {
   Widget build(BuildContext context) {
     // No auto-collapse; fixed widths handle layout consistently
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+    return Container(
       width: sidebarWidth,
       color: const Color(0xFF1F2840),
       child: Column(
@@ -424,18 +423,19 @@ class _SideMenuState extends State<SideMenu> {
                 ),
                 // Small spacing before logout button
                 const SizedBox(height: 310.0),
-                // Version Control Widget positioned above logout button
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 8.0,
-                  ),
-                  child: Center(
-                    child: const VersionControlWidget(
-                      fontSize: 10.0, // Smaller font for sidebar
+                // Version Control Widget positioned above logout button - only show when expanded
+                if (_isExpanded)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
+                    child: Center(
+                      child: const VersionControlWidget(
+                        fontSize: 10.0, // Smaller font for sidebar
+                      ),
                     ),
                   ),
-                ),
                 // Logout item with hover functionality - directly below version control
                 _LogoutMenuItem(
                   isExpanded: _isExpanded,

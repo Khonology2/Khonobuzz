@@ -140,12 +140,7 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
-  List<Widget> get _screens => [
-    const UserManagementScreen(),
-    const EntityManagementScreen(),
-    const ModuleAccessScreen(),
-    ModuleScreen(),
-  ];
+  // Remove the getter since we now have persistent screens
 
   void _onItemTapped(int index) {
     // Check if Staff user is trying to access Admin-only screen
@@ -213,16 +208,19 @@ class _MainScreenState extends State<MainScreen> {
           Row(
             children: [
               SideMenu(
-                selectedIndex: (_selectedIndex < _screens.length)
-                    ? _selectedIndex
-                    : 0,
+                selectedIndex: (_selectedIndex < 4) ? _selectedIndex : 0,
                 onItemSelected: _onItemTapped,
               ),
               Expanded(
-                child:
-                    _screens[(_selectedIndex < _screens.length)
-                        ? _selectedIndex
-                        : 0],
+                child: IndexedStack(
+                  index: _selectedIndex,
+                  children: const [
+                    UserManagementScreen(),
+                    EntityManagementScreen(),
+                    ModuleAccessScreen(),
+                    ModuleScreen(),
+                  ],
+                ),
               ),
             ],
           ),
