@@ -112,6 +112,15 @@ class OnboardingScreenState extends State<OnboardingScreen>
                     children: [
                       Image.asset('assets/images/khono.png', height: 100),
                       const SizedBox(height: 48),
+                      const Text(
+                        'Create Your Account',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
 
                       Center(
                         child: LayoutBuilder(
