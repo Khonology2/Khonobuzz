@@ -162,7 +162,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                             CrossAxisAlignment.start,
                                         children: [
                                           _buildTextField(
-                                            label: 'Surname',
+                                            label: 'Last Name',
                                             controller: _lastNameController,
                                           ),
                                           const SizedBox(height: 16),
@@ -275,7 +275,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                             CrossAxisAlignment.start,
                                         children: [
                                           _buildTextField(
-                                            label: 'Surname',
+                                            label: 'Last Name',
                                             controller: _lastNameController,
                                           ),
                                           const SizedBox(height: 16),
@@ -677,7 +677,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
     switch (label) {
       case 'First Name':
         return 'John';
-      case 'Surname':
+      case 'Last Name':
         return 'Doe';
       case 'Email Address':
         return 'john.doe@example.com';

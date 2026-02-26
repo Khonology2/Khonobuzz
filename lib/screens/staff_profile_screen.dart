@@ -362,10 +362,10 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Staff',
+                            'Staff Profile',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 24,
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
                               fontFamily: 'Poppins',
                             ),

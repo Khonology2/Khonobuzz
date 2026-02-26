@@ -103,7 +103,14 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                     children: [
                       Image.asset('assets/images/khono.png', height: 100),
                       const SizedBox(height: 48),
-
+                      const Text(
+                        'Manual Login',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
+                      ),
                       const SizedBox(height: 32),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
