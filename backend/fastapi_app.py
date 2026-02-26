@@ -68,15 +68,6 @@ def derive_module_access_from_role(module_access: Optional[str], module_access_r
         if trimmed.startswith('PDH'):
             if 'Personal Development Hub' not in module_names:
                 module_names.append('Personal Development Hub')
-        elif trimmed.startswith('Skills Heatmap'):
-            if 'Resource & Capacity Skills Heatmap' not in module_names:
-                module_names.append('Resource & Capacity Skills Heatmap')
-        elif trimmed.startswith('Automated Recruitment Workflow'):
-            if 'Automated Recruitment Workflow' not in module_names:
-                module_names.append('Automated Recruitment Workflow')
-        elif trimmed.startswith('Proposal & SOW Builder') or trimmed.startswith('SOW Builder'):
-            if 'Proposal & SOW Builder' not in module_names:
-                module_names.append('Proposal & SOW Builder')
     return ','.join(module_names) if module_names else None
 def load_firebase_credentials(env_var_name: str, default_path: str):
     """
@@ -1421,7 +1412,7 @@ async def get_user_token(email: str = Query(..., description="User email address
     """
     Generate a fresh encrypted token for a user by email.
     This endpoint ALWAYS generates a new token to ensure it's fresh and not expired.
-    The token is then synced to all relevant collections (main, PDH, Skills Heatmap).
+    The token is then synced to PDH app only.
     """
     try:
         info_log(f"Token generation request for email: {email}")

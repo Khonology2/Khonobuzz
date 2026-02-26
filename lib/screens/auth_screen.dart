@@ -164,86 +164,87 @@ class AuthScreenState extends State<AuthScreen> {
                         ),
                       ),
                       const SizedBox(height: 32),
-                      _buildLoginButton(
-                        text: 'MICROSOFT LOGIN',
-                        color: const Color(0xFFC10D00),
-                        onPressed: () async {
-                          final messenger = ScaffoldMessenger.of(context);
-                          final navigator = Navigator.of(context);
-                          final authProvider = context.read<AuthProvider>();
-                          try {
-                            final provider = fb_auth.OAuthProvider(
-                              'microsoft.com',
-                            );
+                      // Microsoft login button hidden - only show Manual Login and Onboarding
+                      // _buildLoginButton(
+                      //   text: 'MICROSOFT LOGIN',
+                      //   color: const Color(0xFFC10D00),
+                      //   onPressed: () async {
+                      //     final messenger = ScaffoldMessenger.of(context);
+                      //     final navigator = Navigator.of(context);
+                      //     final authProvider = context.read<AuthProvider>();
+                      //     try {
+                      //       final provider = fb_auth.OAuthProvider(
+                      //         'microsoft.com',
+                      //       );
 
-                            fb_auth.UserCredential credential;
-                            if (kIsWeb) {
-                              debugPrint(
-                                'Initiating Microsoft sign-in redirect...',
-                              );
-                              await fb_auth.FirebaseAuth.instance
-                                  .signInWithRedirect(provider);
+                      //       fb_auth.UserCredential credential;
+                      //       if (kIsWeb) {
+                      //         debugPrint(
+                      //           'Initiating Microsoft sign-in redirect...',
+                      //         );
+                      //         await fb_auth.FirebaseAuth.instance
+                      //             .signInWithRedirect(provider);
 
-                              return;
-                            } else {
-                              credential = await fb_auth.FirebaseAuth.instance
-                                  .signInWithProvider(provider);
-                            }
+                      //         return;
+                      //       } else {
+                      //         credential = await fb_auth.FirebaseAuth.instance
+                      //             .signInWithProvider(provider);
+                      //       }
 
-                            final email = credential.user?.email;
-                            if (email == null ||
-                                !email.toLowerCase().endsWith(
-                                  '@khonology.com',
-                                )) {
-                              await fb_auth.FirebaseAuth.instance.signOut();
-                              if (!mounted) return;
-                              messenger.showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Only khonology.com accounts are allowed',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
+                      //       final email = credential.user?.email;
+                      //       if (email == null ||
+                      //           !email.toLowerCase().endsWith(
+                      //             '@khonology.com',
+                      //           )) {
+                      //         await fb_auth.FirebaseAuth.instance.signOut();
+                      //         if (!mounted) return;
+                      //         messenger.showSnackBar(
+                      //           const SnackBar(
+                      //             content: Text(
+                      //               'Only khonology.com accounts are allowed',
+                      //             ),
+                      //           ),
+                      //         );
+                      //         return;
+                      //       }
 
-                            if (!mounted) return;
-                            final success = await authProvider.login(
-                              email,
-                              role: null,
-                            );
-                            if (!mounted) return;
+                      //       if (!mounted) return;
+                      //       final success = await authProvider.login(
+                      //         email,
+                      //         role: null,
+                      //       );
+                      //       if (!mounted) return;
 
-                            if (!success) {
-                              messenger.showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Login failed. Please try again later.',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
+                      //       if (!success) {
+                      //         messenger.showSnackBar(
+                      //           const SnackBar(
+                      //             content: Text(
+                      //               'Login failed. Please try again later.',
+                      //             ),
+                      //           ),
+                      //         );
+                      //         return;
+                      //       }
 
-                            if (!mounted) return;
-                            navigator.pushAndRemoveUntil(
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const MainScreen(initialIndex: 8),
-                              ),
-                              (route) => false,
-                            );
-                          } catch (e) {
-                            if (!mounted) return;
-                            messenger.showSnackBar(
-                              SnackBar(
-                                content: Text('Microsoft sign-in failed: $e'),
-                              ),
-                            );
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 16),
+                      //       if (!mounted) return;
+                      //       navigator.pushAndRemoveUntil(
+                      //         MaterialPageRoute(
+                      //           builder: (context) =>
+                      //               const MainScreen(initialIndex: 8),
+                      //         ),
+                      //         (route) => false,
+                      //       );
+                      //     } catch (e) {
+                      //       if (!mounted) return;
+                      //       messenger.showSnackBar(
+                      //         SnackBar(
+                      //           content: Text('Microsoft sign-in failed: $e'),
+                      //         ),
+                      //       );
+                      //     }
+                      //   },
+                      // ),
+                      // const SizedBox(height: 16),
                       _buildLoginButton(
                         text: 'MANUAL LOGIN',
                         color: const Color(0xFFC10D00),

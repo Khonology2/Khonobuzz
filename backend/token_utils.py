@@ -128,9 +128,9 @@ def parse_module_access_role_to_roles(module_access_role: str) -> list:
     """
     Parse moduleAccessRole string into a list of roles.
     Args:
-        module_access_role: Comma-separated string like "PDH - Employee, Skills Heatmap - Manager"
+        module_access_role: Comma-separated string like "PDH - Employee, PDH - Manager"
     Returns:
-        List of role strings, e.g., ["PDH - Employee", "Skills Heatmap - Manager"]
+        List of role strings, e.g., ["PDH - Employee", "PDH - Manager"]
     """
     if not module_access_role or not isinstance(module_access_role, str):
         return []
