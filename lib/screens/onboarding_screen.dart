@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import 'lobby_screen.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'dart:async';
 import '../widgets/animations/loading_button.dart';
 import '../widgets/floating_circles_particle_animation.dart';
+import 'lobby_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final FlutterAadOauth? oauth;
@@ -29,6 +30,8 @@ class OnboardingScreenState extends State<OnboardingScreen>
   late Animation<double> _blinkAnimation;
   final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
       GlobalKey();
+
+  late AudioPlayer _audioPlayer;
 
   final List<String> _departments = const [
     'Management',
@@ -63,6 +66,8 @@ class OnboardingScreenState extends State<OnboardingScreen>
   void initState() {
     super.initState();
 
+    _audioPlayer = AudioPlayer();
+
     _blinkController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -85,6 +90,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
     _lastNameController.dispose();
     _emailController.dispose();
     _blinkController.dispose();
+    _audioPlayer.dispose();
 
     super.dispose();
   }
@@ -459,21 +465,49 @@ class OnboardingScreenState extends State<OnboardingScreen>
                           });
                         },
                         onPressed: () async {
+                          final firstName = _firstNameController.text.trim();
+                          final lastName = _lastNameController.text.trim();
                           final email = _emailController.text.trim();
-                          if (email.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Please enter your email address.',
-                                ),
-                              ),
+                          final department = _selectedDepartment;
+                          final designation = _selectedDesignation;
+
+                          // Validate First Name
+                          if (firstName.isEmpty) {
+                            await _playErrorSound();
+                            _showValidationError(
+                              'First Name',
+                              'Please enter your first name to continue with onboarding.',
                             );
                             return;
                           }
 
+                          // Validate Last Name
+                          if (lastName.isEmpty) {
+                            await _playErrorSound();
+                            _showValidationError(
+                              'Last Name',
+                              'Please enter your last name to continue with onboarding.',
+                            );
+                            return;
+                          }
+
+                          // Validate Email Address
+                          if (email.isEmpty) {
+                            await _playErrorSound();
+                            _showValidationError(
+                              'Email Address',
+                              'Please enter your email address to continue with onboarding.',
+                            );
+                            return;
+                          }
+
+                          // Validate Email Domain
                           if (!email.toLowerCase().endsWith('@khonology.com')) {
+                            await _playErrorSound();
+                            final currentContext = context;
+                            if (!currentContext.mounted) return;
                             showDialog(
-                              context: context,
+                              context: currentContext,
                               barrierColor: Colors.black54,
                               builder: (BuildContext context) {
                                 return Dialog(
@@ -554,9 +588,28 @@ class OnboardingScreenState extends State<OnboardingScreen>
                             return;
                           }
 
+                          // Validate Department
+                          if (department == null || department.isEmpty) {
+                            await _playErrorSound();
+                            _showValidationError(
+                              'Department',
+                              'Please select your department to continue with onboarding.',
+                            );
+                            return;
+                          }
+
+                          // Validate Designation
+                          if (designation == null || designation.isEmpty) {
+                            await _playErrorSound();
+                            _showValidationError(
+                              'Designation',
+                              'Please select your designation to continue with onboarding.',
+                            );
+                            return;
+                          }
+
                           final authProvider = context.read<AuthProvider>();
                           final navigator = Navigator.of(context);
-                          final messenger = ScaffoldMessenger.of(context);
                           final success = await authProvider.login(
                             email,
                             firstName: _firstNameController.text,
@@ -569,11 +622,10 @@ class OnboardingScreenState extends State<OnboardingScreen>
 
                           if (success) {
                             if (authProvider.userAlreadyOnboarded) {
-                              messenger.showSnackBar(
-                                const SnackBar(
-                                  content: Text('You have already onboarded!'),
-                                  duration: Duration(seconds: 2),
-                                ),
+                              await _playErrorSound();
+                              _showValidationError(
+                                'Already Onboarded',
+                                'You have already completed the onboarding process. You can proceed to the main application.',
                               );
                               await Future.delayed(const Duration(seconds: 2));
                             }
@@ -586,12 +638,10 @@ class OnboardingScreenState extends State<OnboardingScreen>
                               (route) => false,
                             );
                           } else {
-                            messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Registration/Login failed. Please try again.',
-                                ),
-                              ),
+                            await _playErrorSound();
+                            _showValidationError(
+                              'Registration Failed',
+                              'Registration/Login failed. Please try again.',
                             );
                           }
                         },
@@ -670,6 +720,87 @@ class OnboardingScreenState extends State<OnboardingScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _playErrorSound() async {
+    try {
+      await _audioPlayer.play(AssetSource('sounds/error_1.wav'));
+    } catch (e) {
+      debugPrint('Error playing sound: $e');
+    }
+  }
+
+  void _showValidationError(String fieldName, String message) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C3E50).withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$fieldName Required',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      message,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      style: TextButton.styleFrom(
+                        backgroundColor: const Color(0xFFC10D00),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'OK',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

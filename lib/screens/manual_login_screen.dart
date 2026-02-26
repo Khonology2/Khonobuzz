@@ -7,6 +7,7 @@ import '../providers/user_provider.dart';
 import 'package:provider/provider.dart';
 import '../widgets/animations/loading_button.dart';
 import '../widgets/floating_circles_particle_animation.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class ManualLoginScreen extends StatefulWidget {
   const ManualLoginScreen({super.key});
@@ -26,10 +27,13 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
       GlobalKey();
   VoidCallback? _pendingNavigation;
   bool _isAnimatingNavigation = false;
+  late AudioPlayer _audioPlayer;
 
   @override
   void initState() {
     super.initState();
+
+    _audioPlayer = AudioPlayer();
 
     _blinkController = AnimationController(
       vsync: this,
@@ -60,10 +64,92 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
     _blinkController.reset();
   }
 
+  Future<void> _playErrorSound() async {
+    try {
+      await _audioPlayer.play(AssetSource('sounds/error_1.wav'));
+    } catch (e) {
+      debugPrint('Error playing sound: $e');
+    }
+  }
+
+  void _showValidationError(String fieldName, String message) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C3E50).withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      fieldName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      message,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      style: TextButton.styleFrom(
+                        backgroundColor: const Color(0xFFC10D00),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'OK',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
     _blinkController.dispose();
+    _audioPlayer.dispose();
 
     super.dispose();
   }
@@ -167,12 +253,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                         onPressed: () async {
                           final email = _emailController.text.trim();
                           if (email.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Please enter your email address.',
-                                ),
-                              ),
+                            await _playErrorSound();
+                            _showValidationError(
+                              'Email Required',
+                              'Please enter your email address to continue with login.',
                             );
                             return;
                           }
@@ -188,8 +272,12 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           if (!baseEmail.toLowerCase().endsWith(
                             '@khonology.com',
                           )) {
+                            await _playErrorSound();
+                            if (!mounted) return;
+                            final currentContext = context;
+                            if (!currentContext.mounted) return;
                             showDialog(
-                              context: context,
+                              context: currentContext,
                               barrierColor: Colors.black54,
                               builder: (BuildContext context) {
                                 return Dialog(
@@ -277,11 +365,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
 
                           final authProvider = context.read<AuthProvider>();
                           final navigator = Navigator.of(context);
-                          final messenger = ScaffoldMessenger.of(context);
                           final currentContext = context;
                           try {
                             final success = await authProvider.manualLogin(
-                              email,
+                              normalizedEmail,
                             );
 
                             if (!mounted) return;
@@ -294,12 +381,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                 (route) => false,
                               );
                             } else {
-                              messenger.showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Login failed. Please check your email address and try again.',
-                                  ),
-                                ),
+                              await _playErrorSound();
+                              _showValidationError(
+                                'Login Failed',
+                                'Login failed. Please check your email address and try again.',
                               );
                             }
                           } catch (e) {
@@ -425,16 +510,12 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                             }
 
                             if (!mounted) return;
-                            messenger.showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  errorMessage.isNotEmpty
-                                      ? errorMessage
-                                      : 'Login failed. Please check your email address and try again.',
-                                ),
-                                backgroundColor: Colors.orange,
-                                duration: const Duration(seconds: 4),
-                              ),
+                            await _playErrorSound();
+                            _showValidationError(
+                              'Login Error',
+                              errorMessage.isNotEmpty
+                                  ? errorMessage
+                                  : 'Login failed. Please check your email address and try again.',
                             );
                           }
                         },
@@ -500,7 +581,6 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
     BuildContext context,
     String baseEmail,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final currentContext = context;
     final authProvider = context.read<AuthProvider>();
@@ -510,8 +590,9 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
 
       if (emails.isEmpty) {
         if (!mounted) return;
-        messenger.showSnackBar(
-          const SnackBar(content: Text('No users found. Please try again.')),
+        _showValidationError(
+          'No Users Found',
+          'No users found. Please try again.',
         );
         return;
       }
@@ -623,16 +704,15 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
             (route) => false,
           );
         } else {
-          messenger.showSnackBar(
-            const SnackBar(content: Text('Login failed. Please try again.')),
+          _showValidationError(
+            'Login Failed',
+            'Login failed. Please try again.',
           );
         }
       }
     } catch (_) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('An error occurred. Please try again.')),
-      );
+      _showValidationError('Error', 'An error occurred. Please try again.');
     }
   }
 }
