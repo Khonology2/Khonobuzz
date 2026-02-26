@@ -283,7 +283,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   ],
                                   buttonText: 'Launch',
                                   url:
-                                      'https://willowy-scone-c14f7c.netlify.app/',
+                                      'https://recruitment-web-59qy.onrender.com',
                                   moduleKey: 'recruitment',
                                 ),
                               );
