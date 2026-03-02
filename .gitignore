@@ -29,6 +29,10 @@ key.properties
 **/.env
 node_modules
 
+# Firebase / Google service account credentials (never commit)
+**/firebase*adminsdk*.json
+**/*-firebase-adminsdk-*.json
+
 # Generated localization files
 lib/generated/
 lib/l10n/*.dart

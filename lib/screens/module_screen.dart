@@ -1,4 +1,6 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,6 +21,8 @@ class ModuleScreen extends StatefulWidget {
 
 class _ModuleScreenState extends State<ModuleScreen> {
   bool _isLoadingModuleAccess = false;
+  bool _isGeneratingToken = false;
+  bool _pdhCardShowToken = false;
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -246,6 +250,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   buttonText: 'Launch',
                                   url: 'https://pdh-web-app.onrender.com',
                                   moduleKey: 'pdh',
+                                  onPdhLaunchSuccess: () {
+                                    setState(() => _pdhCardShowToken = true);
+                                  },
+                                  pdhShowToken: _pdhCardShowToken,
+                                  tokenForPdh: authProvider.userToken,
                                 ),
                               );
                             }
@@ -327,6 +336,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
                               crossAxisAlignment: CrossAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                _buildTokenSection(context, authProvider),
+                                const SizedBox(height: 24.0),
                                 if (topRow.isNotEmpty)
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
@@ -361,6 +372,131 @@ class _ModuleScreenState extends State<ModuleScreen> {
     );
   }
 
+  Widget _buildTokenSection(BuildContext context, AuthProvider authProvider) {
+    final String? token = authProvider.userToken;
+    final bool hasToken = token != null && token.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: Colors.white24, width: 1),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'API Token',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16.0,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10.0),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12.0,
+              vertical: 10.0,
+            ),
+            decoration: BoxDecoration(
+              color: primaryDark.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(8.0),
+            ),
+            child: SelectableText(
+              hasToken ? token : 'Generate a token to see it here',
+              style: TextStyle(
+                color: hasToken ? Colors.white70 : Colors.white38,
+                fontSize: 13.0,
+                fontFamily: 'monospace',
+              ),
+              maxLines: 3,
+            ),
+          ),
+          const SizedBox(height: 12.0),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              FilledButton.icon(
+                onPressed: _isGeneratingToken
+                    ? null
+                    : () async {
+                        setState(() => _isGeneratingToken = true);
+                        try {
+                          await authProvider.fetchUserToken();
+                          if (mounted) {
+                            final currentContext = context;
+                            if (!currentContext.mounted) return;
+                            ScaffoldMessenger.of(currentContext).showSnackBar(
+                              const SnackBar(
+                                content: Text('Token generated.'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        } catch (_) {
+                          if (mounted) {
+                            final currentContext = context;
+                            if (!currentContext.mounted) return;
+                            ScaffoldMessenger.of(currentContext).showSnackBar(
+                              const SnackBar(
+                                content: Text('Failed to generate token.'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        } finally {
+                          if (mounted) {
+                            setState(() => _isGeneratingToken = false);
+                          }
+                        }
+                      },
+                icon: _isGeneratingToken
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
+                    : const Icon(Icons.refresh, size: 18),
+                label: Text(_isGeneratingToken ? 'Generating…' : 'Generate'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: primaryAccent,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 10.0),
+              FilledButton.icon(
+                onPressed: hasToken
+                    ? () {
+                        Clipboard.setData(ClipboardData(text: token));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Token copied to clipboard.'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    : null,
+                icon: const Icon(Icons.copy, size: 18),
+                label: const Text('Copy'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: primaryDark,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildModuleCard({
     required BuildContext context,
     required double cardWidth,
@@ -370,6 +506,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
     required String url,
     required String moduleKey,
     bool isComingSoon = false,
+    VoidCallback? onPdhLaunchSuccess,
+    bool pdhShowToken = false,
+    String? tokenForPdh,
   }) {
     return _HoverableModuleCard(
       context: context,
@@ -380,6 +519,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
       url: url,
       moduleKey: moduleKey,
       isComingSoon: isComingSoon,
+      onPdhLaunchSuccess: onPdhLaunchSuccess,
+      pdhShowToken: pdhShowToken,
+      tokenForPdh: tokenForPdh,
     );
   }
 }
@@ -393,6 +535,9 @@ class _HoverableModuleCard extends StatefulWidget {
   final String url;
   final String moduleKey;
   final bool isComingSoon;
+  final VoidCallback? onPdhLaunchSuccess;
+  final bool pdhShowToken;
+  final String? tokenForPdh;
 
   const _HoverableModuleCard({
     required this.context,
@@ -403,6 +548,9 @@ class _HoverableModuleCard extends StatefulWidget {
     required this.url,
     required this.moduleKey,
     this.isComingSoon = false,
+    this.onPdhLaunchSuccess,
+    this.pdhShowToken = false,
+    this.tokenForPdh,
   });
 
   @override
@@ -410,14 +558,16 @@ class _HoverableModuleCard extends StatefulWidget {
 }
 
 class _HoverableModuleCardState extends State<_HoverableModuleCard>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   bool _isHovered = false;
   bool _isLoading = false;
   String? _lastAccessedText;
   final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
       GlobalKey();
   late AnimationController _animationController;
+  late AnimationController _flipController;
   late Animation<double> _scaleAnimation;
+  late Animation<double> _flipAnimation;
 
   @override
   void initState() {
@@ -429,7 +579,27 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
+    _flipController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _flipAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _flipController, curve: Curves.easeInOut),
+    );
+    if (widget.moduleKey == 'pdh' && widget.pdhShowToken) {
+      _flipController.value = 1.0;
+    }
     _loadLastAccessed();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HoverableModuleCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.moduleKey == 'pdh' &&
+        widget.pdhShowToken &&
+        !oldWidget.pdhShowToken) {
+      _flipController.forward();
+    }
   }
 
   Future<void> _loadLastAccessed() async {
@@ -444,6 +614,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
   @override
   void dispose() {
     _animationController.dispose();
+    _flipController.dispose();
     super.dispose();
   }
 
@@ -599,39 +770,45 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                       ),
                                       const SizedBox(height: 18.0),
                                     ],
-                                    ElevatedButton(
-                                      onPressed: _isLoading
-                                          ? null
-                                          : () async {
-                                              _animationKey.currentState
-                                                  ?.triggerParticleExplosion();
+                                    if (widget.moduleKey == 'pdh')
+                                      _buildPdhFlipButton(
+                                        innerConstraints: innerConstraints,
+                                        description: description,
+                                      )
+                                    else
+                                      ElevatedButton(
+                                        onPressed: _isLoading
+                                            ? null
+                                            : () async {
+                                                _animationKey.currentState
+                                                    ?.triggerParticleExplosion();
 
-                                              if (widget.isComingSoon) {
-                                                if (!mounted) {
-                                                  return;
-                                                }
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'Deliverables & Sprint Sign-Off Hub is coming soon.',
-                                                      style: TextStyle(
-                                                        fontFamily: 'Poppins',
+                                                if (widget.isComingSoon) {
+                                                  if (!mounted) {
+                                                    return;
+                                                  }
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                        'Deliverables & Sprint Sign-Off Hub is coming soon.',
+                                                        style: TextStyle(
+                                                          fontFamily: 'Poppins',
+                                                        ),
                                                       ),
                                                     ),
-                                                  ),
-                                                );
-                                                return;
-                                              }
+                                                  );
+                                                  return;
+                                                }
 
-                                              setState(() => _isLoading = true);
-                                              try {
-                                                await _launchUrlFromContext(
-                                                  widget.context,
-                                                  widget.url,
-                                                  widget.moduleKey,
-                                                );
+                                                setState(() => _isLoading = true);
+                                                try {
+                                                  await _launchUrlFromContext(
+                                                    widget.context,
+                                                    widget.url,
+                                                    widget.moduleKey,
+                                                  );
                                                 if (mounted) {
                                                   setState(() {
                                                     _lastAccessedText =
@@ -646,31 +823,31 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                                 }
                                               }
                                             },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: primaryAccent,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 36.0,
-                                          vertical: 14.4,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            45.0,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: primaryAccent,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 36.0,
+                                            vertical: 14.4,
                                           ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              45.0,
+                                            ),
+                                          ),
+                                          textStyle: const TextStyle(
+                                            fontSize: 16.2,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          elevation: widget.isComingSoon ? 0 : 10,
+                                          shadowColor: widget.isComingSoon
+                                              ? Colors.transparent
+                                              : primaryAccent.withValues(
+                                                  alpha: 0.5,
+                                                ),
                                         ),
-                                        textStyle: const TextStyle(
-                                          fontSize: 16.2,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        elevation: widget.isComingSoon ? 0 : 10,
-                                        shadowColor: widget.isComingSoon
-                                            ? Colors.transparent
-                                            : primaryAccent.withValues(
-                                                alpha: 0.5,
-                                              ),
+                                        child: Text(widget.buttonText),
                                       ),
-                                      child: Text(widget.buttonText),
-                                    ),
                                   ],
                                 ),
                               ),
@@ -696,6 +873,119 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPdhFlipButton({
+    required BoxConstraints innerConstraints,
+    String? description,
+  }) {
+    const double buttonHeight = 52.0;
+    final token = widget.tokenForPdh ?? '';
+    final hasToken = token.isNotEmpty;
+
+    Widget frontFace = ElevatedButton(
+      onPressed: _isLoading
+          ? null
+          : () async {
+              _animationKey.currentState?.triggerParticleExplosion();
+              setState(() => _isLoading = true);
+              try {
+                await _launchUrlFromContext(
+                  widget.context,
+                  widget.url,
+                  widget.moduleKey,
+                );
+                if (mounted) {
+                  setState(() {
+                    _lastAccessedText = 'Last accessed: Just now';
+                  });
+                  widget.onPdhLaunchSuccess?.call();
+                }
+              } finally {
+                if (mounted) {
+                  setState(() => _isLoading = false);
+                }
+              }
+            },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primaryAccent,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 36.0, vertical: 14.4),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(45.0),
+        ),
+        textStyle: const TextStyle(fontSize: 16.2, fontWeight: FontWeight.bold),
+        elevation: 10,
+        shadowColor: primaryAccent.withValues(alpha: 0.5),
+      ),
+      child: const Text('Launch'),
+    );
+
+    Widget backFace = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      decoration: BoxDecoration(
+        color: primaryDark.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Expanded(
+            child: SelectableText(
+              hasToken ? token : 'Generate token above',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 11.0,
+                fontFamily: 'monospace',
+              ),
+              maxLines: 2,
+            ),
+          ),
+          const SizedBox(width: 8.0),
+          IconButton(
+            icon: const Icon(Icons.copy, color: Colors.white, size: 20),
+            onPressed: hasToken
+                ? () {
+                    Clipboard.setData(ClipboardData(text: token));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Token copied to clipboard.'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                : null,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+        ],
+      ),
+    );
+
+    return SizedBox(
+      height: buttonHeight,
+      child: AnimatedBuilder(
+        animation: _flipAnimation,
+        builder: (context, child) {
+          final angle = _flipAnimation.value * math.pi;
+          return Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.001)
+              ..rotateY(angle),
+            child: _flipAnimation.value < 0.5
+                ? frontFace
+                : Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.identity()..rotateY(math.pi),
+                    child: backFace,
+                  ),
+          );
+        },
+      ),
     );
   }
 }

@@ -404,6 +404,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         const SizedBox(width: 8.0),
                         ElevatedButton(
+                          onPressed: () => _showBulkUpdateDialog(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFC10D00),
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text(
+                            'Update',
+                            style: TextStyle(fontFamily: 'Poppins'),
+                          ),
+                        ),
+                        const SizedBox(width: 8.0),
+                        ElevatedButton(
                           onPressed: () => _showDeleteConfirmation(context),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
@@ -2323,7 +2335,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         'password': 'password',
         'name': fullName,
         'role': 'Staff',
-        'status': 'Pending',
+        'status': 'Active',
         'created_at': DateTime.now().toUtc().toIso8601String(),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
         'entity': '',
@@ -2340,7 +2352,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         'fullName': fullName.trim(),
         'department': '',
         'designation': '',
-        'status': 'Pending',
+        'status': 'Active',
         'role': 'Staff',
         'first_valid': DateTime.utc(2025, 9, 25).toIso8601String(),
         'inserted_by': adminEmail.isNotEmpty ? adminEmail : email,
@@ -2385,6 +2397,276 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       debugPrint('Error creating new user: $e');
       rethrow;
     }
+  }
+
+  void _showBulkUpdateDialog(BuildContext context) {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final selectedUsers = userProvider.users
+        .where((u) => _selectedUserIds.contains(u.id))
+        .toList();
+    if (selectedUsers.isEmpty) return;
+    final first = selectedUsers.first;
+    final deptSet = userProvider.users
+        .map((u) => u.department)
+        .where((d) => d.isNotEmpty)
+        .toSet();
+    final desigSet = userProvider.users
+        .map((u) => u.designation)
+        .where((d) => d.isNotEmpty)
+        .toSet();
+    final deptOptions = deptSet.toList()..sort();
+    final desigOptions = desigSet.toList()..sort();
+
+    String? bulkRole = first.role;
+    String? bulkStatus = first.status;
+    String? bulkDepartment;
+    String? bulkDesignation;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF2C3E50),
+              title: const Text(
+                'Bulk update',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Apply the following to ${selectedUsers.length} selected user(s):',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontFamily: 'Poppins',
+                        fontSize: 13.0,
+                      ),
+                    ),
+                    const SizedBox(height: 16.0),
+                    const Text(
+                      'Role',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontFamily: 'Poppins',
+                        fontSize: 12.0,
+                      ),
+                    ),
+                    const SizedBox(height: 4.0),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: userRoles.contains(bulkRole) ? bulkRole : null,
+                        isExpanded: true,
+                        dropdownColor: const Color(0xFF2C3E50),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                        items: userRoles
+                            .map(
+                              (r) => DropdownMenuItem<String>(
+                                value: r,
+                                child: Text(r),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          setDialogState(() => bulkRole = v);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12.0),
+                    const Text(
+                      'Status',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontFamily: 'Poppins',
+                        fontSize: 12.0,
+                      ),
+                    ),
+                    const SizedBox(height: 4.0),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: userStatusColors.containsKey(bulkStatus)
+                            ? bulkStatus
+                            : null,
+                        isExpanded: true,
+                        dropdownColor: const Color(0xFF2C3E50),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                        items: userStatusColors.keys
+                            .map(
+                              (s) => DropdownMenuItem<String>(
+                                value: s,
+                                child: Text(s),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          setDialogState(() => bulkStatus = v);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12.0),
+                    const Text(
+                      'Department (optional)',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontFamily: 'Poppins',
+                        fontSize: 12.0,
+                      ),
+                    ),
+                    const SizedBox(height: 4.0),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: bulkDepartment,
+                        isExpanded: true,
+                        dropdownColor: const Color(0xFF2C3E50),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                        hint: const Text(
+                          '— No change —',
+                          style: TextStyle(color: Colors.white54),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('— No change —'),
+                          ),
+                          ...deptOptions.map(
+                            (d) => DropdownMenuItem<String?>(
+                              value: d,
+                              child: Text(d),
+                            ),
+                          ),
+                        ],
+                        onChanged: (v) {
+                          setDialogState(() => bulkDepartment = v);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12.0),
+                    const Text(
+                      'Designation (optional)',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontFamily: 'Poppins',
+                        fontSize: 12.0,
+                      ),
+                    ),
+                    const SizedBox(height: 4.0),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: bulkDesignation,
+                        isExpanded: true,
+                        dropdownColor: const Color(0xFF2C3E50),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                        hint: const Text(
+                          '— No change —',
+                          style: TextStyle(color: Colors.white54),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('— No change —'),
+                          ),
+                          ...desigOptions.map(
+                            (d) => DropdownMenuItem<String?>(
+                              value: d,
+                              child: Text(d),
+                            ),
+                          ),
+                        ],
+                        onChanged: (v) {
+                          setDialogState(() => bulkDesignation = v);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    final role = bulkRole ?? first.role;
+                    final status = bulkStatus ?? first.status;
+                    int done = 0;
+                    int failed = 0;
+                    for (final user in selectedUsers) {
+                      try {
+                        await _updateUserRoleAndStatus(
+                          user.id,
+                          role,
+                          status,
+                          firstName: user.firstName,
+                          lastName: user.lastName,
+                          department: bulkDepartment ?? user.department,
+                          designation: bulkDesignation ?? user.designation,
+                          entity: user.entity,
+                        );
+                        done++;
+                      } catch (_) {
+                        failed++;
+                      }
+                    }
+                    if (mounted) {
+                      setState(() {
+                        _isSelectionMode = false;
+                        _selectedUserIds.clear();
+                      });
+                      final currentContext = context;
+                      if (!currentContext.mounted) return;
+                      ScaffoldMessenger.of(currentContext).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Updated $done user(s).${failed > 0 ? ' $failed failed.' : ''}',
+                            style: const TextStyle(fontFamily: 'Poppins'),
+                          ),
+                          backgroundColor: const Color(0xFFC10D00),
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC10D00),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(fontFamily: 'Poppins'),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showDeleteConfirmation(BuildContext context) {
