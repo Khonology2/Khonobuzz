@@ -247,7 +247,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Hub',
                                   ],
                                   buttonText: 'Launch',
-                                  url: 'https://pdh-web-app.onrender.com',
+                                  url: 'https://pdh-web-app-4in5.onrender.com',
                                   moduleKey: 'pdh',
                                   onPdhLaunchSuccess: () {
                                     setState(() => _pdhCardShowToken = true);
@@ -291,7 +291,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   ],
                                   buttonText: 'Launch',
                                   url:
-                                      'https://recruitment-web-59qy.onrender.com',
+                                      'https://recruitment-web-59qy.onrender.com/',
                                   moduleKey: 'recruitment',
                                 ),
                               );
