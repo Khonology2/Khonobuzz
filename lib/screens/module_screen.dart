@@ -21,7 +21,6 @@ class ModuleScreen extends StatefulWidget {
 
 class _ModuleScreenState extends State<ModuleScreen> {
   bool _isLoadingModuleAccess = false;
-  bool _isGeneratingToken = false;
   bool _pdhCardShowToken = false;
   final ScrollController _scrollController = ScrollController();
 
@@ -336,8 +335,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                               crossAxisAlignment: CrossAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                _buildTokenSection(context, authProvider),
-                                const SizedBox(height: 24.0),
                                 if (topRow.isNotEmpty)
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
@@ -366,131 +363,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTokenSection(BuildContext context, AuthProvider authProvider) {
-    final String? token = authProvider.userToken;
-    final bool hasToken = token != null && token.isNotEmpty;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(color: Colors.white24, width: 1),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'API Token',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16.0,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 10.0),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12.0,
-              vertical: 10.0,
-            ),
-            decoration: BoxDecoration(
-              color: primaryDark.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-            child: SelectableText(
-              hasToken ? token : 'Generate a token to see it here',
-              style: TextStyle(
-                color: hasToken ? Colors.white70 : Colors.white38,
-                fontSize: 13.0,
-                fontFamily: 'monospace',
-              ),
-              maxLines: 3,
-            ),
-          ),
-          const SizedBox(height: 12.0),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              FilledButton.icon(
-                onPressed: _isGeneratingToken
-                    ? null
-                    : () async {
-                        setState(() => _isGeneratingToken = true);
-                        try {
-                          await authProvider.fetchUserToken();
-                          if (mounted) {
-                            final currentContext = context;
-                            if (!currentContext.mounted) return;
-                            ScaffoldMessenger.of(currentContext).showSnackBar(
-                              const SnackBar(
-                                content: Text('Token generated.'),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          }
-                        } catch (_) {
-                          if (mounted) {
-                            final currentContext = context;
-                            if (!currentContext.mounted) return;
-                            ScaffoldMessenger.of(currentContext).showSnackBar(
-                              const SnackBar(
-                                content: Text('Failed to generate token.'),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          }
-                        } finally {
-                          if (mounted) {
-                            setState(() => _isGeneratingToken = false);
-                          }
-                        }
-                      },
-                icon: _isGeneratingToken
-                    ? SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                        ),
-                      )
-                    : const Icon(Icons.refresh, size: 18),
-                label: Text(_isGeneratingToken ? 'Generating…' : 'Generate'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: primaryAccent,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 10.0),
-              FilledButton.icon(
-                onPressed: hasToken
-                    ? () {
-                        Clipboard.setData(ClipboardData(text: token));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Token copied to clipboard.'),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    : null,
-                icon: const Icon(Icons.copy, size: 18),
-                label: const Text('Copy'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: primaryDark,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
           ),
         ],
       ),
