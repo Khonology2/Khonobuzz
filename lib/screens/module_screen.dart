@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -21,7 +20,6 @@ class ModuleScreen extends StatefulWidget {
 
 class _ModuleScreenState extends State<ModuleScreen> {
   bool _isLoadingModuleAccess = false;
-  bool _pdhCardShowToken = false;
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -249,11 +247,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   buttonText: 'Launch',
                                   url: 'https://pdh-web-app-4in5.onrender.com',
                                   moduleKey: 'pdh',
-                                  onPdhLaunchSuccess: () {
-                                    setState(() => _pdhCardShowToken = true);
-                                  },
-                                  pdhShowToken: _pdhCardShowToken,
-                                  tokenForPdh: authProvider.userToken,
                                 ),
                               );
                             }
@@ -378,9 +371,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
     required String url,
     required String moduleKey,
     bool isComingSoon = false,
-    VoidCallback? onPdhLaunchSuccess,
-    bool pdhShowToken = false,
-    String? tokenForPdh,
   }) {
     return _HoverableModuleCard(
       context: context,
@@ -391,9 +381,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
       url: url,
       moduleKey: moduleKey,
       isComingSoon: isComingSoon,
-      onPdhLaunchSuccess: onPdhLaunchSuccess,
-      pdhShowToken: pdhShowToken,
-      tokenForPdh: tokenForPdh,
     );
   }
 }
@@ -407,9 +394,6 @@ class _HoverableModuleCard extends StatefulWidget {
   final String url;
   final String moduleKey;
   final bool isComingSoon;
-  final VoidCallback? onPdhLaunchSuccess;
-  final bool pdhShowToken;
-  final String? tokenForPdh;
 
   const _HoverableModuleCard({
     required this.context,
@@ -420,9 +404,6 @@ class _HoverableModuleCard extends StatefulWidget {
     required this.url,
     required this.moduleKey,
     this.isComingSoon = false,
-    this.onPdhLaunchSuccess,
-    this.pdhShowToken = false,
-    this.tokenForPdh,
   });
 
   @override
@@ -430,16 +411,14 @@ class _HoverableModuleCard extends StatefulWidget {
 }
 
 class _HoverableModuleCardState extends State<_HoverableModuleCard>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   bool _isHovered = false;
   bool _isLoading = false;
   String? _lastAccessedText;
   final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
       GlobalKey();
   late AnimationController _animationController;
-  late AnimationController _flipController;
   late Animation<double> _scaleAnimation;
-  late Animation<double> _flipAnimation;
 
   @override
   void initState() {
@@ -451,27 +430,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
-    _flipController = AnimationController(
-      duration: const Duration(milliseconds: 400),
-      vsync: this,
-    );
-    _flipAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _flipController, curve: Curves.easeInOut),
-    );
-    if (widget.moduleKey == 'pdh' && widget.pdhShowToken) {
-      _flipController.value = 1.0;
-    }
     _loadLastAccessed();
-  }
-
-  @override
-  void didUpdateWidget(covariant _HoverableModuleCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.moduleKey == 'pdh' &&
-        widget.pdhShowToken &&
-        !oldWidget.pdhShowToken) {
-      _flipController.forward();
-    }
   }
 
   Future<void> _loadLastAccessed() async {
@@ -486,7 +445,6 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
   @override
   void dispose() {
     _animationController.dispose();
-    _flipController.dispose();
     super.dispose();
   }
 
@@ -642,13 +600,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                       ),
                                       const SizedBox(height: 18.0),
                                     ],
-                                    if (widget.moduleKey == 'pdh')
-                                      _buildPdhFlipButton(
-                                        innerConstraints: innerConstraints,
-                                        description: description,
-                                      )
-                                    else
-                                      ElevatedButton(
+                                    ElevatedButton(
                                         onPressed: _isLoading
                                             ? null
                                             : () async {
@@ -745,119 +697,6 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
           ),
         );
       },
-    );
-  }
-
-  Widget _buildPdhFlipButton({
-    required BoxConstraints innerConstraints,
-    String? description,
-  }) {
-    const double buttonHeight = 52.0;
-    final token = widget.tokenForPdh ?? '';
-    final hasToken = token.isNotEmpty;
-
-    Widget frontFace = ElevatedButton(
-      onPressed: _isLoading
-          ? null
-          : () async {
-              _animationKey.currentState?.triggerParticleExplosion();
-              setState(() => _isLoading = true);
-              try {
-                await _launchUrlFromContext(
-                  widget.context,
-                  widget.url,
-                  widget.moduleKey,
-                );
-                if (mounted) {
-                  setState(() {
-                    _lastAccessedText = 'Last accessed: Just now';
-                  });
-                  widget.onPdhLaunchSuccess?.call();
-                }
-              } finally {
-                if (mounted) {
-                  setState(() => _isLoading = false);
-                }
-              }
-            },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: primaryAccent,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 36.0, vertical: 14.4),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(45.0),
-        ),
-        textStyle: const TextStyle(fontSize: 16.2, fontWeight: FontWeight.bold),
-        elevation: 10,
-        shadowColor: primaryAccent.withValues(alpha: 0.5),
-      ),
-      child: const Text('Launch'),
-    );
-
-    Widget backFace = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-      decoration: BoxDecoration(
-        color: primaryDark.withValues(alpha: 0.8),
-        borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(color: Colors.white24),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Expanded(
-            child: SelectableText(
-              hasToken ? token : 'Generate token above',
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 11.0,
-                fontFamily: 'monospace',
-              ),
-              maxLines: 2,
-            ),
-          ),
-          const SizedBox(width: 8.0),
-          IconButton(
-            icon: const Icon(Icons.copy, color: Colors.white, size: 20),
-            onPressed: hasToken
-                ? () {
-                    Clipboard.setData(ClipboardData(text: token));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Token copied to clipboard.'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                : null,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          ),
-        ],
-      ),
-    );
-
-    return SizedBox(
-      height: buttonHeight,
-      child: AnimatedBuilder(
-        animation: _flipAnimation,
-        builder: (context, child) {
-          final angle = _flipAnimation.value * math.pi;
-          return Transform(
-            alignment: Alignment.center,
-            transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.001)
-              ..rotateY(angle),
-            child: _flipAnimation.value < 0.5
-                ? frontFace
-                : Transform(
-                    alignment: Alignment.center,
-                    transform: Matrix4.identity()..rotateY(math.pi),
-                    child: backFace,
-                  ),
-          );
-        },
-      ),
     );
   }
 }
