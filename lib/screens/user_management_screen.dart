@@ -23,6 +23,9 @@ class UserManagementScreen extends StatefulWidget {
   State<UserManagementScreen> createState() => _UserManagementScreenState();
 }
 
+const String _kAddNewDepartment = '__add_new_department__';
+const String _kAddNewDesignation = '__add_new_designation__';
+
 class _UserManagementScreenState extends State<UserManagementScreen> {
   String? _updatingUserId;
   Timer? _debounceTimer;
@@ -38,19 +41,40 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   final Map<String, String> _editedDepartments = {};
   final Map<String, String> _editedDesignations = {};
 
+  List<String> _departments = [];
+  List<String> _designations = [];
+
   Set<String> get _availableStatuses {
     final userProvider = Provider.of<UserProvider>(context);
     return userProvider.users.map((user) => user.status).toSet();
   }
 
-  Set<String> get _availableDepartments {
+  List<String> get _availableDepartments {
     final userProvider = Provider.of<UserProvider>(context);
-    return userProvider.users.map((user) => user.department).toSet();
+    final users = userProvider.users;
+    final deptOrder = _departments.where((d) => d.isNotEmpty).toList();
+    if (users.isEmpty) return List<String>.from(deptOrder);
+    final fromUsers = users
+        .map((user) => user.department)
+        .where((d) => d.isNotEmpty)
+        .toSet();
+    final rest = fromUsers.difference(deptOrder.toSet()).toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return [...deptOrder, ...rest];
   }
 
-  Set<String> get _availableDesignations {
+  List<String> get _availableDesignations {
     final userProvider = Provider.of<UserProvider>(context);
-    return userProvider.users.map((user) => user.designation).toSet();
+    final users = userProvider.users;
+    final desigOrder = _designations.where((d) => d.isNotEmpty).toList();
+    if (users.isEmpty) return List<String>.from(desigOrder);
+    final fromUsers = users
+        .map((user) => user.designation)
+        .where((d) => d.isNotEmpty)
+        .toSet();
+    final rest = fromUsers.difference(desigOrder.toSet()).toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return [...desigOrder, ...rest];
   }
 
   final Map<String, Color> userStatusColors = {
@@ -127,6 +151,172 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       userProvider.refreshUsersInBackground();
     }
     _searchController.addListener(_onSearchChanged);
+    _fetchDepartments();
+    _fetchDesignations();
+  }
+
+  Future<void> _fetchDepartments() async {
+    try {
+      final response = await http.get(Uri.parse(ApiConfig.departmentsEndpoint));
+      if (response.statusCode == 200 && mounted) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>?;
+        final raw = data?['departments'];
+        final list = raw is List<dynamic>
+            ? raw.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList()
+            : <String>[];
+        setState(() => _departments = list);
+      }
+    } catch (e) {
+      debugPrint('Fetch departments failed: $e');
+    }
+  }
+
+  Future<void> _fetchDesignations() async {
+    try {
+      final response = await http.get(Uri.parse(ApiConfig.designationsEndpoint));
+      if (response.statusCode == 200 && mounted) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>?;
+        final raw = data?['designations'];
+        final list = raw is List<dynamic>
+            ? raw.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList()
+            : <String>[];
+        setState(() => _designations = list);
+      }
+    } catch (e) {
+      debugPrint('Fetch designations failed: $e');
+    }
+  }
+
+  Future<void> _showAddDepartmentDialog({String? initialSelectForUser}) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2C3E50),
+        title: const Text(
+          'Add new department',
+          style: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+          decoration: const InputDecoration(
+            labelText: 'Department name',
+            labelStyle: TextStyle(color: Colors.white70),
+          ),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC10D00)),
+            child: const Text('Add', style: TextStyle(fontFamily: 'Poppins')),
+          ),
+        ],
+      ),
+    );
+    if (result == null || result.isEmpty) return;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.departmentsEndpoint),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'name': result}),
+      );
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>?;
+        final raw = data?['departments'];
+        final list = raw is List<dynamic>
+            ? raw.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList()
+            : <String>[];
+        if (mounted) {
+          setState(() {
+            _departments = [result, ...list.where((s) => s != result)];
+          });
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Department "$result" added. You can select it from the list.'), backgroundColor: const Color(0xFFC10D00)),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add department: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _showAddDesignationDialog({String? initialSelectForUser}) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2C3E50),
+        title: const Text(
+          'Add new designation',
+          style: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+          decoration: const InputDecoration(
+            labelText: 'Designation name',
+            labelStyle: TextStyle(color: Colors.white70),
+          ),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC10D00)),
+            child: const Text('Add', style: TextStyle(fontFamily: 'Poppins')),
+          ),
+        ],
+      ),
+    );
+    if (result == null || result.isEmpty) return;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.designationsEndpoint),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'name': result}),
+      );
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>?;
+        final raw = data?['designations'];
+        final list = raw is List<dynamic>
+            ? raw.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList()
+            : <String>[];
+        if (mounted) {
+          setState(() {
+            _designations = [result, ...list.where((s) => s != result)];
+          });
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Designation "$result" added. You can select it from the list.'), backgroundColor: const Color(0xFFC10D00)),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add designation: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   void _onSearchChanged() {
@@ -570,7 +760,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     Icons.arrow_drop_down,
                     color: Colors.white70,
                   ),
-                  onChanged: (String? newValue) {
+                  onChanged: (String? newValue) async {
+                    if (newValue == _kAddNewDepartment) {
+                      await _showAddDepartmentDialog();
+                      return;
+                    }
                     setState(() {
                       _selectedDepartment = newValue;
                     });
@@ -579,6 +773,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     const DropdownMenuItem<String>(
                       value: null,
                       child: Text('All Departments'),
+                    ),
+                    const DropdownMenuItem<String>(
+                      value: _kAddNewDepartment,
+                      child: Text('➕ Add new department...'),
                     ),
                     ..._availableDepartments.map<DropdownMenuItem<String>>((
                       String value,
@@ -615,7 +813,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     Icons.arrow_drop_down,
                     color: Colors.white70,
                   ),
-                  onChanged: (String? newValue) {
+                  onChanged: (String? newValue) async {
+                    if (newValue == _kAddNewDesignation) {
+                      await _showAddDesignationDialog();
+                      return;
+                    }
                     setState(() {
                       _selectedDesignation = newValue;
                     });
@@ -624,6 +826,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     const DropdownMenuItem<String>(
                       value: null,
                       child: Text('All Designations'),
+                    ),
+                    const DropdownMenuItem<String>(
+                      value: _kAddNewDesignation,
+                      child: Text('➕ Add new designation...'),
                     ),
                     ..._availableDesignations.map<DropdownMenuItem<String>>((
                       String value,
@@ -1152,9 +1358,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: DropdownButton<String>(
-                        value: selectedDepartmentLocal.isNotEmpty
-                            ? selectedDepartmentLocal
-                            : null,
+                        value: selectedDepartmentLocal.isEmpty
+                            ? null
+                            : selectedDepartmentLocal,
                         hint: const Text(
                           'Select department',
                           style: TextStyle(
@@ -1173,7 +1379,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           color: Colors.white70,
                         ),
                         underline: const SizedBox.shrink(),
-                        onChanged: (String? newValue) {
+                        onChanged: (String? newValue) async {
+                          if (newValue == _kAddNewDepartment) {
+                            await _showAddDepartmentDialog(initialSelectForUser: user.id);
+                            if (mounted) setState(() {});
+                            return;
+                          }
                           setState(() {
                             selectedDepartmentLocal = newValue ?? '';
                             if (selectedDepartmentLocal.isNotEmpty) {
@@ -1184,26 +1395,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             }
                           });
                         },
-                        items: const [
-                          DropdownMenuItem<String>(
-                            value: 'Management',
-                            child: Text('Management'),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: _kAddNewDepartment,
+                            child: Text('➕ Add new department...'),
                           ),
-                          DropdownMenuItem<String>(
-                            value: 'Operations',
-                            child: Text('Operations'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'Finance',
-                            child: Text('Finance'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'HR',
-                            child: Text('HR'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'Sales',
-                            child: Text('Sales'),
+                          ..._availableDepartments.map<DropdownMenuItem<String>>(
+                            (String value) => DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            ),
                           ),
                         ],
                       ),
@@ -1253,7 +1454,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           color: Colors.white70,
                         ),
                         underline: const SizedBox.shrink(),
-                        onChanged: (String? newValue) {
+                        onChanged: (String? newValue) async {
+                          if (newValue == _kAddNewDesignation) {
+                            await _showAddDesignationDialog(initialSelectForUser: user.id);
+                            if (mounted) setState(() {});
+                            return;
+                          }
                           setState(() {
                             selectedDesignationLocal = newValue ?? '';
                             if (selectedDesignationLocal.isNotEmpty) {
@@ -1264,70 +1470,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             }
                           });
                         },
-                        items: const [
-                          DropdownMenuItem<String>(
-                            value: 'Director',
-                            child: Text('Director'),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: _kAddNewDesignation,
+                            child: Text('➕ Add new designation...'),
                           ),
-                          DropdownMenuItem<String>(
-                            value: 'Developer',
-                            child: Text('Developer'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'Support Analyst',
-                            child: Text('Support Analyst'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'Learner',
-                            child: Text('Learner'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'UX Designer',
-                            child: Text('UX Designer'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'AWS Cloud Engineer',
-                            child: Text('AWS Cloud Engineer'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'Tester',
-                            child: Text('Tester'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'RMB Small Talk Developer',
-                            child: Text('RMB Small Talk Developer'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'Finance',
-                            child: Text('Finance'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'Business Analyst',
-                            child: Text('Business Analyst'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'Manager',
-                            child: Text('Manager'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'Delivery Manager',
-                            child: Text('Delivery Manager'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'Analyst',
-                            child: Text('Analyst'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'Sales Person',
-                            child: Text('Sales Person'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'HR',
-                            child: Text('HR'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'Junior Analyst',
-                            child: Text('Junior Analyst'),
+                          ..._availableDesignations.map<DropdownMenuItem<String>>(
+                            (String value) => DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            ),
                           ),
                         ],
                       ),
@@ -2406,16 +2558,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         .toList();
     if (selectedUsers.isEmpty) return;
     final first = selectedUsers.first;
-    final deptSet = userProvider.users
-        .map((u) => u.department)
-        .where((d) => d.isNotEmpty)
-        .toSet();
-    final desigSet = userProvider.users
-        .map((u) => u.designation)
-        .where((d) => d.isNotEmpty)
-        .toSet();
-    final deptOptions = deptSet.toList()..sort();
-    final desigOptions = desigSet.toList()..sort();
+    final deptOptions = _availableDepartments;
+    final desigOptions = _availableDesignations;
 
     String? bulkRole = first.role;
     String? bulkStatus = first.status;

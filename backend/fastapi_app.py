@@ -280,6 +280,10 @@ class UserUpdate(BaseModel):
     moduleAccessRole: Optional[str] = None
     adminApproved: Optional[str] = None
     regenerateToken: Optional[bool] = None
+
+
+class NameBody(BaseModel):
+    name: str
 try:
     main_cred = load_firebase_credentials('FIREBASE_CREDENTIALS', 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json')
     initialize_app(main_cred)
@@ -1118,6 +1122,102 @@ async def delete_user(user_id: str):
     except Exception as e:
         print(f"[ERROR] During user deletion: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/departments")
+async def list_departments():
+    """Return all department names from Firestore collection."""
+    try:
+        docs = db.collection("departments").stream()
+        names = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            n = (data.get("name") or "").strip()
+            if n and n not in names:
+                names.append(n)
+        names.sort(key=str.lower)
+        return JSONResponse(status_code=200, content={"departments": names})
+    except Exception as e:
+        print(f"[ERROR] list_departments: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/api/departments")
+async def create_department(body: NameBody):
+    """Add a new department; store in Firestore collection. Returns updated list."""
+    try:
+        name = (body.name or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="name is required")
+        coll = db.collection("departments")
+        existing = coll.where("name", "==", name).limit(1).stream()
+        if next(existing, None) is not None:
+            pass
+        else:
+            coll.add({"name": name})
+        docs = coll.stream()
+        names = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            n = (data.get("name") or "").strip()
+            if n and n not in names:
+                names.append(n)
+        names.sort(key=str.lower)
+        return JSONResponse(status_code=201, content={"departments": names})
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] create_department: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/designations")
+async def list_designations():
+    """Return all designation names from Firestore collection."""
+    try:
+        docs = db.collection("designations").stream()
+        names = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            n = (data.get("name") or "").strip()
+            if n and n not in names:
+                names.append(n)
+        names.sort(key=str.lower)
+        return JSONResponse(status_code=200, content={"designations": names})
+    except Exception as e:
+        print(f"[ERROR] list_designations: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/api/designations")
+async def create_designation(body: NameBody):
+    """Add a new designation; store in Firestore collection. Returns updated list."""
+    try:
+        name = (body.name or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="name is required")
+        coll = db.collection("designations")
+        existing = coll.where("name", "==", name).limit(1).stream()
+        if next(existing, None) is not None:
+            pass
+        else:
+            coll.add({"name": name})
+        docs = coll.stream()
+        names = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            n = (data.get("name") or "").strip()
+            if n and n not in names:
+                names.append(n)
+        names.sort(key=str.lower)
+        return JSONResponse(status_code=201, content={"designations": names})
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] create_designation: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @app.post("/api/roles")
 async def create_role(role: Role):
     try:
