@@ -11,6 +11,7 @@ import '../utils/pdh_firebase.dart'
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/sound_system.dart';
 
 class ModuleAccessScreen extends StatefulWidget {
   const ModuleAccessScreen({super.key});
@@ -486,6 +487,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       } catch (e) {
         debugPrint('PDH sync failed for module access update: $e');
         if (mounted) {
+          SoundSystem.playError();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
@@ -519,6 +521,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       }
 
       if (mounted) {
+        SoundSystem.playSuccess();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -534,6 +537,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       }
     } catch (e) {
       if (mounted) {
+        SoundSystem.playError();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -1429,6 +1433,23 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     );
   }
 
+  Widget _buildUserAvatar(ManagedUser user) {
+    final url = user.profilePictureUrl;
+    if (url != null && url.trim().isNotEmpty) {
+      return CircleAvatar(
+        radius: 20,
+        backgroundColor: Colors.white24,
+        backgroundImage: NetworkImage(url.trim()),
+        onBackgroundImageError: (_, __) {},
+      );
+    }
+    return const CircleAvatar(
+      radius: 20,
+      backgroundColor: Colors.white24,
+      child: Icon(Icons.person, size: 24, color: Colors.white54),
+    );
+  }
+
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
     final moduleAccessChips = _buildModuleAccessChips(user.moduleAccess);
     final isSelected = _selectedUserIds.contains(user.id);
@@ -1513,11 +1534,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   width: columnWidth,
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.person,
-                        size: 40.0,
-                        color: Colors.white54,
-                      ),
+                      _buildUserAvatar(user),
                       const SizedBox(width: 12.0),
                       Flexible(
                         child: Column(

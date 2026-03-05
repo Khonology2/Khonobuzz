@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/sound_system.dart';
 import 'manual_login_screen.dart';
 import '../main.dart';
 import 'onboarding_screen.dart';
@@ -312,6 +313,7 @@ class AuthScreenState extends State<AuthScreen> {
       text: text,
       color: color,
       onPressed: () {
+        SoundSystem.playButtonClick();
         if (onPressed == null) {
           return;
         }

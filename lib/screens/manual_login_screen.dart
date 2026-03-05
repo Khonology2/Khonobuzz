@@ -5,6 +5,7 @@ import 'dart:async';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import 'package:provider/provider.dart';
+import '../services/sound_system.dart';
 import '../widgets/animations/loading_button.dart';
 import '../widgets/floating_circles_particle_animation.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -376,7 +377,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                               navigator.pushAndRemoveUntil(
                                 MaterialPageRoute(
                                   builder: (context) =>
-                                      const MainScreen(initialIndex: 8),
+                                      const MainScreen(
+                                        initialIndex: 8,
+                                        playLoginSuccessSound: true,
+                                      ),
                                 ),
                                 (route) => false,
                               );
@@ -691,7 +695,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
       if (selectedEmail != null && mounted) {
         if (!mounted) return;
         final success = await authProvider.manualLogin(
-          selectedEmail,
+          selectedEmail.trim().toLowerCase(),
           isSpecialAccess: true,
         );
 
@@ -699,7 +703,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
         if (success) {
           navigator.pushAndRemoveUntil(
             MaterialPageRoute(
-              builder: (context) => const MainScreen(initialIndex: 8),
+              builder: (context) => const MainScreen(
+                initialIndex: 8,
+                playLoginSuccessSound: true,
+              ),
             ),
             (route) => false,
           );
@@ -745,6 +752,7 @@ class _LoadingConfirmButtonWrapperState
       text: widget.text,
       color: widget.color,
       onPressed: () async {
+        SoundSystem.playButtonClick();
         if (widget.animationKey?.currentState != null) {
           widget.animationKey!.currentState!.triggerParticleExplosion();
         }
@@ -815,6 +823,7 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
           ),
           child: MaterialButton(
             onPressed: () {
+              SoundSystem.playButtonClick();
               _clickController.forward(from: 0);
               widget.onPressed();
             },

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../screens/landing_screen.dart';
+import '../services/sound_system.dart';
 import 'version_control_widget.dart'; // Added import for VersionControlWidget
 
 class MenuItemWidget extends StatefulWidget {
@@ -74,7 +75,10 @@ class _MenuItemWidgetState extends State<MenuItemWidget> {
           ), // Fully rounded circular/pill design
         ),
         child: InkWell(
-          onTap: widget.onTap,
+          onTap: () {
+            SoundSystem.playButtonClick();
+            widget.onTap?.call();
+          },
           borderRadius: BorderRadius.circular(
             25,
           ), // Fully rounded circular/pill design
@@ -225,7 +229,10 @@ class _LogoutMenuItemState extends State<_LogoutMenuItem> {
           ), // Fully rounded circular/pill design
         ),
         child: InkWell(
-          onTap: widget.onTap,
+          onTap: () {
+            SoundSystem.playButtonClick();
+            widget.onTap();
+          },
           borderRadius: BorderRadius.circular(
             25,
           ), // Fully rounded circular/pill design
@@ -421,8 +428,19 @@ class _SideMenuState extends State<SideMenu> {
                   isExpanded: _isExpanded,
                   onTap: () => widget.onItemSelected(3),
                 ),
+                // Profile - Available to all users (Staff and Admin)
+                MenuItemWidget(
+                  unselectedIconPath:
+                      'assets/images/HR_Team_Management/Management_White_Badge_Red.png',
+                  selectedIconPath:
+                      'assets/images/HR_Team_Management/red_Management_Red_Badge_White.png',
+                  title: 'Profile',
+                  isSelected: widget.selectedIndex == 4,
+                  isExpanded: _isExpanded,
+                  onTap: () => widget.onItemSelected(4),
+                ),
                 // Small spacing before logout button
-                const SizedBox(height: 310.0),
+                const SizedBox(height: 260.0),
                 // Version Control Widget positioned above logout button - only show when expanded
                 if (_isExpanded)
                   Container(

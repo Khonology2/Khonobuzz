@@ -11,6 +11,7 @@ import '../utils/pdh_firebase.dart'
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/sound_system.dart';
 
 class EntityManagementScreen extends StatefulWidget {
   const EntityManagementScreen({super.key});
@@ -155,6 +156,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       } catch (e) {
         debugPrint('PDH sync failed for entity update: $e');
         if (mounted) {
+          SoundSystem.playError();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
@@ -181,6 +183,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       }
 
       if (mounted) {
+        SoundSystem.playSuccess();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -196,6 +199,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       }
     } catch (e) {
       if (mounted) {
+        SoundSystem.playError();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -400,11 +404,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                   width: columnWidth,
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.person,
-                        size: 40.0,
-                        color: Colors.white54,
-                      ),
+                      _buildUserAvatar(user),
                       const SizedBox(width: 12.0),
                       Flexible(
                         child: Column(
@@ -519,6 +519,23 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           color: Colors.white,
         ),
       ),
+    );
+  }
+
+  Widget _buildUserAvatar(ManagedUser user) {
+    final url = user.profilePictureUrl;
+    if (url != null && url.trim().isNotEmpty) {
+      return CircleAvatar(
+        radius: 20,
+        backgroundColor: Colors.white24,
+        backgroundImage: NetworkImage(url.trim()),
+        onBackgroundImageError: (_, __) {},
+      );
+    }
+    return const CircleAvatar(
+      radius: 20,
+      backgroundColor: Colors.white24,
+      child: Icon(Icons.person, size: 24, color: Colors.white54),
     );
   }
 

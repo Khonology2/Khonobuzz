@@ -8,8 +8,10 @@ import 'screens/landing_screen.dart';
 import 'screens/onboarding_alert_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
+import 'services/sound_system.dart';
+import 'screens/admin_profile_screen.dart';
+import 'screens/staff_profile_screen.dart';
 import 'widgets/side_menu.dart';
-import 'widgets/profile_icon.dart';
 import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
 import 'firebase_options.dart'; // Import generated Firebase options
 
@@ -75,11 +77,14 @@ class MyApp extends StatelessWidget {
 class MainScreen extends StatefulWidget {
   final String? role; // New: Optional role parameter
   final int? initialIndex; // Optional initial screen index
+  /// When true, plays login success sound once after the user has landed (post-frame).
+  final bool playLoginSuccessSound;
 
   const MainScreen({
     super.key,
     this.role,
     this.initialIndex,
+    this.playLoginSuccessSound = false,
   }); // Modified constructor
 
   @override
@@ -126,6 +131,9 @@ class _MainScreenState extends State<MainScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
+      }
+      if (widget.playLoginSuccessSound) {
+        SoundSystem.playLoginSuccess();
       }
       final authProvider = context.read<AuthProvider>();
       authProvider.saveCurrentScreenIndex(finalIndex);
@@ -208,7 +216,7 @@ class _MainScreenState extends State<MainScreen> {
           Row(
             children: [
               SideMenu(
-                selectedIndex: (_selectedIndex < 4) ? _selectedIndex : 0,
+                selectedIndex: _selectedIndex <= 4 ? _selectedIndex : 0,
                 onItemSelected: _onItemTapped,
               ),
               Expanded(
@@ -219,6 +227,7 @@ class _MainScreenState extends State<MainScreen> {
                     EntityManagementScreen(),
                     ModuleAccessScreen(),
                     ModuleScreen(),
+                    _ProfileScreenPlaceholder(),
                   ],
                 ),
               ),
@@ -296,9 +305,26 @@ class _MainScreenState extends State<MainScreen> {
                 ],
               ),
             ),
-          ProfileIcon(hasOnboardingAlerts: hasOnboardingAlerts),
         ],
       ),
+    );
+  }
+}
+
+/// Shows Admin or Staff profile screen based on current user role.
+class _ProfileScreenPlaceholder extends StatelessWidget {
+  const _ProfileScreenPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        final role = authProvider.userRole?.toLowerCase() ?? '';
+        if (role == 'admin') {
+          return const AdminProfileScreen();
+        }
+        return const StaffProfileScreen();
+      },
     );
   }
 }

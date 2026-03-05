@@ -15,6 +15,7 @@ import '../models/managed_user.dart';
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/sound_system.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -239,6 +240,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           });
         }
         if (mounted) {
+          SoundSystem.playSuccess();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Department "$result" added. You can select it from the list.'), backgroundColor: const Color(0xFFC10D00)),
           );
@@ -246,6 +248,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
     } catch (e) {
       if (mounted) {
+        SoundSystem.playError();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to add department: $e'), backgroundColor: Colors.red),
         );
@@ -257,7 +260,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final controller = TextEditingController();
     final result = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog( 
         backgroundColor: const Color(0xFF2C3E50),
         title: const Text(
           'Add new designation',
@@ -305,6 +308,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           });
         }
         if (mounted) {
+          SoundSystem.playSuccess();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Designation "$result" added. You can select it from the list.'), backgroundColor: const Color(0xFFC10D00)),
           );
@@ -312,6 +316,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
     } catch (e) {
       if (mounted) {
+        SoundSystem.playError();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to add designation: $e'), backgroundColor: Colors.red),
         );
@@ -374,6 +379,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
 
       if (mounted) {
+        SoundSystem.playSuccess();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -417,6 +423,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       } catch (e) {
         debugPrint('PDH sync failed for user update: $e');
         if (mounted) {
+          SoundSystem.playError();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
@@ -926,6 +933,23 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 
+  Widget _buildUserAvatar(ManagedUser user) {
+    final url = user.profilePictureUrl;
+    if (url != null && url.trim().isNotEmpty) {
+      return CircleAvatar(
+        radius: 20,
+        backgroundColor: Colors.white24,
+        backgroundImage: NetworkImage(url.trim()),
+        onBackgroundImageError: (_, __) {},
+      );
+    }
+    return const CircleAvatar(
+      radius: 20,
+      backgroundColor: Colors.white24,
+      child: Icon(Icons.person, size: 24, color: Colors.white54),
+    );
+  }
+
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
     final isSelected = _selectedUserIds.contains(user.id);
 
@@ -1004,11 +1028,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   width: columnWidth,
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.person,
-                        size: 40.0,
-                        color: Colors.white54,
-                      ),
+                      _buildUserAvatar(user),
                       const SizedBox(width: 12.0),
                       Flexible(
                         child: Column(
@@ -1664,6 +1684,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
 
       if (mounted) {
+        SoundSystem.playSuccess();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Manager set to $managerFullName for ${user.name}.'),
@@ -1958,6 +1979,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           final emailsText = emailsController.text.trim();
 
                           if (emailsText.isEmpty) {
+                            SoundSystem.playError();
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
@@ -1973,6 +1995,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           final emails = _parseEmails(emailsText);
 
                           if (emails.isEmpty) {
+                            SoundSystem.playError();
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
@@ -2531,6 +2554,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         await userProvider.fetchUsers();
 
         if (mounted) {
+          SoundSystem.playSuccess();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -2785,6 +2809,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       });
                       final currentContext = context;
                       if (!currentContext.mounted) return;
+                      if (done > 0) SoundSystem.playSuccess();
+                      if (failed > 0) SoundSystem.playError();
                       ScaffoldMessenger.of(currentContext).showSnackBar(
                         SnackBar(
                           content: Text(

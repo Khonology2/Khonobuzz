@@ -103,12 +103,13 @@ class UserProvider extends ChangeNotifier {
     }
   }
 
-  // Update a single user in the cache
+  // Update a single user in the cache. Set updatedAt to now so the edited user moves to the top.
   void updateUser(ManagedUser updatedUser) {
     final index = _users.indexWhere((u) => u.id == updatedUser.id);
     if (index != -1) {
-      _users[index] = updatedUser;
-      // Re-sort after update
+      final bumped = updatedUser.copyWith(updatedAt: DateTime.now());
+      _users[index] = bumped;
+      // Re-sort by updatedAt/createdAt descending so most recently edited is at top
       _users.sort((a, b) {
         final aKey =
             a.updatedAt ??

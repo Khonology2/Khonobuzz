@@ -597,10 +597,12 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
         module_access_raw = user_info.get('moduleAccess') or onboarding_info.get('moduleAccess', '')
         module_access_role_raw = user_info.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', '')
 
+        entity_value = user_info.get('entity') or onboarding_info.get('entity') or ''
         response_user = {
             'email': user_info.get('email', normalized_email),
             'role': user_info.get('role', ''),
             'status': user_info.get('status', 'Pending'),
+            'entity': entity_value,
             'moduleAccess': module_access_raw or '',
             'moduleAccessRole': module_access_role_raw or '',
             'firstName': onboarding_info.get('firstName') or user_info.get('firstName') or user_info.get('name', '').split(' ')[0],
@@ -884,6 +886,7 @@ async def list_users():
             module_access_raw = user_info.get('moduleAccess') or onboarding_info.get('moduleAccess', '')
             module_access_role_raw = user_info.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', '')
             final_module_access = derive_module_access_from_role(module_access_raw, module_access_role_raw)
+            profile_image_url = onboarding_info.get('profileImageUrl') or user_info.get('profileImageUrl') or ''
             user_payload = {
                 'id': user_doc.id,
                 'email': user_info.get('email', ''),
@@ -898,6 +901,7 @@ async def list_users():
                 'moduleAccess': final_module_access or '',
                 'moduleRole': user_info.get('moduleRole') or onboarding_info.get('moduleRole', ''),
                 'moduleAccessRole': module_access_role_raw or '',
+                'profileImageUrl': profile_image_url,
                 'createdAt': created_at_str,
                 'updatedAt': updated_at_str,
             }
@@ -1349,6 +1353,23 @@ async def login_user(user_login: UserLogin, request: Request):
                         "expires_at": now + LOGIN_CACHE_TTL_SECONDS,
                     }
                     debug_log(f"Login cache populated for {normalized_email}")
+                else:
+                    # Case-insensitive fallback: user may be stored with mixed case
+                    for doc in users_ref.stream():
+                        doc_data = doc.to_dict() or {}
+                        doc_email = (doc_data.get('email') or '').strip()
+                        if doc_email.lower() == normalized_email:
+                            user_data = doc_data
+                            user_id = doc.id
+                            stored_email = doc_email
+                            USER_CACHE[cache_key] = {
+                                "user_data": user_data,
+                                "user_id": user_id,
+                                "stored_email": stored_email,
+                                "expires_at": now + LOGIN_CACHE_TTL_SECONDS,
+                            }
+                            debug_log(f"Login cache populated (case-insensitive) for {normalized_email}")
+                            break
             except Exception as query_error:
                 user_lookup_end = time.time()
                 if not is_special_session:

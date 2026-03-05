@@ -79,6 +79,35 @@ class ManagedUser {
     this.updatedAt,
   });
 
+  /// Copy with optional overrides so the updated user can be sorted to the top.
+  ManagedUser copyWith({
+    DateTime? updatedAt,
+    String? entity,
+    String? moduleAccess,
+    String? moduleRole,
+    String? moduleAccessRole,
+  }) {
+    return ManagedUser(
+      id: id,
+      firstName: firstName,
+      lastName: lastName,
+      email: email,
+      department: department,
+      designation: designation,
+      role: role,
+      status: status,
+      entity: entity ?? this.entity,
+      manager: manager,
+      moduleAccess: moduleAccess ?? this.moduleAccess,
+      moduleRole: moduleRole ?? this.moduleRole,
+      moduleAccessRole: moduleAccessRole ?? this.moduleAccessRole,
+      phoneNumber: phoneNumber,
+      profilePictureUrl: profilePictureUrl,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   factory ManagedUser.fromFirestore(
     String id,
     Map<String, dynamic> userData,
@@ -201,7 +230,7 @@ class ManagedUser {
           : null,
       moduleAccessRole: moduleAccessRoleRaw,
       phoneNumber: data['phone'],
-      profilePictureUrl: data['profilePictureUrl'],
+      profilePictureUrl: data['profilePictureUrl'] ?? data['profileImageUrl'],
       createdAt: createdAtRaw is String && createdAtRaw.isNotEmpty
           ? DateTime.tryParse(createdAtRaw)
           : null,

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'dart:async';
+import '../services/sound_system.dart';
 import '../widgets/animations/loading_button.dart';
 import '../widgets/floating_circles_particle_animation.dart';
 import 'lobby_screen.dart';
@@ -876,6 +877,7 @@ class _LoadingConfirmButtonWrapperState
       text: widget.text,
       color: widget.color,
       onPressed: () async {
+        SoundSystem.playButtonClick();
         if (_isAnimating) {
           return;
         }
@@ -1038,6 +1040,7 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
           },
           child: MaterialButton(
             onPressed: () {
+              SoundSystem.playButtonClick();
               if (widget.isBackButton) {
                 _triggerDissolve();
                 if (widget.animationKey?.currentState != null) {

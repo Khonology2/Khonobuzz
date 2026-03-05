@@ -303,6 +303,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> manualLogin(String email, {bool isSpecialAccess = false}) async {
+    final normalizedEmail = email.trim().toLowerCase();
     final url = Uri.parse(ApiConfig.authLoginEndpoint);
 
     try {
@@ -315,7 +316,7 @@ class AuthProvider extends ChangeNotifier {
       final response = await _postWithTimeoutAndRetry(
         url,
         headers: headers,
-        body: json.encode({'email': email}),
+        body: json.encode({'email': normalizedEmail}),
         maxRetries: 0,
         timeout: const Duration(seconds: 4),
       );

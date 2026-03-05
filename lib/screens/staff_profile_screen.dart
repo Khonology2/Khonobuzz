@@ -34,6 +34,8 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
   String? _selectedDesignation;
   String? _profileImageUrl;
   String? _profileImagePublicId;
+  String _userEntity = '';
+  String _userModuleAccess = '';
 
   final List<String> _departments = const [
     'Management',
@@ -195,6 +197,8 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         final profileImageUrl = (userMap['profileImageUrl'] ?? '').toString();
         final profileImagePublicId = (userMap['profileImagePublicId'] ?? '')
             .toString();
+        final entity = (userMap['entity'] ?? '').toString().trim();
+        final moduleAccess = (userMap['moduleAccess'] ?? '').toString().trim();
 
         // Robust matching for dropdowns
         String? matchedDept;
@@ -234,6 +238,10 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
           _profileImagePublicId = profileImagePublicId.isNotEmpty
               ? profileImagePublicId
               : null;
+          _userEntity = entity.isEmpty ? 'Not assigned' : entity;
+          _userModuleAccess = moduleAccess.isNotEmpty
+              ? moduleAccess
+              : (authProvider.userModuleAccess ?? 'None');
         });
 
         // Update AuthProvider with profile image data
@@ -304,23 +312,6 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         child: Stack(
           children: [
             FloatingCirclesParticleAnimation(),
-
-            Positioned(
-              top: 40,
-              left: 16,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: IconButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
-                ),
-              ),
-            ),
 
             Positioned(
               top: 100,
@@ -403,6 +394,23 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Entity and Modules (read-only)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _buildReadOnlyLabelValue('Entity', _userEntity),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildReadOnlyLabelValue(
+                            'Modules Access',
+                            _userModuleAccess,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
                     Row(
                       children: [
                         Expanded(
@@ -487,6 +495,41 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildReadOnlyLabelValue(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+          ),
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+              fontFamily: 'Poppins',
+            ),
+          ),
+        ),
+      ],
     );
   }
 

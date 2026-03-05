@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/sound_system.dart';
 import 'auth_screen.dart';
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart';
 import 'package:video_player/video_player.dart';
@@ -165,6 +166,7 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
           },
           child: MaterialButton(
             onPressed: () {
+              SoundSystem.playButtonClick();
               _clickController.forward(from: 0);
               if (widget.onPressed != null) {
                 Future.delayed(

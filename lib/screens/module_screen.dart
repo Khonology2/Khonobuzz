@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../config/api_config.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
+import '../services/sound_system.dart';
 import '../widgets/floating_circles_particle_animation.dart';
 
 const Color primaryDark = Color(0xFF1F2937);
@@ -607,6 +608,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                         onPressed: _isLoading
                                             ? null
                                             : () async {
+                                                SoundSystem.playButtonClick();
                                                 _animationKey.currentState
                                                     ?.triggerParticleExplosion();
 
