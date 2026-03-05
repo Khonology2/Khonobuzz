@@ -134,8 +134,13 @@ class ApiConfig {
   static String get authLoginEndpoint => '$baseUrl/api/auth/login';
   static String userByEmailEndpoint(String email) =>
       '$baseUrl/api/users/by-email?email=${Uri.encodeComponent(email)}';
-  static String authTokenEndpoint(String email) =>
-      '$baseUrl/api/auth/token?email=${Uri.encodeComponent(email)}';
+  static String authTokenEndpoint(String email, {String? module}) {
+    final base = '$baseUrl/api/auth/token?email=${Uri.encodeComponent(email)}';
+    if (module != null && module.isNotEmpty) {
+      return '$base&module=${Uri.encodeComponent(module)}';
+    }
+    return base;
+  }
   static String get pdhSyncUserEndpoint => '$baseUrl/api/pdh/sync-user';
   static String pdhUpdateUserEndpoint(String uid) =>
       '$baseUrl/api/pdh/update-user/$uid';

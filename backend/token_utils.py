@@ -136,6 +136,28 @@ def parse_module_access_role_to_roles(module_access_role: str) -> list:
         return []
     roles = [role.strip() for role in module_access_role.split(',') if role.strip()]
     return roles
+
+
+def parse_module_access_role_to_arw_roles(module_access_role: str) -> list:
+    """
+    Extract Automated Recruitment Workflow roles from moduleAccessRole and map to ARW - X format.
+    Used when issuing a token for the ARW (Automated Recruitment Workflow) app.
+    Args:
+        module_access_role: Comma-separated string, e.g. "PDH - Employee, Automated Recruitment Workflow - Admin"
+    Returns:
+        List like ["ARW - Admin", "ARW - Hiring Manager"] for use in the ARW token payload.
+    """
+    if not module_access_role or not isinstance(module_access_role, str):
+        return []
+    prefix = "Automated Recruitment Workflow - "
+    result = []
+    for part in module_access_role.split(','):
+        part = part.strip()
+        if part.startswith(prefix):
+            role_suffix = part[len(prefix):].strip()
+            if role_suffix:
+                result.append(f"ARW - {role_suffix}")
+    return result
 def generate_and_encrypt_token(
     user_id: str,
     email: str,

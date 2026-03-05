@@ -21,12 +21,14 @@ try:
     from .token_utils import (
         generate_and_encrypt_token,
         parse_module_access_role_to_roles,
+        parse_module_access_role_to_arw_roles,
         verify_token,
     )
 except ImportError:
     from token_utils import (
         generate_and_encrypt_token,
         parse_module_access_role_to_roles,
+        parse_module_access_role_to_arw_roles,
         verify_token,
     )
 try:
@@ -1508,14 +1510,19 @@ async def login_user(user_login: UserLogin, request: Request):
             )
         info_log(f"/api/auth/login completed in {total_duration:.3f} seconds")
 @app.get("/api/auth/token")
-async def get_user_token(email: str = Query(..., description="User email address")):
+async def get_user_token(
+    email: str = Query(..., description="User email address"),
+    module: Optional[str] = Query(None, description="Target app: 'recruitment' or 'arw' for ARW token with roles like ARW - Admin, ARW - Hiring Manager"),
+):
     """
     Generate a fresh encrypted token for a user by email.
-    This endpoint ALWAYS generates a new token to ensure it's fresh and not expired.
-    The token is then synced to PDH app only.
+    When module=recruitment (or arw), the token payload roles are mapped to ARW format
+    (e.g. ARW - Admin, ARW - Hiring Manager) for the Automated Recruitment Workflow app;
+    the token is returned only and not saved to onboarding/PDH.
+    Otherwise, a normal PDH token is generated and synced to onboarding/PDH.
     """
     try:
-        info_log(f"Token generation request for email: {email}")
+        info_log(f"Token generation request for email: {email}, module: {module}")
         users_ref = db.collection('users')
         query = users_ref.where('email', '==', email).limit(1)
         users = query.get()
@@ -1533,13 +1540,18 @@ async def get_user_token(email: str = Query(..., description="User email address
             onboarding_doc_ref = onboarding_doc.reference
             module_access_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
             break
-        roles = parse_module_access_role_to_roles(module_access_role)
+        is_arw = module and module.strip().lower() in ("recruitment", "arw")
+        if is_arw:
+            roles = parse_module_access_role_to_arw_roles(module_access_role)
+            print(f"[DEBUG] Generating ARW token for user_id: {user_id} with roles: {roles}")
+        else:
+            roles = parse_module_access_role_to_roles(module_access_role)
+            print(f"[DEBUG] Generating fresh token for user_id: {user_id} with roles: {roles}")
         first_name = onboarding_data.get('firstName') or onboarding_data.get('name') or user_data.get('firstName') or ''
         last_name = onboarding_data.get('lastName') or onboarding_data.get('surname') or user_data.get('lastName') or ''
         full_name = f"{first_name} {last_name}".strip()
         if not full_name:
             full_name = user_data.get('name', '')
-        print(f"[DEBUG] Generating fresh token for user_id: {user_id} with roles: {roles}")
         try:
             encrypted_token = generate_and_encrypt_token(
                 user_id=user_id,
@@ -1547,40 +1559,41 @@ async def get_user_token(email: str = Query(..., description="User email address
                 full_name=full_name,
                 roles=roles,
             )
-            if onboarding_doc_ref:
-                onboarding_doc_ref.update({
-                    'token': encrypted_token,
-                    'token_updated_at': datetime.utcnow(),
-                    'updated_at': datetime.utcnow(),
-                    'fullName': full_name,
-                    'email': user_data['email'],
-                })
-                print(f"[DEBUG] Token updated in main onboarding collection for user_id: {user_id}")
-            else:
-                onboarding_data = {
-                    'user_id': user_id,
-                    'email': user_data['email'],
-                    'token': encrypted_token,
-                    'fullName': full_name,
-                    'token_updated_at': datetime.utcnow(),
-                    'created_at': datetime.utcnow(),
-                    'updated_at': datetime.utcnow(),
-                    'moduleAccessRole': module_access_role,
-                }
-                db.collection('onboarding').add(onboarding_data)
-                print(f"[DEBUG] Created onboarding document with token for user_id: {user_id}")
-            try:
-                pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
-                pdh_onboarding_ref.set({
-                    'email': user_data['email'],
-                    'token': encrypted_token,
-                    'fullName': full_name,
-                    'token_updated_at': datetime.utcnow(),
-                    'updated_at': datetime.utcnow(),
-                }, merge=True)
-                print(f"[DEBUG] Token synced to PDH onboarding collection for user_id: {user_id}")
-            except Exception as pdh_sync_error:
-                print(f"[ERROR] Failed to sync token to PDH: {pdh_sync_error}")
+            if not is_arw:
+                if onboarding_doc_ref:
+                    onboarding_doc_ref.update({
+                        'token': encrypted_token,
+                        'token_updated_at': datetime.utcnow(),
+                        'updated_at': datetime.utcnow(),
+                        'fullName': full_name,
+                        'email': user_data['email'],
+                    })
+                    print(f"[DEBUG] Token updated in main onboarding collection for user_id: {user_id}")
+                else:
+                    onboarding_data = {
+                        'user_id': user_id,
+                        'email': user_data['email'],
+                        'token': encrypted_token,
+                        'fullName': full_name,
+                        'token_updated_at': datetime.utcnow(),
+                        'created_at': datetime.utcnow(),
+                        'updated_at': datetime.utcnow(),
+                        'moduleAccessRole': module_access_role,
+                    }
+                    db.collection('onboarding').add(onboarding_data)
+                    print(f"[DEBUG] Created onboarding document with token for user_id: {user_id}")
+                try:
+                    pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
+                    pdh_onboarding_ref.set({
+                        'email': user_data['email'],
+                        'token': encrypted_token,
+                        'fullName': full_name,
+                        'token_updated_at': datetime.utcnow(),
+                        'updated_at': datetime.utcnow(),
+                    }, merge=True)
+                    print(f"[DEBUG] Token synced to PDH onboarding collection for user_id: {user_id}")
+                except Exception as pdh_sync_error:
+                    print(f"[ERROR] Failed to sync token to PDH: {pdh_sync_error}")
         except Exception as token_error:
             print(f"[ERROR] Failed to generate token: {token_error}")
             return JSONResponse(status_code=500, content={"error": "Failed to generate token"})

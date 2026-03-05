@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import '../config/api_config.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import '../widgets/floating_circles_particle_animation.dart';
@@ -831,7 +834,37 @@ Future<void> _launchUrlFromContext(
       );
       return;
     }
-    final String token = existingToken;
+
+    String token = existingToken;
+    if (moduleKey == 'recruitment') {
+      final email = authProvider.userEmail;
+      if (email != null && email.isNotEmpty) {
+        try {
+          final tokenUri = Uri.parse(
+            ApiConfig.authTokenEndpoint(email, module: 'recruitment'),
+          );
+          final response = await http.get(
+            tokenUri,
+            headers: {
+              'Authorization': 'Bearer $existingToken',
+              'Accept': 'application/json',
+            },
+          ).timeout(const Duration(seconds: 10));
+          if (response.statusCode == 200) {
+            final body = json.decode(response.body);
+            if (body is Map<String, dynamic>) {
+              final arwToken = body['token'] as String?;
+              if (arwToken != null && arwToken.isNotEmpty) {
+                token = arwToken;
+                debugPrint('[ModuleLaunch] Using ARW token for recruitment app');
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('[ModuleLaunch] ARW token fetch failed, using default token: $e');
+        }
+      }
+    }
 
     Uri uri = Uri.parse(secureUrl);
     final existingParams = Map<String, String>.from(uri.queryParameters);
