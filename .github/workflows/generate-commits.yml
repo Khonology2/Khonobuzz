@@ -1,6 +1,7 @@
 name: Generate Daily Commits
  
 on:
+  push: # Run on every commit (push)
   schedule:
     # Run daily at 4:30 PM UTC (2:30 PM SAST, 6:30 AM PST)
     - cron: '30 16 * * *'
