@@ -8,6 +8,7 @@ import '../config/api_config.dart';
 import '../models/managed_user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
+import '../services/sound_system.dart';
 
 enum OnboardingAlertStage { pendingApproval, assignmentsNeeded }
 
@@ -223,7 +224,10 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                         ],
                       ),
                       IconButton(
-                        onPressed: widget.onClose,
+                        onPressed: () {
+                          SoundSystem.playButtonClick();
+                          widget.onClose();
+                        },
                         icon: const Icon(Icons.close, color: Colors.white70),
                       ),
                     ],
@@ -352,7 +356,10 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                                   child: ElevatedButton(
                                     onPressed: _processingUserId == user.id
                                         ? null
-                                        : () => _approveUser(user),
+                                        : () {
+                                            SoundSystem.playButtonClick();
+                                            _approveUser(user);
+                                          },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFFC10D00),
                                       foregroundColor: Colors.white,

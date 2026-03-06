@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import '../config/api_config.dart';
 import '../providers/auth_provider.dart';
+import '../services/sound_system.dart';
 
 class ProfileImageUpload extends StatefulWidget {
   final String? currentImageUrl;
@@ -90,6 +91,7 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
                 ),
                 title: const Text('Choose from Gallery'),
                 onTap: () {
+                  SoundSystem.playButtonClick();
                   Navigator.pop(context);
                   _pickImage(ImageSource.gallery);
                 },
@@ -98,6 +100,7 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
                 leading: const Icon(Icons.camera_alt, color: Color(0xFFC10D00)),
                 title: const Text('Take Photo'),
                 onTap: () {
+                  SoundSystem.playButtonClick();
                   Navigator.pop(context);
                   _pickImage(ImageSource.camera);
                 },
@@ -107,6 +110,7 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
                   leading: const Icon(Icons.delete, color: Colors.red),
                   title: const Text('Remove Photo'),
                   onTap: () {
+                    SoundSystem.playButtonClick();
                     Navigator.pop(context);
                     _removeImage();
                   },
@@ -354,7 +358,10 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
     debugPrint('[ProfileImageUpload] Build - Display URL: $displayImageUrl');
 
     return GestureDetector(
-      onTap: _showImageOptions,
+      onTap: () {
+        SoundSystem.playButtonClick();
+        _showImageOptions();
+      },
       child: Stack(
         children: [
           CircleAvatar(

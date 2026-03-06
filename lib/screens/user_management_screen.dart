@@ -210,11 +210,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
+            onPressed: () {
+              SoundSystem.playButtonClick();
+              Navigator.of(ctx).pop();
+            },
             child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            onPressed: () {
+              SoundSystem.playButtonClick();
+              Navigator.of(ctx).pop(controller.text.trim());
+            },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC10D00)),
             child: const Text('Add', style: TextStyle(fontFamily: 'Poppins')),
           ),
@@ -278,11 +284,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
+            onPressed: () {
+              SoundSystem.playButtonClick();
+              Navigator.of(ctx).pop();
+            },
             child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            onPressed: () {
+              SoundSystem.playButtonClick();
+              Navigator.of(ctx).pop(controller.text.trim());
+            },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC10D00)),
             child: const Text('Add', style: TextStyle(fontFamily: 'Poppins')),
           ),
@@ -525,7 +537,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       floatingActionButton: _isSelectionMode
           ? null
           : FloatingActionButton(
-              onPressed: () => _showAddUserDialog(context),
+              onPressed: () {
+                SoundSystem.playButtonClick();
+                _showAddUserDialog(context);
+              },
               backgroundColor: const Color(0xFFC10D00),
               shape: const CircleBorder(),
               child: const Icon(Icons.add, color: Colors.white),
@@ -560,6 +575,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       children: [
                         TextButton(
                           onPressed: () {
+                            SoundSystem.playButtonClick();
                             setState(() {
                               _isSelectionMode = false;
                               _selectedUserIds.clear();
@@ -576,6 +592,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         const SizedBox(width: 8.0),
                         TextButton(
                           onPressed: () {
+                            SoundSystem.playButtonClick();
                             setState(() {
                               final allIds = _filteredUsers
                                   .map((u) => u.id)
@@ -601,7 +618,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         const SizedBox(width: 8.0),
                         ElevatedButton(
-                          onPressed: () => _showBulkUpdateDialog(context),
+                          onPressed: () {
+                            SoundSystem.playButtonClick();
+                            _showBulkUpdateDialog(context);
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFC10D00),
                             foregroundColor: Colors.white,
@@ -613,7 +633,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         const SizedBox(width: 8.0),
                         ElevatedButton(
-                          onPressed: () => _showDeleteConfirmation(context),
+                          onPressed: () {
+                            SoundSystem.playButtonClick();
+                            _showDeleteConfirmation(context);
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
@@ -723,6 +746,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     color: Colors.white70,
                   ),
                   onChanged: (String? newValue) {
+                    SoundSystem.playButtonClick();
                     setState(() {
                       _selectedStatus = newValue;
                     });
@@ -768,6 +792,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     color: Colors.white70,
                   ),
                   onChanged: (String? newValue) async {
+                    SoundSystem.playButtonClick();
                     if (newValue == _kAddNewDepartment) {
                       await _showAddDepartmentDialog();
                       return;
@@ -821,6 +846,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     color: Colors.white70,
                   ),
                   onChanged: (String? newValue) async {
+                    SoundSystem.playButtonClick();
                     if (newValue == _kAddNewDesignation) {
                       await _showAddDesignationDialog();
                       return;
@@ -865,6 +891,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             suffixIcon: IconButton(
               icon: const Icon(Icons.close, color: Colors.white54),
               onPressed: () {
+                SoundSystem.playButtonClick();
                 setState(() {
                   _searchController.clear();
                   _searchQuery = '';
@@ -955,6 +982,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
     return GestureDetector(
       onLongPress: () {
+        SoundSystem.playButtonClick();
         if (!_isSelectionMode) {
           setState(() {
             _isSelectionMode = true;
@@ -964,6 +992,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         }
       },
       onTap: () {
+        SoundSystem.playButtonClick();
         if (_isSelectionMode) {
           setState(() {
             if (isSelected) {
@@ -1007,6 +1036,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   Checkbox(
                     value: isSelected,
                     onChanged: (value) {
+                      SoundSystem.playButtonClick();
                       setState(() {
                         if (value == true) {
                           _selectedUserIds.add(user.id);
@@ -1228,6 +1258,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
+                          SoundSystem.playButtonClick();
                           if (newValue != null && newValue != selectedRole) {
                             // Store current expanded state before setState
                             final currentExpandedUserId = expandedUserId;
@@ -1314,6 +1345,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
+                          SoundSystem.playButtonClick();
                           if (newValue != null &&
                               newValue != selectedStatusLocal) {
                             // Store current expanded state before setState
@@ -1400,6 +1432,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) async {
+                          SoundSystem.playButtonClick();
                           if (newValue == _kAddNewDepartment) {
                             await _showAddDepartmentDialog(initialSelectForUser: user.id);
                             if (mounted) setState(() {});
@@ -1475,6 +1508,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) async {
+                          SoundSystem.playButtonClick();
                           if (newValue == _kAddNewDesignation) {
                             await _showAddDesignationDialog(initialSelectForUser: user.id);
                             if (mounted) setState(() {});
@@ -1522,6 +1556,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     const SizedBox(height: 8.0),
                     GestureDetector(
                       onTap: () {
+                        SoundSystem.playButtonClick();
                         _showManagedByDialog(user);
                       },
                       child: Container(
@@ -1569,6 +1604,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               onPressed: _updatingUserId == user.id
                   ? null
                   : () {
+                      SoundSystem.playButtonClick();
                       _updateUserRoleAndStatus(
                         user.id,
                         user.role,
@@ -1817,6 +1853,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                           )
                                         : null,
                                     onTap: () {
+                                      SoundSystem.playButtonClick();
                                       setStateDialog(() {
                                         selectedManager = candidate;
                                       });
@@ -1832,6 +1869,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               actions: [
                 TextButton(
                   onPressed: () {
+                    SoundSystem.playButtonClick();
                     Navigator.of(dialogContext).pop();
                   },
                   child: const Text(
@@ -1846,6 +1884,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   onPressed: selectedManager == null
                       ? null
                       : () async {
+                          SoundSystem.playButtonClick();
                           final manager = selectedManager!;
                           Navigator.of(dialogContext).pop();
                           await _updateUserManager(user, manager);
@@ -1962,6 +2001,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   onPressed: isCreating
                       ? null
                       : () {
+                          SoundSystem.playButtonClick();
                           Navigator.of(dialogContext).pop();
                         },
                   child: const Text(
@@ -1976,6 +2016,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   onPressed: isCreating
                       ? null
                       : () async {
+                          SoundSystem.playButtonClick();
                           final emailsText = emailsController.text.trim();
 
                           if (emailsText.isEmpty) {
@@ -2449,6 +2490,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           actions: [
             ElevatedButton(
               onPressed: () {
+                SoundSystem.playButtonClick();
                 Navigator.of(context).pop();
               },
               style: ElevatedButton.styleFrom(
@@ -2646,6 +2688,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             )
                             .toList(),
                         onChanged: (v) {
+                          SoundSystem.playButtonClick();
                           setDialogState(() => bulkRole = v);
                         },
                       ),
@@ -2680,6 +2723,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             )
                             .toList(),
                         onChanged: (v) {
+                          SoundSystem.playButtonClick();
                           setDialogState(() => bulkStatus = v);
                         },
                       ),
@@ -2720,6 +2764,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           ),
                         ],
                         onChanged: (v) {
+                          SoundSystem.playButtonClick();
                           setDialogState(() => bulkDepartment = v);
                         },
                       ),
@@ -2760,6 +2805,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           ),
                         ],
                         onChanged: (v) {
+                          SoundSystem.playButtonClick();
                           setDialogState(() => bulkDesignation = v);
                         },
                       ),
@@ -2769,7 +2815,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
+                  onPressed: () {
+                    SoundSystem.playButtonClick();
+                    Navigator.of(ctx).pop();
+                  },
                   child: const Text(
                     'Cancel',
                     style: TextStyle(
@@ -2780,6 +2829,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () async {
+                    SoundSystem.playButtonClick();
                     Navigator.of(ctx).pop();
                     final role = bulkRole ?? first.role;
                     final status = bulkStatus ?? first.status;
@@ -2861,7 +2911,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () {
+                SoundSystem.playButtonClick();
+                Navigator.of(context).pop();
+              },
               child: const Text(
                 'Cancel',
                 style: TextStyle(color: Colors.white70, fontFamily: 'Poppins'),
@@ -2869,6 +2922,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             ),
             ElevatedButton(
               onPressed: () {
+                SoundSystem.playButtonClick();
                 Navigator.of(context).pop();
                 _deleteUsers(_selectedUserIds.toList());
               },

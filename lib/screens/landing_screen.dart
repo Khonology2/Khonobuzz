@@ -142,7 +142,6 @@ class _LandingScreenState extends State<LandingScreen> {
                     text: 'GET STARTED',
                     color: const Color(0xFFC10D00),
                     onPressed: () {
-                      SoundSystem.playButtonClick();
                       _pingBackend();
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -181,7 +180,12 @@ class _LandingScreenState extends State<LandingScreen> {
         borderRadius: BorderRadius.circular(50.0),
       ),
       child: MaterialButton(
-        onPressed: onPressed,
+        onPressed: onPressed == null
+            ? null
+            : () {
+                SoundSystem.playButtonClick();
+                onPressed();
+              },
         padding: const EdgeInsets.symmetric(vertical: 16.0),
         child: Text(
           text,

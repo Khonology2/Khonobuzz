@@ -350,7 +350,7 @@ class _SideMenuState extends State<SideMenu> {
                         child: InkWell(
                           // Wrap the Image.asset with InkWell
                           onTap: () {
-                            // Transfer onPressed logic here
+                            SoundSystem.playButtonClick();
                             setState(() {
                               _isExpanded = !_isExpanded;
                             });
@@ -458,6 +458,7 @@ class _SideMenuState extends State<SideMenu> {
                 _LogoutMenuItem(
                   isExpanded: _isExpanded,
                   onTap: () {
+                    SoundSystem.playButtonClick();
                     context.read<AuthProvider>().logout();
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(

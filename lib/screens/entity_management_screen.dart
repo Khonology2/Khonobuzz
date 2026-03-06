@@ -296,6 +296,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         suffixIcon: IconButton(
           icon: const Icon(Icons.close, color: Colors.white54),
           onPressed: () {
+            SoundSystem.playButtonClick();
             setState(() {
               _searchController.clear();
               _searchQuery = '';
@@ -379,6 +380,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
     return InkWell(
       onTap: () {
+        SoundSystem.playButtonClick();
         setState(() {
           expandedUserId = isExpanded ? null : user.id;
         });
@@ -600,6 +602,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                 onChanged: isUpdating
                     ? null
                     : (value) async {
+                        SoundSystem.playButtonClick();
                         final newEntity = value == _notAssignedValue
                             ? null
                             : value;

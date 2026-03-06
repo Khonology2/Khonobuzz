@@ -466,6 +466,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                           });
                         },
                         onPressed: () async {
+                          SoundSystem.playButtonClick();
                           final firstName = _firstNameController.text.trim();
                           final lastName = _lastNameController.text.trim();
                           final email = _emailController.text.trim();
@@ -553,6 +554,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                             const SizedBox(height: 24),
                                             TextButton(
                                               onPressed: () {
+                                                SoundSystem.playButtonClick();
                                                 Navigator.of(context).pop();
                                               },
                                               style: TextButton.styleFrom(
@@ -652,6 +654,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                         text: 'BACK',
                         color: Colors.grey,
                         onPressed: () {
+                          SoundSystem.playButtonClick();
                           Navigator.of(context).pop();
                         },
                         isBackButton: true,
@@ -774,6 +777,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                     const SizedBox(height: 24),
                     TextButton(
                       onPressed: () {
+                        SoundSystem.playButtonClick();
                         Navigator.of(context).pop();
                       },
                       style: TextButton.styleFrom(

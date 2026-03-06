@@ -481,6 +481,7 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
           },
           child: MaterialButton(
             onPressed: () {
+              SoundSystem.playButtonClick();
               _clickController.forward(from: 0);
               if (widget.onPressed != null) {
                 Future.delayed(
@@ -600,6 +601,7 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
           ),
           child: MaterialButton(
             onPressed: () {
+              SoundSystem.playButtonClick();
               _clickController.forward(from: 0);
               if (widget.onPressed != null) {
                 widget.onPressed!();

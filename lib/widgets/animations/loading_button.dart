@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/sound_system.dart';
 
 class LoadingConfirmButton extends StatefulWidget {
   final String text;
@@ -27,6 +28,7 @@ class _LoadingConfirmButtonState extends State<LoadingConfirmButton> {
         onPressed: _loading
             ? null
             : () async {
+                SoundSystem.playButtonClick();
                 setState(() => _loading = true);
                 try {
                   await widget.onPressed();

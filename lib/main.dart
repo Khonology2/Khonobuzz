@@ -244,6 +244,7 @@ class _MainScreenState extends State<MainScreen> {
                     color: Colors.transparent,
                     child: InkWell(
                       onTap: () {
+                        SoundSystem.playButtonClick();
                         setState(() {
                           _isAlertPanelOpen = !_isAlertPanelOpen;
                         });

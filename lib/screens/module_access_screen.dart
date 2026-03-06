@@ -557,6 +557,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   void _showBulkModuleAccessDialog() {
     if (_selectedUserIds.isEmpty) return;
+    SoundSystem.playButtonClick();
 
     showDialog(
       context: context,
@@ -613,6 +614,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               activeColor: const Color(0xFFC10D00),
                               checkColor: Colors.white,
                               onChanged: (bool? value) {
+                                SoundSystem.playButtonClick();
                                 setStateDialog(() {
                                   pdhSelected = value ?? false;
                                   if (!pdhSelected) {
@@ -664,6 +666,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 ),
                                 onChanged: pdhSelected
                                     ? (value) {
+                                        SoundSystem.playButtonClick();
                                         setStateDialog(() {
                                           selectedModuleRole = value;
                                         });
@@ -713,6 +716,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               activeColor: const Color(0xFFC10D00),
                               checkColor: Colors.white,
                               onChanged: (bool? value) {
+                                SoundSystem.playButtonClick();
                                 setStateDialog(() {
                                   skillsHeatmapSelected = value ?? false;
                                 });
@@ -761,6 +765,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 ),
                                 onChanged: skillsHeatmapSelected
                                     ? (value) {
+                                        SoundSystem.playButtonClick();
                                         setStateDialog(() {});
                                       }
                                     : null,
@@ -807,6 +812,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               activeColor: const Color(0xFFC10D00),
                               checkColor: Colors.white,
                               onChanged: (bool? value) {
+                                SoundSystem.playButtonClick();
                                 setStateDialog(() {
                                   recruitmentSelected = value ?? false;
                                   if (!recruitmentSelected) {
@@ -858,6 +864,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 ),
                                 onChanged: recruitmentSelected
                                     ? (value) {
+                                        SoundSystem.playButtonClick();
                                         setStateDialog(() {
                                           selectedRecruitmentRole = value;
                                         });
@@ -907,6 +914,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               activeColor: const Color(0xFFC10D00),
                               checkColor: Colors.white,
                               onChanged: (bool? value) {
+                                SoundSystem.playButtonClick();
                                 setStateDialog(() {
                                   sowBuilderSelected = value ?? false;
                                   if (!sowBuilderSelected) {
@@ -958,6 +966,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 ),
                                 onChanged: sowBuilderSelected
                                     ? (value) {
+                                        SoundSystem.playButtonClick();
                                         setStateDialog(() {
                                           selectedSOWBuilderRole = value;
                                         });
@@ -1007,6 +1016,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               activeColor: const Color(0xFFC10D00),
                               checkColor: Colors.white,
                               onChanged: (bool? value) {
+                                SoundSystem.playButtonClick();
                                 setStateDialog(() {
                                   deliverablesSelected = value ?? false;
                                   if (!deliverablesSelected) {
@@ -1058,6 +1068,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                   ),
                                   onChanged: deliverablesSelected
                                       ? (value) {
+                                          SoundSystem.playButtonClick();
                                           setStateDialog(() {
                                             selectedDeliverablesRole = value;
                                           });
@@ -1090,6 +1101,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   onPressed: isUpdating
                       ? null
                       : () {
+                          SoundSystem.playButtonClick();
                           Navigator.of(dialogContext).pop();
                         },
                   child: const Text(
@@ -1104,6 +1116,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   onPressed: isUpdating
                       ? null
                       : () async {
+                          SoundSystem.playButtonClick();
                           setStateDialog(() {
                             isUpdating = true;
                           });
@@ -1216,6 +1229,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       children: [
                         TextButton(
                           onPressed: () {
+                            SoundSystem.playButtonClick();
                             setState(() {
                               _isSelectionMode = false;
                               _selectedUserIds.clear();
@@ -1232,6 +1246,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         const SizedBox(width: 8.0),
                         TextButton(
                           onPressed: () {
+                            SoundSystem.playButtonClick();
                             setState(() {
                               final allIds = _filteredUsers
                                   .map((u) => u.id)
@@ -1257,7 +1272,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         ),
                         const SizedBox(width: 8.0),
                         ElevatedButton(
-                          onPressed: _showBulkModuleAccessDialog,
+                          onPressed: () {
+                            SoundSystem.playButtonClick();
+                            _showBulkModuleAccessDialog();
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFC10D00),
                             foregroundColor: Colors.white,
@@ -1353,6 +1371,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         suffixIcon: IconButton(
           icon: const Icon(Icons.close, color: Colors.white54),
           onPressed: () {
+            SoundSystem.playButtonClick();
             setState(() {
               _searchController.clear();
               _searchQuery = '';
@@ -1455,6 +1474,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     final isSelected = _selectedUserIds.contains(user.id);
     return GestureDetector(
       onLongPress: () {
+        SoundSystem.playButtonClick();
         if (!_isSelectionMode) {
           setState(() {
             _isSelectionMode = true;
@@ -1464,6 +1484,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         }
       },
       onTap: () {
+        SoundSystem.playButtonClick();
         if (_isSelectionMode) {
           setState(() {
             if (isSelected) {
@@ -1514,6 +1535,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   Checkbox(
                     value: isSelected,
                     onChanged: (value) {
+                      SoundSystem.playButtonClick();
                       setState(() {
                         if (value == true) {
                           _selectedUserIds.add(user.id);
@@ -1892,6 +1914,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     activeColor: const Color(0xFFC10D00),
                     checkColor: Colors.white,
                     onChanged: (bool? value) {
+                      SoundSystem.playButtonClick();
                       setState(() {
                         pdhSelected = value ?? false;
                         _updateModuleAccessList(
@@ -1957,6 +1980,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       ),
                       onChanged: pdhSelected
                           ? (value) {
+                              SoundSystem.playButtonClick();
                               setState(() {
                                 if (value == _notAssignedValue) {
                                   selectedModuleRole = _notAssignedValue;
@@ -2070,6 +2094,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       ),
                       onChanged: skillsHeatmapSelected
                           ? (value) {
+                              SoundSystem.playButtonClick();
                               setState(() {});
                             }
                           : null,
@@ -2117,6 +2142,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     activeColor: const Color(0xFFC10D00),
                     checkColor: Colors.white,
                     onChanged: (bool? value) {
+                      SoundSystem.playButtonClick();
                       setState(() {
                         recruitmentSelected = value ?? false;
                         _updateModuleAccessList(
@@ -2175,6 +2201,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       ),
                       onChanged: recruitmentSelected
                           ? (value) {
+                              SoundSystem.playButtonClick();
                               setState(() {
                                 if (value == _notAssignedValue) {
                                   _selectedRecruitmentRoles[user.id] =
@@ -2230,6 +2257,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     activeColor: const Color(0xFFC10D00),
                     checkColor: Colors.white,
                     onChanged: (bool? value) {
+                      SoundSystem.playButtonClick();
                       setState(() {
                         deliverablesSelected = value ?? false;
                         _updateModuleAccessList(
@@ -2287,6 +2315,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       ),
                       onChanged: deliverablesSelected
                           ? (value) {
+                              SoundSystem.playButtonClick();
                               setState(() {
                                 if (value == _notAssignedValue) {
                                   _selectedDeliverablesRoles[user.id] =
@@ -2341,6 +2370,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     activeColor: const Color(0xFFC10D00),
                     checkColor: Colors.white,
                     onChanged: (bool? value) {
+                      SoundSystem.playButtonClick();
                       setState(() {
                         sowBuilderSelected = value ?? false;
                         _updateModuleAccessList(
@@ -2399,6 +2429,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       ),
                       onChanged: sowBuilderSelected
                           ? (value) {
+                              SoundSystem.playButtonClick();
                               setState(() {
                                 if (value == _notAssignedValue) {
                                   _selectedSOWBuilderRoles[user.id] =
@@ -2434,18 +2465,21 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             child: ElevatedButton(
               onPressed: _updatingUserId == user.id
                   ? null
-                  : () => _updateUserModuleAccess(
-                      user,
-                      pdhSelected,
-                      skillsHeatmapSelected,
-                      recruitmentSelected,
-                      sowBuilderSelected,
-                      deliverablesSelected,
-                      selectedModuleRole,
-                      _selectedRecruitmentRoles[user.id] ?? _notAssignedValue,
-                      _selectedSOWBuilderRoles[user.id] ?? _notAssignedValue,
-                      _selectedDeliverablesRoles[user.id] ?? _notAssignedValue,
-                    ),
+                  : () {
+                      SoundSystem.playButtonClick();
+                      _updateUserModuleAccess(
+                        user,
+                        pdhSelected,
+                        skillsHeatmapSelected,
+                        recruitmentSelected,
+                        sowBuilderSelected,
+                        deliverablesSelected,
+                        selectedModuleRole,
+                        _selectedRecruitmentRoles[user.id] ?? _notAssignedValue,
+                        _selectedSOWBuilderRoles[user.id] ?? _notAssignedValue,
+                        _selectedDeliverablesRoles[user.id] ?? _notAssignedValue,
+                      );
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFC10D00),
                 foregroundColor: Colors.white,

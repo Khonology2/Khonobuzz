@@ -115,6 +115,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                     const SizedBox(height: 24),
                     TextButton(
                       onPressed: () {
+                        SoundSystem.playButtonClick();
                         Navigator.of(context).pop();
                       },
                       style: TextButton.styleFrom(
@@ -252,6 +253,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           });
                         },
                         onPressed: () async {
+                          SoundSystem.playButtonClick();
                           final email = _emailController.text.trim();
                           if (email.isEmpty) {
                             await _playErrorSound();
@@ -323,6 +325,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                             const SizedBox(height: 24),
                                             TextButton(
                                               onPressed: () {
+                                                SoundSystem.playButtonClick();
                                                 Navigator.of(context).pop();
                                               },
                                               style: TextButton.styleFrom(
@@ -460,6 +463,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                               const SizedBox(height: 24),
                                               TextButton(
                                                 onPressed: () {
+                                                  SoundSystem.playButtonClick();
                                                   Navigator.of(context).pop();
                                                 },
                                                 style: TextButton.styleFrom(
@@ -529,6 +533,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                         text: 'BACK',
                         color: Colors.grey,
                         onPressed: () {
+                          SoundSystem.playButtonClick();
                           Navigator.of(context).pop();
                         },
                       ),
@@ -651,6 +656,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                               ),
                             ),
                             onTap: () {
+                              SoundSystem.playButtonClick();
                               Navigator.of(context).pop(email);
                             },
                             hoverColor: const Color(
@@ -663,6 +669,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                     const SizedBox(height: 16),
                     TextButton(
                       onPressed: () {
+                        SoundSystem.playButtonClick();
                         Navigator.of(context).pop();
                       },
                       style: TextButton.styleFrom(
