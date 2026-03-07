@@ -206,7 +206,7 @@ class _LandingScreenState extends State<LandingScreen> {
       debugPrint('[LandingScreen] Obtained UserProvider instance for prefetch');
       final uri = Uri.parse(ApiConfig.baseUrl);
       debugPrint('[LandingScreen] Pinging backend at: ${uri.toString()}');
-      final response = await http.get(uri).timeout(const Duration(seconds: 5));
+      final response = await http.get(uri).timeout(const Duration(seconds: 25));
       debugPrint(
         '[LandingScreen] Backend ping completed with status: ${response.statusCode}',
       );

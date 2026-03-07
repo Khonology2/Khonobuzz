@@ -318,7 +318,7 @@ class AuthProvider extends ChangeNotifier {
         headers: headers,
         body: json.encode({'email': normalizedEmail}),
         maxRetries: 0,
-        timeout: const Duration(seconds: 4),
+        timeout: const Duration(seconds: 45),
       );
       final elapsed = DateTime.now().millisecondsSinceEpoch - start;
       debugPrint(
@@ -513,7 +513,7 @@ class AuthProvider extends ChangeNotifier {
       final userCheckResponse = await http
           .get(userCheckUrl)
           .timeout(
-            const Duration(seconds: 8),
+            const Duration(seconds: 30),
             onTimeout: () {
               throw TimeoutException('Request timed out');
             },
