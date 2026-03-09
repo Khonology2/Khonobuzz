@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'config/api_config.dart';
 import 'screens/entity_management_screen.dart';
 import 'screens/user_management_screen.dart';
 import 'screens/module_access_screen.dart';
@@ -9,6 +10,7 @@ import 'screens/onboarding_alert_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
 import 'services/sound_system.dart';
+import 'services/version_service.dart';
 import 'screens/admin_profile_screen.dart';
 import 'screens/staff_profile_screen.dart';
 import 'widgets/side_menu.dart';
@@ -22,6 +24,8 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   ); // Initialize Firebase
   debugPrint('Firebase initialized successfully!'); // Debug print
+  // So version widget can fetch latest from backend and stop being stuck on build-time version
+  VersionService.versionBaseUrl = ApiConfig.baseUrl;
   runApp(const MyApp());
 }
 

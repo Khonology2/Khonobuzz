@@ -396,6 +396,31 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
+
+
+@app.get("/api/version")
+async def get_version():
+    """
+    Returns version.json content so the app can display the latest version without rebuild.
+    Reads from VERSION_JSON_PATH env, or repo root version.json when running from backend/.
+    """
+    try:
+        path_str = os.environ.get("VERSION_JSON_PATH")
+        if path_str:
+            path = Path(path_str)
+        else:
+            # Default: version.json in repo root (parent of backend/)
+            path = (Path(__file__).resolve().parent.parent / "version.json")
+        if not path.exists():
+            return JSONResponse(status_code=404, content={"error": "version.json not found"})
+        raw = path.read_text(encoding="utf-8")
+        data = json.loads(raw)
+        return data
+    except Exception as e:
+        error_log(f"Failed to serve version: {e}")
+        return JSONResponse(status_code=500, content={"error": "Failed to load version"})
+
+
 class TokenValidationRequest(BaseModel):
     token: str
 

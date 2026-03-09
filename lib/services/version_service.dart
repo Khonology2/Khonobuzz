@@ -37,12 +37,24 @@ class VersionData {
 }
 
 /// Loads version from assets/data/version.json (updated by version-control workflow).
-/// On web, also tries to load from same-origin /version.json so deployed app can show latest without rebuild.
+/// Tries network first (same-origin on web, then backend /api/version) so the app shows the latest version
+/// without rebuild. Network result is not cached so the widget's periodic refresh picks up updates.
 class VersionService {
   static VersionData? _cached;
 
+  /// Backend endpoint that serves version.json (set in api_config or use baseUrl + '/api/version').
+  static String? _versionUrl;
+
+  static set versionBaseUrl(String? baseUrl) {
+    if (baseUrl != null && baseUrl.isNotEmpty) {
+      _versionUrl = baseUrl.endsWith('/') ? '${baseUrl}api/version' : '$baseUrl/api/version';
+    } else {
+      _versionUrl = null;
+    }
+  }
+
   static Future<VersionData> loadVersion() async {
-    if (_cached != null) return _cached!;
+    // 1) Try network: same-origin (web) then backend. Do not cache so next refresh gets latest.
     if (kIsWeb) {
       try {
         final uri = Uri.base.resolve('version.json');
@@ -50,17 +62,34 @@ class VersionService {
         if (response.statusCode == 200 && response.body.isNotEmpty) {
           final map = json.decode(response.body) as Map<String, dynamic>?;
           if (map != null && _isCustomVersionFormat(map)) {
-            _cached = VersionData.fromJson(map);
-            return _cached!;
+            return VersionData.fromJson(map);
+          }
+        }
+      } catch (_) {
+        // Fall through
+      }
+    }
+    if (_versionUrl != null) {
+      try {
+        final uri = Uri.parse(_versionUrl!);
+        final response = await http.get(uri).timeout(const Duration(seconds: 5));
+        if (response.statusCode == 200 && response.body.isNotEmpty) {
+          final map = json.decode(response.body) as Map<String, dynamic>?;
+          if (map != null && _isCustomVersionFormat(map)) {
+            return VersionData.fromJson(map);
           }
         }
       } catch (_) {
         // Fall through to assets
       }
     }
+
+    // 2) Use cached asset result if we have it
+    if (_cached != null) return _cached!;
+
+    // 3) Load from assets and cache (only asset load is cached so app shows something when offline)
     try {
-      final s =
-          await rootBundle.loadString('assets/data/version.json');
+      final s = await rootBundle.loadString('assets/data/version.json');
       final map = json.decode(s) as Map<String, dynamic>;
       _cached = VersionData.fromJson(map);
       return _cached!;
