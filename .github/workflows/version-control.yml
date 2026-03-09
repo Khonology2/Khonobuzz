@@ -27,10 +27,13 @@ jobs:
       - name: Get latest commit info
         id: commit
         run: |
+          # Use head_commit for push events; for workflow_dispatch use latest commit on branch
           MSG="${{ github.event.head_commit.message }}"
           if [ -z "$MSG" ]; then
             MSG=$(git log -1 --pretty=format:"%s")
           fi
+          echo "Commit message: $MSG"
+          echo "Branch: ${{ github.ref_name }}"
           # Do not update version for bot/version-bump commits
           if echo "$MSG" | grep -q '\[skip ci\]'; then
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -167,10 +170,12 @@ jobs:
         if: steps.commit.outputs.skip == 'true' || steps.commit.outputs.skip_weekend == 'true' || steps.commit.outputs.starts_with_feature != 'true'
         run: |
           echo "## Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "Commit message: \`${{ steps.commit.outputs.message }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.commit.outputs.skip }}" = "true" ]; then
             echo "Version not updated (commit contained [skip ci])." >> $GITHUB_STEP_SUMMARY
           elif [ "${{ steps.commit.outputs.skip_weekend }}" = "true" ]; then
             echo "Version not updated (commit on Saturday/Sunday; weekend days are not counted)." >> $GITHUB_STEP_SUMMARY
           else
-            echo "Version not updated (commit message does not start with 'Feature')." >> $GITHUB_STEP_SUMMARY
+            echo "Version not updated (commit message does not start with 'Feature'; checked case-insensitive)." >> $GITHUB_STEP_SUMMARY
           fi

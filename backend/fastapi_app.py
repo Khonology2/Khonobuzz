@@ -594,6 +594,10 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
             onboarding_info = onboarding_doc.to_dict() or {}
             break
 
+        # Only use onboarding for profile/name if it belongs to this user (avoid returning another user's data)
+        onboarding_email = (onboarding_info.get('email') or '').strip().lower()
+        safe_onboarding = onboarding_info if (not onboarding_email or onboarding_email == normalized_email) else {}
+
         module_access_raw = user_info.get('moduleAccess') or onboarding_info.get('moduleAccess', '')
         module_access_role_raw = user_info.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', '')
 
@@ -605,16 +609,16 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
             'entity': entity_value,
             'moduleAccess': module_access_raw or '',
             'moduleAccessRole': module_access_role_raw or '',
-            'firstName': onboarding_info.get('firstName') or user_info.get('firstName') or user_info.get('name', '').split(' ')[0],
-            'lastName': onboarding_info.get('lastName') or onboarding_info.get('surname') or user_info.get('lastName') or (user_info.get('name', '').split(' ')[1] if ' ' in user_info.get('name', '') else ''),
-            'surname': onboarding_info.get('surname') or onboarding_info.get('lastName') or user_info.get('lastName') or '',
-            'preferredName': onboarding_info.get('preferredName') or user_info.get('preferredName') or '',
-            'phoneNumber': onboarding_info.get('phoneNumber') or user_info.get('phoneNumber') or '',
-            'department': onboarding_info.get('department') or user_info.get('department') or '',
-            'designation': onboarding_info.get('designation') or user_info.get('designation') or '',
-            'managedBy': onboarding_info.get('managedBy') or user_info.get('manager') or onboarding_info.get('manager') or '',
-            'profileImageUrl': onboarding_info.get('profileImageUrl') or '',
-            'profileImagePublicId': onboarding_info.get('profileImagePublicId') or '',
+            'firstName': safe_onboarding.get('firstName') or user_info.get('firstName') or user_info.get('name', '').split(' ')[0],
+            'lastName': safe_onboarding.get('lastName') or safe_onboarding.get('surname') or user_info.get('lastName') or (user_info.get('name', '').split(' ')[1] if ' ' in user_info.get('name', '') else ''),
+            'surname': safe_onboarding.get('surname') or safe_onboarding.get('lastName') or user_info.get('lastName') or '',
+            'preferredName': safe_onboarding.get('preferredName') or user_info.get('preferredName') or '',
+            'phoneNumber': safe_onboarding.get('phoneNumber') or user_info.get('phoneNumber') or '',
+            'department': safe_onboarding.get('department') or user_info.get('department') or '',
+            'designation': safe_onboarding.get('designation') or user_info.get('designation') or '',
+            'managedBy': safe_onboarding.get('managedBy') or user_info.get('manager') or onboarding_info.get('manager') or '',
+            'profileImageUrl': safe_onboarding.get('profileImageUrl') or '',
+            'profileImagePublicId': safe_onboarding.get('profileImagePublicId') or '',
         }
 
         return JSONResponse(
@@ -1413,13 +1417,16 @@ async def login_user(user_login: UserLogin, request: Request):
         except Exception as onboarding_query_error:
             error_log(f"Failed to query onboarding collection: {onboarding_query_error}")
         onboarding_lookup_end = time.time()
+        # Only use onboarding for name/profile in response if it belongs to this user (avoid returning another user's data)
+        onboarding_email = (onboarding_data.get('email') or '').strip().lower()
+        safe_onboarding_for_response = onboarding_data if (not onboarding_email or onboarding_email == normalized_email) else {}
         if not module_access_role:
             module_access_role = user_data.get('moduleAccessRole', '')
         roles = parse_module_access_role_to_roles(module_access_role)
         if is_special_session:
             roles = ['admin']
-        first_name = onboarding_data.get('firstName') or onboarding_data.get('name') or user_data.get('firstName') or ''
-        last_name = onboarding_data.get('lastName') or onboarding_data.get('surname') or user_data.get('lastName') or ''
+        first_name = safe_onboarding_for_response.get('firstName') or safe_onboarding_for_response.get('name') or user_data.get('firstName') or ''
+        last_name = safe_onboarding_for_response.get('lastName') or safe_onboarding_for_response.get('surname') or user_data.get('lastName') or ''
         full_name = f"{first_name} {last_name}".strip()
         if not full_name:
             full_name = user_data.get('name', '')
@@ -1493,18 +1500,21 @@ async def login_user(user_login: UserLogin, request: Request):
                 pass
         module_access_raw = user_data.get('moduleAccess') or onboarding_data.get('moduleAccess', '')
         final_module_access = derive_module_access_from_role(module_access_raw, module_access_role)
+        response_name = full_name or user_data.get('name', '')
+        response_profile_url = safe_onboarding_for_response.get('profileImageUrl', '')
+        response_profile_public_id = safe_onboarding_for_response.get('profileImagePublicId', '')
         response_content = {
             "message": "Login successful",
             "user": {
                 "id": user_id,
                 "email": user_data['email'],
-                "name": user_data.get('name', ''),
+                "name": response_name,
                 "role": "Admin" if is_special_session else user_data.get('role', 'user'),
                 "status": user_status,
                 "moduleAccess": final_module_access or '',
                 "moduleAccessRole": module_access_role,
-                "profileImageUrl": onboarding_data.get('profileImageUrl', ''),
-                "profileImagePublicId": onboarding_data.get('profileImagePublicId', ''),
+                "profileImageUrl": response_profile_url,
+                "profileImagePublicId": response_profile_public_id,
             }
         }
         if encrypted_token:

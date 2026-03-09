@@ -363,6 +363,21 @@ class AuthProvider extends ChangeNotifier {
         debugPrint('[AuthProvider] Login response userPayload: $userPayload');
         _userProfileImageUrl = userPayload['profileImageUrl'] as String?;
         _userProfilePublicId = userPayload['profileImagePublicId'] as String?;
+        // Defensive: if profile URL/publicId clearly belong to another user (e.g. contain different email), clear them
+        if (_userEmail != null && (_userProfileImageUrl != null || _userProfilePublicId != null)) {
+          final cur = _userEmail!.trim().toLowerCase();
+          final curEnc = cur.replaceAll('@', '%40');
+          final urlOk = _userProfileImageUrl == null ||
+              _userProfileImageUrl!.toLowerCase().contains(cur) ||
+              _userProfileImageUrl!.contains(curEnc);
+          final idOk = _userProfilePublicId == null ||
+              _userProfilePublicId!.toLowerCase().contains(cur) ||
+              _userProfilePublicId!.contains(curEnc);
+          if (!urlOk || !idOk) {
+            _userProfileImageUrl = null;
+            _userProfilePublicId = null;
+          }
+        }
         debugPrint(
           '[AuthProvider] Extracted profileImageUrl: $_userProfileImageUrl',
         );
@@ -503,17 +518,18 @@ class AuthProvider extends ChangeNotifier {
           return;
         }
 
-        // Update AuthProvider with profile image data if available
+        // Update AuthProvider with profile image data (clear when user has no image so we never show another user's)
         final profileImageUrl = userMap['profileImageUrl'] as String?;
         final profileImagePublicId = userMap['profileImagePublicId'] as String?;
-
-        if (profileImageUrl != null && profileImageUrl.isNotEmpty ||
-            profileImagePublicId != null && profileImagePublicId.isNotEmpty) {
+        final hasImage = (profileImageUrl ?? '').trim().isNotEmpty || (profileImagePublicId ?? '').trim().isNotEmpty;
+        if (hasImage) {
           await updateUserProfileImage(profileImageUrl, profileImagePublicId);
           debugPrint('[AuthProvider] Profile data prefetched successfully');
+        } else {
+          await updateUserProfileImage(null, null);
         }
 
-        // Store other profile data for potential future use
+        // Store other profile data for potential future use (only for this user; already validated email match)
         _cachedProfileData = userMap;
       } else {
         debugPrint(
