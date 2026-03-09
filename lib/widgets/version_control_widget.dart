@@ -131,8 +131,8 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
     return 'Ver $version SIT';
   }
 
-  /// Tooltip: Latest Feature Release and date only (no commit count since release).
-  /// Only feature commits are reflected (stored in version.json by workflow).
+  /// Tooltip: title "Latest Feature Release", then stripped commit message, then Released date.
+  /// Strips "Feature - " / "Feature: " / "feature: " and optional leading "bug " from commit message.
   String _buildTooltip(VersionData data) {
     final buffer = StringBuffer();
 
@@ -140,8 +140,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
     buffer.writeln();
 
     if (data.lastFeatureCommit.isNotEmpty) {
-      buffer.writeln('Latest Feature:');
-      buffer.writeln(data.lastFeatureCommit);
+      buffer.writeln(_displayCommitMessage(data.lastFeatureCommit));
       buffer.writeln();
     }
 
@@ -151,6 +150,19 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
     }
 
     return buffer.toString();
+  }
+
+  /// Removes "Feature - ", "Feature: ", "feature: " etc. and optional "bug " so e.g.
+  /// "Feature - bug Fix on the seetings screen" -> "Fix on the seetings screen".
+  static String _displayCommitMessage(String raw) {
+    String s = raw.trim();
+    final featurePrefix = RegExp(r'^Feature\s*[-:]\s*', caseSensitive: false);
+    s = s.replaceFirst(featurePrefix, '').trim();
+    const bugPrefix = 'bug ';
+    if (s.toLowerCase().startsWith(bugPrefix)) {
+      s = s.substring(bugPrefix.length).trim();
+    }
+    return s.isEmpty ? raw : s;
   }
 
   void _onHover(bool isHovering) {
