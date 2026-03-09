@@ -1,9 +1,10 @@
 # Version Control Workflow
 # Format: YYYY.MM.[W][D][n] then display as "Ver YYYY.MM.WD<n> SIT"
-#   YYYY=year, MM=month, W=week of month (A-E), D=day of week (A=Mon..E=Fri only; Sat/Sun use E), n=commit count, SIT=suffix
+#   YYYY=year, MM=month, W=week of month 1-4 only (A,B,C,D), D=weekday Mon-Fri only (A-E). n=commit count, SIT=suffix
+#   Saturday and Sunday are NOT counted: version does not update on weekend commits.
 # - feature: commits reset counter to 1 and set date part from commit date.
 # - Non-feature: keep existing YYYY.MM.WD, increment n only.
-# Version only updates when commits are pushed (no automatic date change).
+# Version only updates when commits are pushed on weekdays (no automatic date change).
 
 name: Version Control
 
@@ -35,6 +36,7 @@ jobs:
           # Do not update version for bot/version-bump commits
           if echo "$MSG" | grep -q '\[skip ci\]'; then
             echo "skip=true" >> $GITHUB_OUTPUT
+            echo "skip_weekend=false" >> $GITHUB_OUTPUT
             echo "message=$MSG" >> $GITHUB_OUTPUT
             echo "date=" >> $GITHUB_OUTPUT
             echo "is_feature=false" >> $GITHUB_OUTPUT
@@ -42,6 +44,12 @@ jobs:
           fi
           echo "skip=false" >> $GITHUB_OUTPUT
           COMMIT_DATE=$(git log -1 --format='%ci' | cut -d' ' -f1)
+          DAY_OF_WEEK=$(date -d "$COMMIT_DATE" +%u)  # 1=Mon, 5=Fri, 6=Sat, 7=Sun
+          if [ "$DAY_OF_WEEK" -eq 6 ] || [ "$DAY_OF_WEEK" -eq 7 ]; then
+            echo "skip_weekend=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip_weekend=false" >> $GITHUB_OUTPUT
+          fi
           echo "message<<EOF" >> $GITHUB_OUTPUT
           echo "$MSG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -54,21 +62,19 @@ jobs:
 
       - name: Read or initialize version.json
         id: version
-        if: steps.commit.outputs.skip != 'true'
+        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
         run: |
           VERSION_FILE="assets/data/version.json"
           COMMIT_DATE="${{ steps.commit.outputs.date }}"
 
-          # Week of month (1-5) -> A-E; day of week Mon-Fri only (A-E), Sat/Sun -> E
+          # Week of month: 4 weeks only. Week 1=A, 2=B, 3=C, 4=D
           DAY_OF_MONTH=$(date -d "$COMMIT_DATE" +%d 2>/dev/null | sed 's/^0//')
-          DAY_OF_WEEK=$(date -d "$COMMIT_DATE" +%u)  # 1=Mon, 5=Fri, 6=Sat, 7=Sun
+          DAY_OF_WEEK=$(date -d "$COMMIT_DATE" +%u)  # 1=Mon..5=Fri (weekend already skipped by step if)
           WEEK_OF_MONTH=$(( (DAY_OF_MONTH - 1) / 7 + 1 ))
-          [ "$WEEK_OF_MONTH" -gt 5 ] && WEEK_OF_MONTH=5
+          [ "$WEEK_OF_MONTH" -gt 4 ] && WEEK_OF_MONTH=4
           WEEK_LETTER=$(printf "\\x$(printf %02x $((64 + WEEK_OF_MONTH)))")
-          # A=Mon, B=Tue, C=Wed, D=Thu, E=Fri; weekend (6,7) -> E
-          DAY_NUM=$DAY_OF_WEEK
-          [ "$DAY_NUM" -gt 5 ] && DAY_NUM=5
-          DAY_LETTER=$(printf "\\x$(printf %02x $((64 + DAY_NUM)))")
+          # Day: Mon=A, Tue=B, Wed=C, Thu=D, Fri=E (only weekdays reach here)
+          DAY_LETTER=$(printf "\\x$(printf %02x $((64 + DAY_OF_WEEK)))")
           YEAR=$(echo "$COMMIT_DATE" | cut -d'-' -f1)
           MONTH=$(echo "$COMMIT_DATE" | cut -d'-' -f2)
           DATE_PART="${YEAR}.${MONTH}.${WEEK_LETTER}${DAY_LETTER}"
@@ -118,7 +124,7 @@ jobs:
           echo "feature_date=$NEW_FEATURE_DATE" >> $GITHUB_OUTPUT
 
       - name: Write version.json
-        if: steps.commit.outputs.skip != 'true'
+        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
         run: |
           mkdir -p assets/data
           jq -n \
@@ -131,7 +137,7 @@ jobs:
           cp assets/data/version.json version.json
 
       - name: Commit and push version.json
-        if: steps.commit.outputs.skip != 'true'
+        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Actions"
@@ -144,13 +150,19 @@ jobs:
           fi
 
       - name: Summary
-        if: steps.commit.outputs.skip != 'true'
+        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
         run: |
           echo "## Version Control Update" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Feature commit**: ${{ steps.commit.outputs.is_feature }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commits since feature**: ${{ steps.version.outputs.new_count }}" >> $GITHUB_STEP_SUMMARY
 
-      - name: Skipped (version-bump commit)
-        if: steps.commit.outputs.skip == 'true'
-        run: echo "## Skipped" >> $GITHUB_STEP_SUMMARY && echo "Version not updated (commit contained [skip ci])." >> $GITHUB_STEP_SUMMARY
+      - name: Skipped (version-bump or weekend)
+        if: steps.commit.outputs.skip == 'true' || steps.commit.outputs.skip_weekend == 'true'
+        run: |
+          echo "## Skipped" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.commit.outputs.skip }}" = "true" ]; then
+            echo "Version not updated (commit contained [skip ci])." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Version not updated (commit on Saturday/Sunday; weekend days are not counted)." >> $GITHUB_STEP_SUMMARY
+          fi

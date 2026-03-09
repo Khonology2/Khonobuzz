@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
 
-/// Version data from version.json: YYYY.MM.[W][D][n] (W=week A-E, D=weekday A-E Mon-Fri, n=commit count).
+/// Version data from version.json: YYYY.MM.[W][D][n] (W=week 1-4 A-D, D=weekday A-E Mon-Fri; Sat/Sun not counted).
 class VersionData {
   final String version;
   final String lastFeatureCommit;

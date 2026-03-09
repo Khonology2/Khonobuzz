@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:khonobuzz/services/version_service.dart';
 
-/// Version control widget: displays Ver YYYY.MM.[W][D][n] SIT (W=week A-E, D=weekday A-E Mon-Fri, n=commits).
+/// Version control widget: displays Ver YYYY.MM.[W][D][n] SIT (W=week 1-4 A-D, D=weekday A-E Mon-Fri; weekend not counted).
 /// Tooltip shows latest feature release, date, and commits since release.
 /// Version only updates when commits are pushed (no automatic date change).
 class VersionControlWidget extends StatefulWidget {
@@ -91,7 +91,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
     }
   }
 
-  /// Display: Ver YYYY.MM.[W][D][n] SIT (W=week A-E, D=weekday A-E Mon-Fri, n=commits; SIT fixed)
+  /// Display: Ver YYYY.MM.[W][D][n] SIT (W=week 1-4 A-D, D=weekday A-E Mon-Fri; SIT fixed)
   String _formatDisplayVersion(String version) {
     return 'Ver $version SIT';
   }
