@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:khonobuzz/services/commit_service.dart';
+import 'package:khonobuzz/services/version_service.dart';
 
-/// A version control widget that displays app version with hover animation.
-/// Displays version information at bottom of screens with smooth hover effects.
+/// Version control widget: displays Ver YYYY.MM.[W][D][n] SIT (W=week A-E, D=weekday A-E Mon-Fri, n=commits).
+/// Tooltip shows latest feature release, date, and commits since release.
+/// Version only updates when commits are pushed (no automatic date change).
 class VersionControlWidget extends StatefulWidget {
   const VersionControlWidget({
     super.key,
@@ -26,8 +27,8 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   late Animation<Color?> _colorAnimation;
   late Animation<double> _scaleAnimation;
   late Timer _refreshTimer;
-  String _tooltipMessage = 'Loading commit data...';
-  String _currentVersion = 'Ver. 2026.02.CD0.SIT';
+  String _currentVersion = 'Ver 2026.03.BA1 SIT';
+  String _tooltipMessage = 'Loading version...';
 
   @override
   void initState() {
@@ -48,12 +49,11 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
 
-    // Start auto-refresh timer
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _loadCommitData();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _loadVersion();
     });
 
-    _loadCommitData();
+    _loadVersion();
   }
 
   @override
@@ -67,92 +67,59 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _loadCommitData(); // Refresh when app resumes
+      VersionService.clearCache();
+      _loadVersion();
     }
   }
 
-  Future<void> _loadCommitData() async {
+  Future<void> _loadVersion() async {
     try {
-      final commitData = await CommitService.loadCommitData();
+      final data = await VersionService.loadVersion();
 
       if (mounted) {
-        // Generate dynamic version: {YYYY}.{MM}.{week-letter}{day-letter}{commit-count}.SIT
-        final now = DateTime.now();
-
-        // Get current year
-        final yearStr = now.year.toString();
-
-        // Get current month (MM format)
-        final monthStr = now.month.toString().padLeft(2, '0');
-
-        // Calculate week of the month using a 4-week cycle
-        // Week 1 = A, Week 2 = B, Week 3 = C, Week 4 = D, then cycles back to A
-        final weekOfMonth =
-            ((now.day - 1) ~/ 7) + 1; // 1-4 based on day of month
-        final weekLetter = String.fromCharCode(
-          64 + ((weekOfMonth - 1) % 4) + 1, // Cycle through A-D
-        ); // A=1, B=2, C=3, D=4, then back to A
-
-        // Get day of week (A=Monday, B=Tuesday, C=Wednesday, D=Thursday, etc.)
-        final dayOfWeek = now.weekday; // 1=Monday, 7=Sunday
-        final dayLetter = String.fromCharCode(
-          64 + dayOfWeek,
-        ); // A=1, B=2, C=3, D=4, etc.
-
-        final dynamicVersion =
-            'Ver. $yearStr.$monthStr.$weekLetter$dayLetter${commitData.totalCommits}.SIT';
-
         setState(() {
-          _currentVersion = dynamicVersion;
-          _tooltipMessage = _generateTooltipMessage(commitData);
+          _currentVersion = _formatDisplayVersion(data.version);
+          _tooltipMessage = _buildTooltip(data);
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _tooltipMessage = 'Failed to load commit data';
+          _tooltipMessage = 'Failed to load version';
         });
       }
     }
   }
 
-  String _generateTooltipMessage(CommitData commitData) {
-    // Filter commits that start with 'Feature' (case sensitive as specified)
-    final featureCommits = commitData.commits
-        .where((commit) => commit.message.startsWith('Feature'))
-        .toList();
+  /// Display: Ver YYYY.MM.[W][D][n] SIT (W=week A-E, D=weekday A-E Mon-Fri, n=commits; SIT fixed)
+  String _formatDisplayVersion(String version) {
+    return 'Ver $version SIT';
+  }
 
-    if (featureCommits.isEmpty) {
-      return 'Daily Commits\n\nNo feature commits found for today';
+  /// Tooltip: Latest Feature Release, Date of Feature Commit, Commits since release.
+  /// Only feature commits are reflected (stored in version.json by workflow).
+  String _buildTooltip(VersionData data) {
+    final buffer = StringBuffer();
+
+    buffer.writeln('Latest Feature Release');
+    buffer.writeln();
+
+    if (data.lastFeatureCommit.isNotEmpty) {
+      buffer.writeln('Latest Feature:');
+      buffer.writeln(data.lastFeatureCommit);
+      buffer.writeln();
     }
 
-    // Group by author and get the latest commit for each author
-    final latestCommitsByAuthor = <String, CommitInfo>{};
-    for (final commit in featureCommits) {
-      // Compare timestamps to get the latest commit per author
-      final currentLatest = latestCommitsByAuthor[commit.author];
-      if (currentLatest == null ||
-          DateTime.parse(
-            commit.timestamp,
-          ).isAfter(DateTime.parse(currentLatest.timestamp))) {
-        latestCommitsByAuthor[commit.author] = commit;
-      }
+    if (data.featureDate.isNotEmpty) {
+      buffer.writeln('Released:');
+      buffer.writeln(data.featureDate);
+      buffer.writeln();
     }
 
-    // Convert to list and sort by timestamp (most recent first)
-    final latestCommits = latestCommitsByAuthor.values.toList()
-      ..sort(
-        (a, b) =>
-            DateTime.parse(b.timestamp).compareTo(DateTime.parse(a.timestamp)),
-      );
+    buffer.writeln('Commits since release:');
+    buffer.write(data.commitCountSinceFeature);
 
-    final commitsText = latestCommits
-        .map((commit) {
-          return '${commit.author} - ${commit.message}';
-        })
-        .join('\n');
-
-    return 'Daily Commits\n\n$commitsText';
+    return buffer.toString();
   }
 
   void _onHover(bool isHovering) {
@@ -170,7 +137,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
       onExit: (_) => _onHover(false),
       child: Tooltip(
         message: _tooltipMessage,
-        textAlign: TextAlign.center,
+        textAlign: TextAlign.left,
         padding: const EdgeInsets.all(16),
         margin: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(

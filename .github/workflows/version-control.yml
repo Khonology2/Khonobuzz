@@ -1,0 +1,156 @@
+# Version Control Workflow
+# Format: YYYY.MM.[W][D][n] then display as "Ver YYYY.MM.WD<n> SIT"
+#   YYYY=year, MM=month, W=week of month (A-E), D=day of week (A=Mon..E=Fri only; Sat/Sun use E), n=commit count, SIT=suffix
+# - feature: commits reset counter to 1 and set date part from commit date.
+# - Non-feature: keep existing YYYY.MM.WD, increment n only.
+# Version only updates when commits are pushed (no automatic date change).
+
+name: Version Control
+
+on:
+  push:
+    branches: [main, develop, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get latest commit info
+        id: commit
+        run: |
+          MSG="${{ github.event.head_commit.message }}"
+          if [ -z "$MSG" ]; then
+            MSG=$(git log -1 --pretty=format:"%s")
+          fi
+          # Do not update version for bot/version-bump commits
+          if echo "$MSG" | grep -q '\[skip ci\]'; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "message=$MSG" >> $GITHUB_OUTPUT
+            echo "date=" >> $GITHUB_OUTPUT
+            echo "is_feature=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "skip=false" >> $GITHUB_OUTPUT
+          COMMIT_DATE=$(git log -1 --format='%ci' | cut -d' ' -f1)
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "date=$COMMIT_DATE" >> $GITHUB_OUTPUT
+          if echo "$MSG" | grep -qi 'feature:'; then
+            echo "is_feature=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_feature=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Read or initialize version.json
+        id: version
+        if: steps.commit.outputs.skip != 'true'
+        run: |
+          VERSION_FILE="assets/data/version.json"
+          COMMIT_DATE="${{ steps.commit.outputs.date }}"
+
+          # Week of month (1-5) -> A-E; day of week Mon-Fri only (A-E), Sat/Sun -> E
+          DAY_OF_MONTH=$(date -d "$COMMIT_DATE" +%d 2>/dev/null | sed 's/^0//')
+          DAY_OF_WEEK=$(date -d "$COMMIT_DATE" +%u)  # 1=Mon, 5=Fri, 6=Sat, 7=Sun
+          WEEK_OF_MONTH=$(( (DAY_OF_MONTH - 1) / 7 + 1 ))
+          [ "$WEEK_OF_MONTH" -gt 5 ] && WEEK_OF_MONTH=5
+          WEEK_LETTER=$(printf "\\x$(printf %02x $((64 + WEEK_OF_MONTH)))")
+          # A=Mon, B=Tue, C=Wed, D=Thu, E=Fri; weekend (6,7) -> E
+          DAY_NUM=$DAY_OF_WEEK
+          [ "$DAY_NUM" -gt 5 ] && DAY_NUM=5
+          DAY_LETTER=$(printf "\\x$(printf %02x $((64 + DAY_NUM)))")
+          YEAR=$(echo "$COMMIT_DATE" | cut -d'-' -f1)
+          MONTH=$(echo "$COMMIT_DATE" | cut -d'-' -f2)
+          DATE_PART="${YEAR}.${MONTH}.${WEEK_LETTER}${DAY_LETTER}"
+
+          if [ -f "$VERSION_FILE" ]; then
+            CURRENT_VERSION=$(jq -r '.version' "$VERSION_FILE")
+            LAST_FEATURE=$(jq -r '.last_feature_commit // ""' "$VERSION_FILE")
+            FEATURE_DATE=$(jq -r '.feature_date // ""' "$VERSION_FILE")
+            COMMIT_COUNT=$(jq -r '.commit_count_since_feature // 1' "$VERSION_FILE")
+          else
+            CURRENT_VERSION=""
+            LAST_FEATURE=""
+            FEATURE_DATE=""
+            COMMIT_COUNT="0"
+          fi
+
+          IS_FEATURE="${{ steps.commit.outputs.is_feature }}"
+          COMMIT_MSG="${{ steps.commit.outputs.message }}"
+
+          if [ "$IS_FEATURE" = "true" ]; then
+            NEW_COUNT=1
+            NEW_VERSION="${DATE_PART}${NEW_COUNT}"
+            NEW_LAST_FEATURE="$COMMIT_MSG"
+            NEW_FEATURE_DATE="$COMMIT_DATE"
+          else
+            if [ -z "$CURRENT_VERSION" ] || [ "$CURRENT_VERSION" = "null" ]; then
+              NEW_COUNT=1
+              NEW_VERSION="${DATE_PART}1"
+              NEW_LAST_FEATURE=""
+              NEW_FEATURE_DATE=""
+            else
+              # Keep existing YYYY.MM.WD (date part), increment commit number only
+              CURRENT_BASE=$(echo "$CURRENT_VERSION" | sed -n 's/^\([0-9]\{4\}\.[0-9]\{2\}\.[A-Z]\{2\}\)[0-9]*$/\1/p')
+              if [ -n "$CURRENT_BASE" ]; then
+                DATE_PART="$CURRENT_BASE"
+              fi
+              NEW_COUNT=$((COMMIT_COUNT + 1))
+              NEW_VERSION="${DATE_PART}${NEW_COUNT}"
+              NEW_LAST_FEATURE="$LAST_FEATURE"
+              NEW_FEATURE_DATE="$FEATURE_DATE"
+            fi
+          fi
+
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "new_count=$NEW_COUNT" >> $GITHUB_OUTPUT
+          echo "last_feature=$NEW_LAST_FEATURE" >> $GITHUB_OUTPUT
+          echo "feature_date=$NEW_FEATURE_DATE" >> $GITHUB_OUTPUT
+
+      - name: Write version.json
+        if: steps.commit.outputs.skip != 'true'
+        run: |
+          mkdir -p assets/data
+          jq -n \
+            --arg version "${{ steps.version.outputs.new_version }}" \
+            --arg last_feature_commit "${{ steps.version.outputs.last_feature }}" \
+            --arg feature_date "${{ steps.version.outputs.feature_date }}" \
+            --argjson commit_count_since_feature ${{ steps.version.outputs.new_count }} \
+            '{version: $version, last_feature_commit: $last_feature_commit, feature_date: $feature_date, commit_count_since_feature: $commit_count_since_feature}' \
+            > assets/data/version.json
+          cp assets/data/version.json version.json
+
+      - name: Commit and push version.json
+        if: steps.commit.outputs.skip != 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Actions"
+          git add assets/data/version.json version.json
+          if git diff --staged --quiet; then
+            echo "No version change to commit"
+          else
+            git commit -m "chore: update version to ${{ steps.version.outputs.new_version }} [skip ci]"
+            git push
+          fi
+
+      - name: Summary
+        if: steps.commit.outputs.skip != 'true'
+        run: |
+          echo "## Version Control Update" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Feature commit**: ${{ steps.commit.outputs.is_feature }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commits since feature**: ${{ steps.version.outputs.new_count }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Skipped (version-bump commit)
+        if: steps.commit.outputs.skip == 'true'
+        run: echo "## Skipped" >> $GITHUB_STEP_SUMMARY && echo "Version not updated (commit contained [skip ci])." >> $GITHUB_STEP_SUMMARY

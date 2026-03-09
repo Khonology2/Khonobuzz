@@ -1,111 +1,67 @@
+# Generates daily-commits.json for legacy/tooling. Does NOT change version.
+# Version is updated only by version-control.yml on push (YYYY.MM.<W><D><n>).
+
 name: Generate Daily Commits
- 
+
 on:
-  push: # Run on every commit (push)
   schedule:
-    # Run daily at 4:30 PM UTC (2:30 PM SAST, 6:30 AM PST)
     - cron: '30 16 * * *'
-  workflow_dispatch: # Allow manual trigger
- 
+  workflow_dispatch:
+
 permissions:
-  contents: write # Allow workflow to push commits back to repository
- 
+  contents: write
+
 jobs:
   generate-commits:
     runs-on: ubuntu-latest
- 
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0 # Fetch all history for complete commit log
- 
-    - name: Setup Node.js for commit processing
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
- 
-    - name: Generate daily commits JSON
-      run: |
-        # Get today's date in YYYY-MM-DD format
-        TODAY=$(date -u +"%Y-%m-%d")
-        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
- 
-        # Get commits from today only and format as proper JSON array using jq
-        COMMITS_JSON=$(git log --since="${TODAY}T00:00:00Z" --pretty=format:'%an|%s|%aI' --no-merges | \
-          jq -R -s '
-            split("\n") |
-            map(select(length > 0)) |
-            map(split("|") | {author: .[0], message: .[1], timestamp: .[2]})
-          ')
- 
-        # Count commits
-        COMMIT_COUNT=$(git log --since="${TODAY}T00:00:00Z" --oneline --no-merges | wc -l)
- 
-        # If no commits today, create empty array
-        if [ "$COMMIT_COUNT" -eq 0 ]; then
-          COMMITS_JSON="[]"
-          COMMIT_COUNT=0
-        fi
- 
-        # Get current version in YYYY-MM-WD-N.SIT format with 4-week cycle
-        YEAR=$(date -u +"%Y")
-        MONTH=$(date -u +"%m")
-        DAY=$(date -u +"%d")
-        
-        # Calculate week of month using 4-week cycle (same as Flutter app)
-        # Week 1 = A, Week 2 = B, Week 3 = C, Week 4 = D, then cycles back to A
-        WEEK_OF_MONTH=$((($DAY - 1) / 7 + 1))
-        WEEK_LETTER=$(echo "ABCD" | cut -c$((($WEEK_OF_MONTH - 1) % 4 + 1)))
-        
-        # Get day of week letter (A=Monday, B=Tuesday, etc.)
-        DAY_OF_WEEK=$(date -u +"%u") # 1=Monday, 7=Sunday
-        DAY_LETTER=$(echo "ABCDEFG" | cut -c$DAY_OF_WEEK)
-        
-        VERSION="${YEAR}.${MONTH}.${WEEK_LETTER}${DAY_LETTER}${COMMIT_COUNT}.SIT"
- 
-        # Create JSON structure using jq for proper formatting
-        jq -n \
-          --arg version "$VERSION" \
-          --arg generated_at "$TIMESTAMP" \
-          --argjson commits "$COMMITS_JSON" \
-          --arg total_commits "$COMMIT_COUNT" \
-          --arg date_range "$TODAY" \
-          '{
-            version: $version,
-            generated_at: $generated_at,
-            commits: $commits,
-            total_commits: ($total_commits | tonumber),
-            date_range: $date_range
-          }' > assets/data/daily-commits.json
- 
-        echo "Generated commit data for $TODAY with $COMMIT_COUNT commits"
- 
-    - name: Verify JSON is valid
-      run: |
-        if command -v jq &> /dev/null; then
-          jq . assets/data/daily-commits.json
-          echo "JSON is valid"
-        else
-          echo "jq not available, skipping validation"
-        fi
- 
-    - name: Display generated data
-      run: |
-        echo "Generated commit data:"
-        cat assets/data/daily-commits.json | jq . 2>/dev/null || cat assets/data/daily-commits.json
- 
-    - name: Commit and push changes (if any)
-      run: |
-        # Check if there are changes to commit
-        if git diff --quiet assets/data/daily-commits.json; then
-          echo "No changes to commit data"
-        else
-          echo "Committing updated commit data"
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate daily commits JSON
+        id: gen
+        run: |
+          TODAY=$(date -u +"%Y-%m-%d")
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "today=$TODAY" >> $GITHUB_OUTPUT
+
+          COMMITS_JSON=$(git log --since="${TODAY}T00:00:00Z" --pretty=format:'%an|%s|%aI' --no-merges | \
+            jq -R -s '
+              split("\n") |
+              map(select(length > 0)) |
+              map(split("|") | {author: .[0], message: .[1], timestamp: .[2]})
+            ')
+          COMMIT_COUNT=$(git log --since="${TODAY}T00:00:00Z" --oneline --no-merges | wc -l | tr -d ' ')
+          [ -z "$COMMIT_COUNT" ] && COMMIT_COUNT=0
+          [ "$COMMIT_COUNT" -eq 0 ] && COMMITS_JSON="[]"
+
+          VER="2026.03.BA1"
+          [ -f "assets/data/version.json" ] && VER=$(jq -r '.version // "2026.03.BA1"' assets/data/version.json)
+          jq -n \
+            --arg version "$VER" \
+            --arg generated_at "$TIMESTAMP" \
+            --argjson commits "$COMMITS_JSON" \
+            --argjson total_commits "$COMMIT_COUNT" \
+            --arg date_range "$TODAY" \
+            '{version: $version, generated_at: $generated_at, commits: $commits, total_commits: $total_commits, date_range: $date_range}' \
+            > assets/data/daily-commits.json
+
+      - name: Verify JSON
+        run: |
+          jq . assets/data/daily-commits.json && echo "JSON valid"
+
+      - name: Commit and push (if changed)
+        run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add assets/data/daily-commits.json
-          git commit -m "Update daily commits data [${TODAY}]" || echo "No changes to commit"
-          git pull --rebase origin $GITHUB_REF_NAME || git pull origin $GITHUB_REF_NAME || echo "Pull failed, attempting push anyway"
-          git push || echo "Push failed - likely due to no changes or permissions"
-        fi
+          if git diff --staged --quiet; then
+            echo "No changes to daily-commits.json"
+          else
+            git commit -m "Update daily commits data [${{ steps.gen.outputs.today }}] [skip ci]"
+            git pull --rebase origin ${GITHUB_REF#refs/heads/} 2>/dev/null || true
+            git push
+          fi

@@ -1,8 +1,10 @@
+# Monitors version consistency. Version in version.json: YYYY.MM.<W><D><n> (W=week, D=day, n=commits).
+# Does not change version; version only updates on push via version-control.yml.
+
 name: Version Control Monitor
 
 on:
   schedule:
-    # Run every hour to monitor version consistency
     - cron: '0 * * * *'
   workflow_dispatch:
 
@@ -14,150 +16,76 @@ jobs:
       pull-requests: write
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
+      - name: Read version from version.json
+        id: version
+        run: |
+          if [ -f "assets/data/version.json" ]; then
+            V=$(jq -r '.version' assets/data/version.json)
+            COUNT=$(jq -r '.commit_count_since_feature' assets/data/version.json)
+            FEATURE=$(jq -r '.last_feature_commit' assets/data/version.json)
+            FDATE=$(jq -r '.feature_date' assets/data/version.json)
+            echo "version=$V" >> $GITHUB_OUTPUT
+            echo "commit_count=$COUNT" >> $GITHUB_OUTPUT
+            echo "last_feature=$FEATURE" >> $GITHUB_OUTPUT
+            echo "feature_date=$FDATE" >> $GITHUB_OUTPUT
+          else
+            echo "version=not_found" >> $GITHUB_OUTPUT
+            echo "commit_count=0" >> $GITHUB_OUTPUT
+            echo "last_feature=" >> $GITHUB_OUTPUT
+            echo "feature_date=" >> $GITHUB_OUTPUT
+          fi
 
-    - name: Get version from widget
-      id: widget_version
-      run: |
-        # Extract version from version_control.dart
-        YEAR=$(grep "static const int _versionYear" lib/widgets/version_control.dart | sed 's/.*= \([0-9]*\).*/\1/')
-        MONTH=$(grep "static const String _versionMonth" lib/widgets/version_control.dart | sed "s/.*= '\([0-9]*\)'.*/\1/")
-        WEEK_CODE=$(grep "static const String _versionWeekCode" lib/widgets/version_control.dart | sed "s/.*= '\([A-Z]\)'.*/\1/")
-        DAY_CODE=$(grep "static const String _versionDayCode" lib/widgets/version_control.dart | sed "s/.*= '\([A-Z]\)'.*/\1/")
-        COMMIT_COUNT=$(grep "static const int _versionCommitNumber" lib/widgets/version_control.dart | sed 's/.*= \([0-9]*\).*/\1/')
-        ENVIRONMENT=$(grep "static const String _versionEnvironment" lib/widgets/version_control.dart | sed "s/.*= '\([A-Z]*\)'.*/\1/")
-        
-        WIDGET_VERSION="Ver. $YEAR.$MONTH.$WEEK_CODE$DAY_CODE$COMMIT_COUNT.$ENVIRONMENT"
-        
-        echo "widget_version=$WIDGET_VERSION" >> $GITHUB_OUTPUT
-        echo "widget_commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+      - name: Git info
+        id: git_info
+        run: |
+          echo "latest_commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "latest_commit_date=$(git log -1 --format='%ci')" >> $GITHUB_OUTPUT
 
-    - name: Get version from JSON
-      id: json_version
-      run: |
-        # Extract version from daily-commits.json
-        if [[ -f "assets/data/daily-commits.json" ]]; then
-          JSON_VERSION=$(jq -r '.version' assets/data/daily-commits.json)
-          JSON_COMMIT_COUNT=$(jq -r '.total_commits' assets/data/daily-commits.json)
-          JSON_GENERATED_AT=$(jq -r '.generated_at' assets/data/daily-commits.json)
-          
-          echo "json_version=$JSON_VERSION" >> $GITHUB_OUTPUT
-          echo "json_commit_count=$JSON_COMMIT_COUNT" >> $GITHUB_OUTPUT
-          echo "json_generated_at=$JSON_GENERATED_AT" >> $GITHUB_OUTPUT
-        else
-          echo "json_version=not_found" >> $GITHUB_OUTPUT
-          echo "json_commit_count=0" >> $GITHUB_OUTPUT
-          echo "json_generated_at=never" >> $GITHUB_OUTPUT
-        fi
+      - name: Consistency check
+        id: check
+        run: |
+          V="${{ steps.version.outputs.version }}"
+          C="${{ steps.version.outputs.commit_count }}"
+          echo "version=$V" >> $GITHUB_OUTPUT
+          echo "commit_count=$C" >> $GITHUB_OUTPUT
+          if [ "$V" = "not_found" ] || [ -z "$V" ]; then
+            echo "consistent=false" >> $GITHUB_OUTPUT
+            echo "status=version.json missing" >> $GITHUB_OUTPUT
+          else
+            echo "consistent=true" >> $GITHUB_OUTPUT
+            echo "status=OK" >> $GITHUB_OUTPUT
+          fi
 
-    - name: Get actual git commit count
-      id: git_info
-      run: |
-        # Get actual commit count from git
-        ACTUAL_COMMIT_COUNT=$(git rev-list --count HEAD)
-        LATEST_COMMIT=$(git rev-parse --short HEAD)
-        LATEST_COMMIT_DATE=$(git log -1 --format='%ci')
-        
-        echo "actual_commit_count=$ACTUAL_COMMIT_COUNT" >> $GITHUB_OUTPUT
-        echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
-        echo "latest_commit_date=$LATEST_COMMIT_DATE" >> $GITHUB_OUTPUT
+      - name: Create version report
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## Version Control Monitor
+          - **Version**: ${{ steps.version.outputs.version }}
+          - **Commits since feature**: ${{ steps.version.outputs.commit_count }}
+          - **Latest feature**: ${{ steps.version.outputs.last_feature }}
+          - **Feature date**: ${{ steps.version.outputs.feature_date }}
+          - **Status**: ${{ steps.check.outputs.status }}
+          - **Latest commit**: ${{ steps.git_info.outputs.latest_commit }}
+          EOF
+          cat > version-report.md << MDEOF
+          # Version Control Monitor Report
+          - Version: ${{ steps.version.outputs.version }}
+          - Commits since feature: ${{ steps.version.outputs.commit_count }}
+          - Latest feature: ${{ steps.version.outputs.last_feature }}
+          - Feature date: ${{ steps.version.outputs.feature_date }}
+          - Status: ${{ steps.check.outputs.status }}
+          - Latest commit: ${{ steps.git_info.outputs.latest_commit }}
+          MDEOF
 
-    - name: Check version consistency
-      id: consistency_check
-      run: |
-        WIDGET_COUNT=${{ steps.widget_version.outputs.widget_commit_count }}
-        JSON_COUNT=${{ steps.json_version.outputs.json_commit_count }}
-        ACTUAL_COUNT=${{ steps.git_info.outputs.actual_commit_count }}
-        
-        echo "widget_commit_count=$WIDGET_COUNT" >> $GITHUB_OUTPUT
-        echo "json_commit_count=$JSON_COUNT" >> $GITHUB_OUTPUT
-        echo "actual_commit_count=$ACTUAL_COUNT" >> $GITHUB_OUTPUT
-        
-        # Check if versions are consistent
-        if [[ "$WIDGET_COUNT" == "$ACTUAL_COUNT" && "$JSON_COUNT" == "$ACTUAL_COUNT" ]]; then
-          echo "consistent=true" >> $GITHUB_OUTPUT
-          echo "status=All versions are consistent" >> $GITHUB_OUTPUT
-        else
-          echo "consistent=false" >> $GITHUB_OUTPUT
-          echo "status=Version inconsistency detected" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Create version report
-      run: |
-        cat > version-report.md << EOF
-        # Version Control Monitor Report
-        
-        ## 📊 Version Status
-        - **Status**: ${{ steps.consistency_check.outputs.status }}
-        - **Consistent**: ${{ steps.consistency_check.outputs.consistent }}
-        
-        ## 📈 Commit Count Comparison
-        | Source | Count | Status |
-        |--------|-------|--------|
-        | Widget | ${{ steps.widget_version.outputs.widget_commit_count }} | ${{ steps.widget_version.outputs.widget_commit_count == steps.git_info.outputs.actual_commit_count && '✅' || '❌' }} |
-        | JSON | ${{ steps.json_version.outputs.json_commit_count }} | ${{ steps.json_version.outputs.json_commit_count == steps.git_info.outputs.actual_commit_count && '✅' || '❌' }} |
-        | Actual Git | ${{ steps.git_info.outputs.actual_commit_count }} | ✅ |
-        
-        ## 📝 Version Details
-        - **Widget Version**: ${{ steps.widget_version.outputs.widget_version }}
-        - **JSON Version**: ${{ steps.json_version.outputs.json_version }}
-        - **JSON Generated**: ${{ steps.json_version.outputs.json_generated_at }}
-        - **Latest Commit**: ${{ steps.git_info.outputs.latest_commit }}
-        - **Latest Commit Date**: ${{ steps.git_info.outputs.latest_commit_date }}
-        
-        ## 🔧 Actions Required
-        EOF
-        
-        if [[ "${{ steps.consistency_check.outputs.consistent }}" == "false" ]]; then
-          echo "- ⚠️ **Version inconsistency detected**" >> version-report.md
-          echo "- 🔄 **Run auto-version-update workflow** to fix" >> version-report.md
-          echo "- 📝 **Check recent commits** for manual updates" >> version-report.md
-        else
-          echo "- ✅ **All versions are consistent**" >> version-report.md
-          echo "- 🎉 **No action required**" >> version-report.md
-        fi
-        
-        echo "" >> version-report.md
-        echo "---" >> version-report.md
-        echo "*Report generated on $(date -u +'%Y-%m-%d %H:%M:%S UTC')*" >> version-report.md
-
-    - name: Create issue if inconsistent
-      if: steps.consistency_check.outputs.consistent == 'false'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const fs = require('fs');
-          const report = fs.readFileSync('version-report.md', 'utf8');
-          
-          github.rest.issues.create({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            title: `Version Inconsistency Detected - ${new Date().toISOString().split('T')[0]}`,
-            body: report,
-            labels: ['version-control', 'bug', 'automated']
-          });
-
-    - name: Upload monitor report
-      uses: actions/upload-artifact@v4
-      with:
-        name: version-monitor-report
-        path: version-report.md
-        retention-days: 7
-
-    - name: Display monitor summary
-      run: |
-        echo "## 🔍 Version Monitor Summary" >> $GITHUB_STEP_SUMMARY
-        echo "- **Status**: ${{ steps.consistency_check.outputs.status }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Consistent**: ${{ steps.consistency_check.outputs.consistent }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Widget Count**: ${{ steps.widget_version.outputs.widget_commit_count }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **JSON Count**: ${{ steps.json_version.outputs.json_commit_count }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Actual Count**: ${{ steps.git_info.outputs.actual_commit_count }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Latest Commit**: ${{ steps.git_info.outputs.latest_commit }}" >> $GITHUB_STEP_SUMMARY
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: version-monitor-report
+          path: version-report.md
+          retention-days: 7
+        continue-on-error: true
