@@ -49,7 +49,7 @@ class VersionService {
         final response = await http.get(uri).timeout(const Duration(seconds: 3));
         if (response.statusCode == 200 && response.body.isNotEmpty) {
           final map = json.decode(response.body) as Map<String, dynamic>?;
-          if (map != null && map['version'] != null) {
+          if (map != null && _isCustomVersionFormat(map)) {
             _cached = VersionData.fromJson(map);
             return _cached!;
           }
@@ -71,5 +71,13 @@ class VersionService {
 
   static void clearCache() {
     _cached = null;
+  }
+
+  /// True if the map looks like our version.json (YYYY.MM.[W][D][n]), not pubspec semver (e.g. 1.0.0).
+  static bool _isCustomVersionFormat(Map<String, dynamic> map) {
+    final v = map['version'];
+    if (v == null || v is! String) return false;
+    final s = v; // promoted to String
+    return s.length >= 7 && s.startsWith('20');
   }
 }

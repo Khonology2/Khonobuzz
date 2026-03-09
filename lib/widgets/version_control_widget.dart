@@ -132,7 +132,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   }
 
   /// Tooltip: title "Latest Feature Release", then stripped commit message, then Released date.
-  /// Strips "Feature - " / "Feature: " / "feature: " and optional leading "bug " from commit message.
+  /// When commit/date are empty, shows version so tooltip is never blank.
   String _buildTooltip(VersionData data) {
     final buffer = StringBuffer();
 
@@ -147,6 +147,10 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
     if (data.featureDate.isNotEmpty) {
       buffer.writeln('Released:');
       buffer.writeln(data.featureDate);
+    }
+
+    if (data.lastFeatureCommit.isEmpty && data.featureDate.isEmpty) {
+      buffer.writeln('Version: ${data.version}');
     }
 
     return buffer.toString();

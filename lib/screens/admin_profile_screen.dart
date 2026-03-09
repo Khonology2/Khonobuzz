@@ -137,6 +137,7 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
     }
   }
 
+  /// Loads the logged-in user's profile from the database and displays it. Only applies data when the API response is for the current user.
   Future<void> _loadUserData() async {
     final authProvider = context.read<AuthProvider>();
 
@@ -144,113 +145,103 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
       final email = authProvider.userEmail ?? '';
       if (email.isEmpty) return;
 
+      // Always fetch from database so the profile screen shows this user's data, not cached/other user's data
+      final url = Uri.parse(ApiConfig.userByEmailEndpoint(email));
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'Authorization': 'Bearer ${authProvider.userToken}',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode != 200) {
+        debugPrint('Failed to fetch user info (${response.statusCode})');
+        return;
+      }
+
+      final decoded = json.decode(response.body);
       Map<String, dynamic>? userMap;
-
-      // Only use cached profile if it belongs to the current user (prevents showing previous user's data)
-      final cached = authProvider.cachedProfileData;
-      final cachedEmail = (cached != null ? cached['email'] as String? : null)?.trim().toLowerCase();
-      final currentEmail = email.trim().toLowerCase();
-      if (cached != null && cachedEmail == currentEmail) {
-        userMap = cached;
-        debugPrint('[AdminProfileScreen] Using cached profile data');
-      } else {
-        // Fetch fresh data if no cache available
-        final url = Uri.parse(ApiConfig.userByEmailEndpoint(email));
-        final response = await http
-            .get(
-              url,
-              headers: {
-                'Authorization': 'Bearer ${authProvider.userToken}',
-                'Accept': 'application/json',
-              },
-            )
-            .timeout(const Duration(seconds: 8));
-
-        if (response.statusCode == 200) {
-          final decoded = json.decode(response.body);
-          if (decoded is Map<String, dynamic>) {
-            if (decoded['user'] is Map<String, dynamic>) {
-              userMap = decoded['user'] as Map<String, dynamic>;
-            } else {
-              userMap = decoded;
-            }
-          }
+      if (decoded is Map<String, dynamic>) {
+        if (decoded['user'] is Map<String, dynamic>) {
+          userMap = decoded['user'] as Map<String, dynamic>;
         } else {
-          debugPrint('Failed to fetch user info (${response.statusCode})');
-          return;
+          userMap = decoded;
+        }
+      }
+      if (userMap == null) return;
+
+      // Only display when the response is for the logged-in user (never show another user's data)
+      final responseEmail = (userMap['email'] as String? ?? '').trim().toLowerCase();
+      final currentEmail = email.trim().toLowerCase();
+      if (responseEmail != currentEmail) {
+        debugPrint('[AdminProfileScreen] Ignoring response: email mismatch');
+        if (mounted) {
+          await authProvider.updateUserProfileImage(null, null);
+        }
+        return;
+      }
+
+      final firstName = (userMap['firstName'] ?? userMap['name'] ?? '').toString().trim();
+      final lastName = (userMap['lastName'] ?? userMap['surname'] ?? '').toString().trim();
+      final phone = (userMap['phoneNumber'] ?? '').toString().trim();
+      final deptRaw = (userMap['department'] ?? '').toString().trim();
+      final desigRaw = (userMap['designation'] ?? '').toString().trim();
+      final preferred = (userMap['preferredName'] ?? '').toString().trim();
+      final manager = (userMap['managedBy'] ?? '').toString().trim();
+      final profileImageUrl = (userMap['profileImageUrl'] ?? '').toString().trim();
+      final profileImagePublicId = (userMap['profileImagePublicId'] ?? '').toString().trim();
+      final entity = (userMap['entity'] ?? '').toString().trim();
+      final moduleAccess = (userMap['moduleAccess'] ?? '').toString().trim();
+      final responseEmailDisplay = (userMap['email'] ?? email).toString().trim();
+
+      String? matchedDept;
+      if (deptRaw.isNotEmpty) {
+        try {
+          matchedDept = _departments.firstWhere(
+            (d) => d.toLowerCase() == deptRaw.toLowerCase(),
+          );
+        } catch (_) {
+          matchedDept = null;
         }
       }
 
-      if (userMap != null) {
-        final firstName = (userMap['firstName'] ?? userMap['name'] ?? '')
-            .toString();
-        final lastName = (userMap['lastName'] ?? userMap['surname'] ?? '')
-            .toString();
-        final phone = (userMap['phoneNumber'] ?? '').toString();
-        final deptRaw = (userMap['department'] ?? '').toString().trim();
-        final desigRaw = (userMap['designation'] ?? '').toString().trim();
-        final preferred = (userMap['preferredName'] ?? '').toString();
-        final manager = (userMap['managedBy'] ?? '').toString();
-        final profileImageUrl = (userMap['profileImageUrl'] ?? '').toString();
-        final profileImagePublicId = (userMap['profileImagePublicId'] ?? '')
-            .toString();
-        final entity = (userMap['entity'] ?? '').toString().trim();
-        final moduleAccess = (userMap['moduleAccess'] ?? '').toString().trim();
-
-        // Robust matching for dropdowns
-        String? matchedDept;
-        if (deptRaw.isNotEmpty) {
-          try {
-            matchedDept = _departments.firstWhere(
-              (d) => d.toLowerCase() == deptRaw.toLowerCase(),
-            );
-          } catch (_) {
-            matchedDept = null;
-          }
-        }
-
-        String? matchedDesig;
-        if (desigRaw.isNotEmpty) {
-          try {
-            matchedDesig = _designations.firstWhere(
-              (d) => d.toLowerCase() == desigRaw.toLowerCase(),
-            );
-          } catch (_) {
-            matchedDesig = null;
-          }
-        }
-
-        if (mounted) {
-          setState(() {
-            _firstNameController.text = firstName;
-            _surnameController.text = lastName;
-            _emailController.text = email;
-            _phoneController.text = phone;
-            _preferredNameController.text = preferred;
-            _managerController.text = manager;
-            _selectedDepartment = matchedDept;
-            _selectedDesignation = matchedDesig;
-            _profileImageUrl = profileImageUrl.isNotEmpty
-                ? profileImageUrl
-                : null;
-            _profileImagePublicId = profileImagePublicId.isNotEmpty
-                ? profileImagePublicId
-                : null;
-            _userEntity = entity.isEmpty ? 'Not assigned' : entity;
-            _userModuleAccess = moduleAccess.isNotEmpty
-                ? moduleAccess
-                : (authProvider.userModuleAccess ?? 'None');
-          });
-        }
-
-        // Sync AuthProvider profile image with loaded profile when viewing current user (so we never show previous user's pic)
-        final currentEmail = (authProvider.userEmail ?? '').trim().toLowerCase();
-        if (mounted && email.trim().toLowerCase() == currentEmail) {
-          await authProvider.updateUserProfileImage(
-            profileImageUrl.isNotEmpty ? profileImageUrl : null,
-            profileImagePublicId.isNotEmpty ? profileImagePublicId : null,
+      String? matchedDesig;
+      if (desigRaw.isNotEmpty) {
+        try {
+          matchedDesig = _designations.firstWhere(
+            (d) => d.toLowerCase() == desigRaw.toLowerCase(),
           );
+        } catch (_) {
+          matchedDesig = null;
         }
+      }
+
+      if (mounted) {
+        setState(() {
+          _firstNameController.text = firstName;
+          _surnameController.text = lastName;
+          _emailController.text = responseEmailDisplay;
+          _phoneController.text = phone;
+          _preferredNameController.text = preferred;
+          _managerController.text = manager;
+          _selectedDepartment = matchedDept;
+          _selectedDesignation = matchedDesig;
+          _profileImageUrl = profileImageUrl.isNotEmpty ? profileImageUrl : null;
+          _profileImagePublicId = profileImagePublicId.isNotEmpty ? profileImagePublicId : null;
+          _userEntity = entity.isEmpty ? 'Not assigned' : entity;
+          _userModuleAccess = moduleAccess.isNotEmpty ? moduleAccess : (authProvider.userModuleAccess ?? 'None');
+        });
+      }
+
+      // Sync AuthProvider profile image: only set if this user has one, otherwise clear (no previous user's pic)
+      if (mounted) {
+        await authProvider.updateUserProfileImage(
+          profileImageUrl.isNotEmpty ? profileImageUrl : null,
+          profileImagePublicId.isNotEmpty ? profileImagePublicId : null,
+        );
       }
     } catch (e) {
       debugPrint('Error loading user data: $e');
