@@ -1382,6 +1382,16 @@ async def login_user(user_login: UserLogin, request: Request):
         if not user_data or not user_id:
             print(f"[DEBUG] User not found: {normalized_email}")
             return JSONResponse(status_code=404, content={"error": "User not found"})
+        # Ensure we never return another user's data: response must match requested email
+        resolved_email = (user_data.get("email") or stored_email or "").strip().lower()
+        if resolved_email != normalized_email:
+            error_log(f"Login user mismatch: requested {normalized_email}, resolved {resolved_email}")
+            if cache_key in USER_CACHE:
+                del USER_CACHE[cache_key]
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Authentication error. Please try again."},
+            )
         user_status = user_data.get('status', 'Pending')
         if not is_special_session and user_status != 'Active':
             return JSONResponse(

@@ -146,9 +146,12 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
 
       Map<String, dynamic>? userMap;
 
-      // Check if we have cached data from login prefetch
-      if (authProvider.cachedProfileData != null) {
-        userMap = authProvider.cachedProfileData!;
+      // Only use cached profile if it belongs to the current user (prevents showing previous user's data)
+      final cached = authProvider.cachedProfileData;
+      final cachedEmail = (cached != null ? cached['email'] as String? : null)?.trim().toLowerCase();
+      final currentEmail = email.trim().toLowerCase();
+      if (cached != null && cachedEmail == currentEmail) {
+        userMap = cached;
         debugPrint('[AdminProfileScreen] Using cached profile data');
       } else {
         // Fetch fresh data if no cache available

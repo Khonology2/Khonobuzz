@@ -337,6 +337,9 @@ class AuthProvider extends ChangeNotifier {
           return false;
         }
 
+        // Clear previous user's cached data to prevent showing another user's profile
+        _cachedProfileData = null;
+
         _isAuthenticated = true;
         _isSpecialSession = isSpecialAccess;
         _userEmail = userPayload['email'] as String;
@@ -376,6 +379,8 @@ class AuthProvider extends ChangeNotifier {
             prefs.setString('userProfileImageUrl', _userProfileImageUrl!),
           if (_userProfilePublicId != null)
             prefs.setString('userProfilePublicId', _userProfilePublicId!),
+          if (_userModuleAccess != null)
+            prefs.setString('userModuleAccess', _userModuleAccess!),
         ];
 
         // Get token from response if available
@@ -525,6 +530,7 @@ class AuthProvider extends ChangeNotifier {
 
         if (foundUser != null) {
           final prefs = await SharedPreferences.getInstance();
+          _cachedProfileData = null;
           _isAuthenticated = true;
           _userEmail = foundUser['email'] ?? email;
           _userRole = foundUser['role'] ?? 'Staff';
@@ -538,13 +544,17 @@ class AuthProvider extends ChangeNotifier {
             moduleAccessRoleRaw,
           );
 
-          await Future.wait([
+          final prefsWrites = <Future>[
             prefs.setBool('isAuthenticated', true),
             prefs.setString('userEmail', _userEmail!),
             prefs.setString('userRole', _userRole!),
             prefs.setInt('initialScreenIndex', 9),
             prefs.setInt('currentScreenIndex', 9),
-          ]);
+          ];
+          if (_userModuleAccess != null) {
+            prefsWrites.add(prefs.setString('userModuleAccess', _userModuleAccess!));
+          }
+          await Future.wait(prefsWrites);
 
           notifyListeners();
 
@@ -579,6 +589,7 @@ class AuthProvider extends ChangeNotifier {
     _userProfileImageUrl = null;
     _userProfilePublicId = null;
     _isSpecialSession = false;
+    _cachedProfileData = null;
     await Future.wait([
       prefs.remove('isAuthenticated'),
       prefs.remove('userEmail'),
