@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:khonobuzz/services/version_service.dart';
+
+const String _kVersionControlLastSeenKey = 'version_control_last_seen_version';
 
 /// Version control widget: displays Ver YYYY.MM.[W][D][n] SIT (W=week 1-4 A-D, D=weekday A-E Mon-Fri; weekend not counted).
 /// Tooltip shows latest feature release, date, and commits since release.
@@ -29,6 +32,10 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   late Timer _refreshTimer;
   String _currentVersion = 'Ver 2026.03.BA1 SIT';
   String _tooltipMessage = 'Loading version...';
+  String? _rawVersion;
+  bool _showAttentionCatcher = false;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
@@ -49,6 +56,14 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
 
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _pulseAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _loadVersion();
     });
@@ -60,6 +75,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _animationController.dispose();
+    _pulseController.dispose();
     _refreshTimer.cancel();
     super.dispose();
   }
@@ -75,12 +91,20 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   Future<void> _loadVersion() async {
     try {
       final data = await VersionService.loadVersion();
+      final prefs = await SharedPreferences.getInstance();
+      final lastSeen = prefs.getString(_kVersionControlLastSeenKey);
+      final isNewVersion = data.version != lastSeen;
 
       if (mounted) {
         setState(() {
+          _rawVersion = data.version;
           _currentVersion = _formatDisplayVersion(data.version);
           _tooltipMessage = _buildTooltip(data);
+          _showAttentionCatcher = isNewVersion;
         });
+        if (isNewVersion) {
+          _pulseController.repeat(reverse: true);
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -91,12 +115,23 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
     }
   }
 
+  Future<void> _onSeenByUser() async {
+    if (!_showAttentionCatcher || _rawVersion == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kVersionControlLastSeenKey, _rawVersion!);
+    if (mounted) {
+      _pulseController.stop();
+      _pulseController.reset();
+      setState(() => _showAttentionCatcher = false);
+    }
+  }
+
   /// Display: Ver YYYY.MM.[W][D][n] SIT (W=week 1-4 A-D, D=weekday A-E Mon-Fri; SIT fixed)
   String _formatDisplayVersion(String version) {
     return 'Ver $version SIT';
   }
 
-  /// Tooltip: Latest Feature Release, Date of Feature Commit, Commits since release.
+  /// Tooltip: Latest Feature Release and date only (no commit count since release).
   /// Only feature commits are reflected (stored in version.json by workflow).
   String _buildTooltip(VersionData data) {
     final buffer = StringBuffer();
@@ -113,31 +148,27 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
     if (data.featureDate.isNotEmpty) {
       buffer.writeln('Released:');
       buffer.writeln(data.featureDate);
-      buffer.writeln();
     }
-
-    buffer.writeln('Commits since release:');
-    buffer.write(data.commitCountSinceFeature);
 
     return buffer.toString();
   }
 
   void _onHover(bool isHovering) {
     if (isHovering) {
+      _onSeenByUser();
       _animationController.forward();
     } else {
       _animationController.reverse();
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildVersionChild() {
     return MouseRegion(
       onEnter: (_) => _onHover(true),
       onExit: (_) => _onHover(false),
       child: Tooltip(
         message: _tooltipMessage,
-        textAlign: TextAlign.left,
+        textAlign: TextAlign.center,
         padding: const EdgeInsets.all(16),
         margin: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
@@ -172,6 +203,37 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
           },
         ),
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showAttentionCatcher) {
+      return _buildVersionChild();
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedBuilder(
+          animation: _pulseAnimation,
+          builder: (context, child) {
+            return Opacity(
+              opacity: _pulseAnimation.value,
+              child: Text(
+                "See what's new — hover here.",
+                style: TextStyle(
+                  fontSize: 11,
+                  color: widget.textColor,
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 6),
+        _buildVersionChild(),
+      ],
     );
   }
 }

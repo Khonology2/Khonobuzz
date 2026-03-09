@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../services/sound_system.dart';
 import '../widgets/animations/loading_button.dart';
 import '../widgets/floating_circles_particle_animation.dart';
+import '../widgets/version_control_widget.dart';
 import 'package:audioplayers/audioplayers.dart';
 
 class ManualLoginScreen extends StatefulWidget {
@@ -556,6 +557,15 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                     ],
                   ),
                 ),
+              ),
+            ),
+            Positioned(
+              bottom: 20,
+              left: 0,
+              right: 0,
+              child: Align(
+                alignment: Alignment.center,
+                child: const VersionControlWidget(),
               ),
             ),
           ],

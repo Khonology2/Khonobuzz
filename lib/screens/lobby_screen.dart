@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/sound_system.dart';
+import '../widgets/version_control_widget.dart';
 import 'auth_screen.dart';
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart';
 import 'package:video_player/video_player.dart';
@@ -354,6 +355,15 @@ class LobbyScreenState extends State<LobbyScreen> {
                   ),
                 ),
               ),
+            ),
+          ),
+          Positioned(
+            bottom: 20,
+            left: 0,
+            right: 0,
+            child: Align(
+              alignment: Alignment.center,
+              child: const VersionControlWidget(),
             ),
           ),
         ],

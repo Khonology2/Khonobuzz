@@ -9,6 +9,7 @@ import 'dart:async';
 import '../services/sound_system.dart';
 import '../widgets/animations/loading_button.dart';
 import '../widgets/floating_circles_particle_animation.dart';
+import '../widgets/version_control_widget.dart';
 import 'lobby_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -678,6 +679,15 @@ class OnboardingScreenState extends State<OnboardingScreen>
                     ],
                   ),
                 ),
+              ),
+            ),
+            Positioned(
+              bottom: 20,
+              left: 0,
+              right: 0,
+              child: Align(
+                alignment: Alignment.center,
+                child: const VersionControlWidget(),
               ),
             ),
           ],
