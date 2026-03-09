@@ -337,8 +337,10 @@ class AuthProvider extends ChangeNotifier {
           return false;
         }
 
-        // Clear previous user's cached data to prevent showing another user's profile
+        // Clear previous user's cached data and profile image to prevent showing another user's profile
         _cachedProfileData = null;
+        _userProfileImageUrl = null;
+        _userProfilePublicId = null;
 
         _isAuthenticated = true;
         _isSpecialSession = isSpecialAccess;
@@ -357,7 +359,7 @@ class AuthProvider extends ChangeNotifier {
           moduleAccessRoleRaw,
         );
 
-        // Extract profile image data from login response
+        // Extract profile image data from login response (only for this user)
         debugPrint('[AuthProvider] Login response userPayload: $userPayload');
         _userProfileImageUrl = userPayload['profileImageUrl'] as String?;
         _userProfilePublicId = userPayload['profileImagePublicId'] as String?;
@@ -368,7 +370,7 @@ class AuthProvider extends ChangeNotifier {
           '[AuthProvider] Extracted profileImagePublicId: $_userProfilePublicId',
         );
 
-        // Batch all SharedPreferences writes
+        // Batch all SharedPreferences writes (clear old profile image if not set for new user)
         final writeTasks = <Future>[
           prefs.setBool('isAuthenticated', true),
           prefs.setString('userEmail', _userEmail!),
@@ -376,9 +378,13 @@ class AuthProvider extends ChangeNotifier {
           prefs.setInt('initialScreenIndex', 9),
           prefs.setInt('currentScreenIndex', 9),
           if (_userProfileImageUrl != null)
-            prefs.setString('userProfileImageUrl', _userProfileImageUrl!),
+            prefs.setString('userProfileImageUrl', _userProfileImageUrl!)
+          else
+            prefs.remove('userProfileImageUrl'),
           if (_userProfilePublicId != null)
-            prefs.setString('userProfilePublicId', _userProfilePublicId!),
+            prefs.setString('userProfilePublicId', _userProfilePublicId!)
+          else
+            prefs.remove('userProfilePublicId'),
           if (_userModuleAccess != null)
             prefs.setString('userModuleAccess', _userModuleAccess!),
         ];
@@ -490,6 +496,13 @@ class AuthProvider extends ChangeNotifier {
           }
         }
 
+        final fetchedEmail = (userMap['email'] as String? ?? '').trim().toLowerCase();
+        final currentEmail = email.trim().toLowerCase();
+        if (fetchedEmail != currentEmail) {
+          debugPrint('[AuthProvider] Ignoring profile data: fetched email does not match current user');
+          return;
+        }
+
         // Update AuthProvider with profile image data if available
         final profileImageUrl = userMap['profileImageUrl'] as String?;
         final profileImagePublicId = userMap['profileImagePublicId'] as String?;
@@ -531,6 +544,8 @@ class AuthProvider extends ChangeNotifier {
         if (foundUser != null) {
           final prefs = await SharedPreferences.getInstance();
           _cachedProfileData = null;
+          _userProfileImageUrl = null;
+          _userProfilePublicId = null;
           _isAuthenticated = true;
           _userEmail = foundUser['email'] ?? email;
           _userRole = foundUser['role'] ?? 'Staff';
@@ -543,6 +558,8 @@ class AuthProvider extends ChangeNotifier {
             moduleAccessRaw,
             moduleAccessRoleRaw,
           );
+          _userProfileImageUrl = foundUser['profileImageUrl'] as String?;
+          _userProfilePublicId = foundUser['profileImagePublicId'] as String?;
 
           final prefsWrites = <Future>[
             prefs.setBool('isAuthenticated', true),
@@ -553,6 +570,16 @@ class AuthProvider extends ChangeNotifier {
           ];
           if (_userModuleAccess != null) {
             prefsWrites.add(prefs.setString('userModuleAccess', _userModuleAccess!));
+          }
+          if (_userProfileImageUrl != null) {
+            prefsWrites.add(prefs.setString('userProfileImageUrl', _userProfileImageUrl!));
+          } else {
+            prefsWrites.add(prefs.remove('userProfileImageUrl'));
+          }
+          if (_userProfilePublicId != null) {
+            prefsWrites.add(prefs.setString('userProfilePublicId', _userProfilePublicId!));
+          } else {
+            prefsWrites.add(prefs.remove('userProfilePublicId'));
           }
           await Future.wait(prefsWrites);
 
@@ -613,17 +640,21 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Update user's profile image
+  // Update user's profile image (pass null or empty to clear)
   Future<void> updateUserProfileImage(
     String? imageUrl,
     String? publicId,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    _userProfileImageUrl = imageUrl;
-    _userProfilePublicId = publicId;
+    _userProfileImageUrl = (imageUrl != null && imageUrl.isNotEmpty) ? imageUrl : null;
+    _userProfilePublicId = (publicId != null && publicId.isNotEmpty) ? publicId : null;
     await Future.wait([
-      if (imageUrl != null) prefs.setString('userProfileImageUrl', imageUrl),
-      if (publicId != null) prefs.setString('userProfilePublicId', publicId),
+      _userProfileImageUrl != null
+          ? prefs.setString('userProfileImageUrl', _userProfileImageUrl!)
+          : prefs.remove('userProfileImageUrl'),
+      _userProfilePublicId != null
+          ? prefs.setString('userProfilePublicId', _userProfilePublicId!)
+          : prefs.remove('userProfilePublicId'),
     ]);
     notifyListeners();
   }

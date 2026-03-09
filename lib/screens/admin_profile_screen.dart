@@ -220,29 +220,32 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
           }
         }
 
-        setState(() {
-          _firstNameController.text = firstName;
-          _surnameController.text = lastName;
-          _emailController.text = email;
-          _phoneController.text = phone;
-          _preferredNameController.text = preferred;
-          _managerController.text = manager;
-          _selectedDepartment = matchedDept;
-          _selectedDesignation = matchedDesig;
-          _profileImageUrl = profileImageUrl.isNotEmpty
-              ? profileImageUrl
-              : null;
-          _profileImagePublicId = profileImagePublicId.isNotEmpty
-              ? profileImagePublicId
-              : null;
-          _userEntity = entity.isEmpty ? 'Not assigned' : entity;
-          _userModuleAccess = moduleAccess.isNotEmpty
-              ? moduleAccess
-              : (authProvider.userModuleAccess ?? 'None');
-        });
+        if (mounted) {
+          setState(() {
+            _firstNameController.text = firstName;
+            _surnameController.text = lastName;
+            _emailController.text = email;
+            _phoneController.text = phone;
+            _preferredNameController.text = preferred;
+            _managerController.text = manager;
+            _selectedDepartment = matchedDept;
+            _selectedDesignation = matchedDesig;
+            _profileImageUrl = profileImageUrl.isNotEmpty
+                ? profileImageUrl
+                : null;
+            _profileImagePublicId = profileImagePublicId.isNotEmpty
+                ? profileImagePublicId
+                : null;
+            _userEntity = entity.isEmpty ? 'Not assigned' : entity;
+            _userModuleAccess = moduleAccess.isNotEmpty
+                ? moduleAccess
+                : (authProvider.userModuleAccess ?? 'None');
+          });
+        }
 
-        // Update AuthProvider with profile image data
-        if (profileImageUrl.isNotEmpty || profileImagePublicId.isNotEmpty) {
+        // Sync AuthProvider profile image with loaded profile when viewing current user (so we never show previous user's pic)
+        final currentEmail = (authProvider.userEmail ?? '').trim().toLowerCase();
+        if (mounted && email.trim().toLowerCase() == currentEmail) {
           await authProvider.updateUserProfileImage(
             profileImageUrl.isNotEmpty ? profileImageUrl : null,
             profileImagePublicId.isNotEmpty ? profileImagePublicId : null,
@@ -289,8 +292,8 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
         'designation': _selectedDesignation ?? '',
         'preferredName': _preferredNameController.text.trim(),
         'managedBy': _managerController.text.trim(),
-        'profileImageUrl': authProvider.userProfileImageUrl ?? '',
-        'profileImagePublicId': authProvider.userProfilePublicId ?? '',
+        'profileImageUrl': _profileImageUrl ?? '',
+        'profileImagePublicId': _profileImagePublicId ?? '',
       };
 
       debugPrint('=== SAVING PROFILE TO DATABASE ===');
@@ -525,6 +528,7 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
                           _profileImageUrl = null;
                           _profileImagePublicId = null;
                         });
+                        _saveProfile(); // Persist removal to backend
                       },
                     ),
                     const SizedBox(width: 16),

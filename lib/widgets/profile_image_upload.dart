@@ -35,36 +35,61 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
   String? _publicId;
   bool _isUploading = false;
 
+  /// Use screen-provided image first. For current user, only use AuthProvider when screen has not yet provided data (initial load).
+  /// When screen explicitly passes null/empty after loading, use that so we never show a previous user's picture.
+  void _resolveImageFromProps() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final isCurrentUser = authProvider.userEmail != null &&
+        widget.userId.trim().toLowerCase() == authProvider.userEmail!.trim().toLowerCase();
+    final hasWidgetImage = (widget.currentImageUrl ?? '').trim().isNotEmpty ||
+        (widget.currentPublicId ?? '').trim().isNotEmpty;
+    if (hasWidgetImage) {
+      _imageUrl = widget.currentImageUrl;
+      _publicId = widget.currentPublicId;
+    } else if (isCurrentUser) {
+      // Use AuthProvider only for current user; profile screen syncs AuthProvider when loading, so this stays in sync
+      final apUrl = authProvider.userProfileImageUrl;
+      final apId = authProvider.userProfilePublicId;
+      final apHasImage = (apUrl ?? '').trim().isNotEmpty || (apId ?? '').trim().isNotEmpty;
+      if (apHasImage) {
+        _imageUrl = apUrl;
+        _publicId = apId;
+      } else {
+        _imageUrl = null;
+        _publicId = null;
+      }
+    } else {
+      _imageUrl = null;
+      _publicId = null;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    // Initialize with AuthProvider data for persistence
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    _imageUrl = authProvider.userProfileImageUrl ?? widget.currentImageUrl;
-    _publicId = authProvider.userProfilePublicId ?? widget.currentPublicId;
-
-    debugPrint(
-      '[ProfileImageUpload] initState - AuthProvider URL: ${authProvider.userProfileImageUrl}',
-    );
-    debugPrint(
-      '[ProfileImageUpload] initState - AuthProvider PublicId: ${authProvider.userProfilePublicId}',
-    );
+    _resolveImageFromProps();
+    debugPrint('[ProfileImageUpload] initState - userId: ${widget.userId}');
     debugPrint('[ProfileImageUpload] initState - Final URL: $_imageUrl');
     debugPrint('[ProfileImageUpload] initState - Final PublicId: $_publicId');
   }
 
   @override
+  void didUpdateWidget(ProfileImageUpload oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentImageUrl != widget.currentImageUrl ||
+        oldWidget.currentPublicId != widget.currentPublicId) {
+      _resolveImageFromProps();
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Update when AuthProvider changes (e.g., after login)
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (authProvider.userProfileImageUrl != _imageUrl ||
-        authProvider.userProfilePublicId != _publicId) {
-      setState(() {
-        _imageUrl = authProvider.userProfileImageUrl ?? widget.currentImageUrl;
-        _publicId = authProvider.userProfilePublicId ?? widget.currentPublicId;
-      });
-    }
+    final prevUrl = _imageUrl;
+    final prevId = _publicId;
+    _resolveImageFromProps();
+    if (mounted && (prevUrl != _imageUrl || prevId != _publicId)) setState(() {});
   }
 
   Future<void> _showImageOptions() async {
@@ -105,7 +130,7 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
                   _pickImage(ImageSource.camera);
                 },
               ),
-              if (_imageUrl != null)
+              if (_imageUrl != null || (_publicId != null && _publicId!.isNotEmpty))
                 ListTile(
                   leading: const Icon(Icons.delete, color: Colors.red),
                   title: const Text('Remove Photo'),
@@ -347,15 +372,8 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
 
   @override
   Widget build(BuildContext context) {
-    // Get AuthProvider data without Consumer to avoid conflicts
-    final authProvider = Provider.of<AuthProvider>(context, listen: true);
-    final displayImageUrl = authProvider.userProfileImageUrl ?? _imageUrl;
-
-    debugPrint(
-      '[ProfileImageUpload] Build - AuthProvider URL: ${authProvider.userProfileImageUrl}',
-    );
-    debugPrint('[ProfileImageUpload] Build - Local URL: $_imageUrl');
-    debugPrint('[ProfileImageUpload] Build - Display URL: $displayImageUrl');
+    // Display only resolved _imageUrl so we never show a previous user's picture (resolution uses widget + AuthProvider correctly)
+    final displayImageUrl = _imageUrl;
 
     return GestureDetector(
       onTap: () {
@@ -367,16 +385,16 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
           CircleAvatar(
             radius: widget.radius,
             backgroundColor: Colors.grey[300],
-            backgroundImage: displayImageUrl != null
+            backgroundImage: displayImageUrl != null && displayImageUrl.isNotEmpty
                 ? NetworkImage(displayImageUrl)
                 : null,
-            child: displayImageUrl != null
-                ? null
-                : Icon(
+            child: (displayImageUrl == null || displayImageUrl.isEmpty)
+                ? Icon(
                     Icons.person,
                     size: widget.radius * 0.8,
                     color: Colors.grey[600],
-                  ),
+                  )
+                : null,
           ),
           if (_isUploading)
             Positioned.fill(
@@ -404,7 +422,7 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
                 border: Border.all(color: Colors.white, width: 2),
               ),
               child: Icon(
-                displayImageUrl != null ? Icons.edit : Icons.add,
+                (displayImageUrl != null && displayImageUrl.isNotEmpty) ? Icons.edit : Icons.add,
                 color: Colors.white,
                 size: widget.radius * 0.25,
               ),
