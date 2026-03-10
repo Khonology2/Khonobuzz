@@ -27,7 +27,7 @@ def generate_jwt_token(user_id: str, email: str, full_name: str = "", roles: lis
         user_id: The user's unique identifier
         email: The user's email address
         full_name: The user's full name (first + last)
-        roles: List of user roles (e.g., ["PDH - Employee", "PDH - Manager"])
+        roles: List of user roles (e.g., ["PDH - Employee", "PDH - Manager", "PDH - Admin"])
         expiration_hours: Token expiration time in hours (defaults to JWT_EXPIRATION_HOURS)
     Returns:
         A JWT token string
@@ -128,9 +128,9 @@ def parse_module_access_role_to_roles(module_access_role: str) -> list:
     """
     Parse moduleAccessRole string into a list of roles.
     Args:
-        module_access_role: Comma-separated string like "PDH - Employee, PDH - Manager"
+        module_access_role: Comma-separated string like "PDH - Employee, PDH - Manager, PDH - Admin"
     Returns:
-        List of role strings, e.g., ["PDH - Employee", "PDH - Manager"]
+        List of role strings, e.g., ["PDH - Employee", "PDH - Manager", "PDH - Admin"]
     """
     if not module_access_role or not isinstance(module_access_role, str):
         return []
@@ -171,7 +171,7 @@ def generate_and_encrypt_token(
         user_id: The user's unique identifier
         email: The user's email address
         full_name: The user's full name (first + last)
-        roles: List of user roles (e.g., ["PDH - Employee", "PDH - Manager"])
+        roles: List of user roles (e.g., ["PDH - Employee", "PDH - Manager", "PDH - Admin"])
         expiration_hours: Token expiration time in hours
     Returns:
         An encrypted token string

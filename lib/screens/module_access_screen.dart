@@ -23,7 +23,7 @@ class ModuleAccessScreen extends StatefulWidget {
 class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final List<String> _moduleRoleOptionsPDH = ['Employee', 'Manager'];
+  final List<String> _moduleRoleOptionsPDH = ['Employee', 'Manager', 'Admin'];
   final List<String> _moduleRoleOptionsRecruitment = [
     'Admin',
     'Hiring Manager',
