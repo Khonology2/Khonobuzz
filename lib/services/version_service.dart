@@ -45,12 +45,16 @@ class VersionService {
   /// Backend endpoint that serves version.json (set in api_config or use baseUrl + '/api/version').
   static String? _versionUrl;
 
+  /// After a 404 from backend we stop calling it for this session to avoid console spam.
+  static bool _versionEndpointUnavailable = false;
+
   static set versionBaseUrl(String? baseUrl) {
     if (baseUrl != null && baseUrl.isNotEmpty) {
       _versionUrl = baseUrl.endsWith('/') ? '${baseUrl}api/version' : '$baseUrl/api/version';
     } else {
       _versionUrl = null;
     }
+    _versionEndpointUnavailable = false;
   }
 
   static Future<VersionData> loadVersion() async {
@@ -69,11 +73,13 @@ class VersionService {
         // Fall through
       }
     }
-    if (_versionUrl != null) {
+    if (_versionUrl != null && !_versionEndpointUnavailable) {
       try {
         final uri = Uri.parse(_versionUrl!);
         final response = await http.get(uri).timeout(const Duration(seconds: 5));
-        if (response.statusCode == 200 && response.body.isNotEmpty) {
+        if (response.statusCode == 404) {
+          _versionEndpointUnavailable = true;
+        } else if (response.statusCode == 200 && response.body.isNotEmpty) {
           final map = json.decode(response.body) as Map<String, dynamic>?;
           if (map != null && _isCustomVersionFormat(map)) {
             return VersionData.fromJson(map);
@@ -100,6 +106,7 @@ class VersionService {
 
   static void clearCache() {
     _cached = null;
+    _versionEndpointUnavailable = false;
   }
 
   /// True if the map looks like our version.json (YYYY.MM.[W][D][n]), not pubspec semver (e.g. 1.0.0).

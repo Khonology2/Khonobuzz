@@ -47,11 +47,16 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
       _imageUrl = widget.currentImageUrl;
       _publicId = widget.currentPublicId;
     } else if (isCurrentUser) {
-      // Use AuthProvider only for current user; profile screen syncs AuthProvider when loading, so this stays in sync
       final apUrl = authProvider.userProfileImageUrl;
       final apId = authProvider.userProfilePublicId;
       final apHasImage = (apUrl ?? '').trim().isNotEmpty || (apId ?? '').trim().isNotEmpty;
-      if (apHasImage) {
+      final cur = authProvider.userEmail!.trim().toLowerCase();
+      final curEnc = cur.replaceAll('@', '%40');
+      final urlMatches = apUrl == null || apUrl.isEmpty ||
+          apUrl.toLowerCase().contains(cur) || apUrl.contains(curEnc);
+      final idMatches = apId == null || apId.isEmpty ||
+          apId.toLowerCase().contains(cur) || apId.contains(curEnc);
+      if (apHasImage && urlMatches && idMatches) {
         _imageUrl = apUrl;
         _publicId = apId;
       } else {

@@ -45,6 +45,14 @@ class AuthProvider extends ChangeNotifier {
     _loadAuthState();
   }
 
+  /// Call when manual login screen is shown to wake up cold backend (e.g. Render) so login is faster.
+  static void warmUpBackendForLogin() {
+    try {
+      final uri = Uri.parse('${ApiConfig.baseUrl}/health');
+      http.get(uri).timeout(const Duration(seconds: 5)).then((_) {}, onError: (_) {});
+    } catch (_) {}
+  }
+
   Future<http.Response> _postWithTimeoutAndRetry(
     Uri url, {
     Map<String, String>? headers,
@@ -95,7 +103,7 @@ class AuthProvider extends ChangeNotifier {
         }
       }
       if (attempt < maxRetries) {
-        await Future.delayed(const Duration(milliseconds: 200));
+        await Future.delayed(const Duration(milliseconds: 400));
       }
     }
     if (lastResponse != null) {
@@ -119,6 +127,26 @@ class AuthProvider extends ChangeNotifier {
     _userProfileImageUrl = prefs.getString('userProfileImageUrl');
     _userProfilePublicId = prefs.getString('userProfilePublicId');
     _isSpecialSession = prefs.getBool('_spSess') ?? false;
+
+    // Only keep profile image if it clearly belongs to the stored user (prevents showing another user's pic)
+    if (_userEmail != null && (_userProfileImageUrl != null || _userProfilePublicId != null)) {
+      final cur = _userEmail!.trim().toLowerCase();
+      final curEnc = cur.replaceAll('@', '%40');
+      final urlOk = _userProfileImageUrl == null ||
+          _userProfileImageUrl!.toLowerCase().contains(cur) ||
+          _userProfileImageUrl!.contains(curEnc);
+      final idOk = _userProfilePublicId == null ||
+          _userProfilePublicId!.toLowerCase().contains(cur) ||
+          _userProfilePublicId!.contains(curEnc);
+      if (!urlOk || !idOk) {
+        _userProfileImageUrl = null;
+        _userProfilePublicId = null;
+        await Future.wait([
+          prefs.remove('userProfileImageUrl'),
+          prefs.remove('userProfilePublicId'),
+        ]);
+      }
+    }
 
     debugPrint(
       '[AuthProvider] _loadAuthState - userProfileImageUrl: $_userProfileImageUrl',
@@ -306,6 +334,17 @@ class AuthProvider extends ChangeNotifier {
     final normalizedEmail = email.trim().toLowerCase();
     final url = Uri.parse(ApiConfig.authLoginEndpoint);
 
+    // Clear previous user's profile and cache as soon as login is attempted so we never show their data
+    _cachedProfileData = null;
+    _userProfileImageUrl = null;
+    _userProfilePublicId = null;
+    final prefsForClear = await SharedPreferences.getInstance();
+    await Future.wait([
+      prefsForClear.remove('userProfileImageUrl'),
+      prefsForClear.remove('userProfilePublicId'),
+    ]);
+    notifyListeners();
+
     try {
       final start = DateTime.now().millisecondsSinceEpoch;
       final headers = <String, String>{'Content-Type': 'application/json'};
@@ -313,12 +352,13 @@ class AuthProvider extends ChangeNotifier {
         headers['X-Session-Type'] = 'special';
       }
 
+      // Shorter first attempt (18s) + one retry (18s) so cold backend can respond on retry; warm backend responds in 2–8s
       final response = await _postWithTimeoutAndRetry(
         url,
         headers: headers,
         body: json.encode({'email': normalizedEmail}),
-        maxRetries: 0,
-        timeout: const Duration(seconds: 45),
+        maxRetries: 1,
+        timeout: const Duration(seconds: 18),
       );
       final elapsed = DateTime.now().millisecondsSinceEpoch - start;
       debugPrint(

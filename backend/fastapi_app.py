@@ -623,6 +623,15 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
         onboarding_email = (onboarding_info.get('email') or '').strip().lower()
         safe_onboarding = onboarding_info if (not onboarding_email or onboarding_email == normalized_email) else {}
 
+        # If profile image URL/ID clearly belong to another user (e.g. path contains other email), do not use onboarding for name/profile
+        profile_url = (safe_onboarding.get('profileImageUrl') or '').strip()
+        profile_id = (safe_onboarding.get('profileImagePublicId') or '').strip()
+        encoded_email = normalized_email.replace('@', '%40')
+        url_belongs = (not profile_url) or (normalized_email in profile_url.lower()) or (encoded_email in profile_url)
+        id_belongs = (not profile_id) or (normalized_email in profile_id.lower()) or (encoded_email in profile_id)
+        if not url_belongs or not id_belongs:
+            safe_onboarding = {}  # use user_info only for name/profile so we never return another user's data
+
         module_access_raw = user_info.get('moduleAccess') or onboarding_info.get('moduleAccess', '')
         module_access_role_raw = user_info.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', '')
 

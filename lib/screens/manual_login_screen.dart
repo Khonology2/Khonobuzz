@@ -51,6 +51,11 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
         _discsOpacity = 1.0;
       });
     });
+
+    // Wake up backend (e.g. Render cold start) so login is faster when user taps Login
+    Future.delayed(const Duration(milliseconds: 400), () {
+      AuthProvider.warmUpBackendForLogin();
+    });
   }
 
   void _startBlinking() {

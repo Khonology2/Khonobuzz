@@ -191,8 +191,18 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
       final desigRaw = (userMap['designation'] ?? '').toString().trim();
       final preferred = (userMap['preferredName'] ?? '').toString().trim();
       final manager = (userMap['managedBy'] ?? '').toString().trim();
-      final profileImageUrl = (userMap['profileImageUrl'] ?? '').toString().trim();
-      final profileImagePublicId = (userMap['profileImagePublicId'] ?? '').toString().trim();
+      final _curEmail = email.trim().toLowerCase();
+      final _curEnc = _curEmail.replaceAll('@', '%40');
+      String profileImageUrl = (userMap['profileImageUrl'] ?? '').toString().trim();
+      String profileImagePublicId = (userMap['profileImagePublicId'] ?? '').toString().trim();
+      if (profileImageUrl.isNotEmpty && !profileImageUrl.toLowerCase().contains(_curEmail) && !profileImageUrl.contains(_curEnc)) {
+        profileImageUrl = '';
+        profileImagePublicId = '';
+      }
+      if (profileImagePublicId.isNotEmpty && !profileImagePublicId.toLowerCase().contains(_curEmail) && !profileImagePublicId.contains(_curEnc)) {
+        profileImageUrl = '';
+        profileImagePublicId = '';
+      }
       final entity = (userMap['entity'] ?? '').toString().trim();
       final moduleAccess = (userMap['moduleAccess'] ?? '').toString().trim();
       final responseEmailDisplay = (userMap['email'] ?? email).toString().trim();
@@ -273,6 +283,18 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
     try {
       final authProvider = context.read<AuthProvider>();
 
+      final _saveEmail = (authProvider.userEmail ?? '').trim().toLowerCase();
+      final _saveEnc = _saveEmail.replaceAll('@', '%40');
+      String _saveProfileUrl = _profileImageUrl ?? '';
+      String _saveProfileId = _profileImagePublicId ?? '';
+      if (_saveProfileUrl.isNotEmpty && !_saveProfileUrl.toLowerCase().contains(_saveEmail) && !_saveProfileUrl.contains(_saveEnc)) {
+        _saveProfileUrl = '';
+        _saveProfileId = '';
+      }
+      if (_saveProfileId.isNotEmpty && !_saveProfileId.toLowerCase().contains(_saveEmail) && !_saveProfileId.contains(_saveEnc)) {
+        _saveProfileUrl = '';
+        _saveProfileId = '';
+      }
       // Create user profile data object
       final Map<String, dynamic> profileData = {
         'firstName': _firstNameController.text.trim(),
@@ -283,8 +305,8 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
         'designation': _selectedDesignation ?? '',
         'preferredName': _preferredNameController.text.trim(),
         'managedBy': _managerController.text.trim(),
-        'profileImageUrl': _profileImageUrl ?? '',
-        'profileImagePublicId': _profileImagePublicId ?? '',
+        'profileImageUrl': _saveProfileUrl,
+        'profileImagePublicId': _saveProfileId,
       };
 
       debugPrint('=== SAVING PROFILE TO DATABASE ===');

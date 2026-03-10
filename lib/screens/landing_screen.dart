@@ -142,6 +142,7 @@ class _LandingScreenState extends State<LandingScreen> {
                     text: 'GET STARTED',
                     color: const Color(0xFFC10D00),
                     onPressed: () {
+                      AuthProvider.warmUpBackendForLogin();
                       _pingBackend();
                       Navigator.of(context).push(
                         MaterialPageRoute(

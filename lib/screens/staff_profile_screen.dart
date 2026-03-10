@@ -1,12 +1,10 @@
-// ignore_for_file: avoid_print, use_build_context_synchronously, deprecated_member_use, unused_import
+// ignore_for_file: avoid_print, use_build_context_synchronously, deprecated_member_use
 
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import '../providers/auth_provider.dart';
-import '../providers/user_provider.dart';
-import '../models/managed_user.dart';
 import '../widgets/floating_circles_particle_animation.dart';
 import '../widgets/profile_image_upload.dart';
 import 'dart:convert';
@@ -190,6 +188,8 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         return;
       }
 
+      final curEmail = email.trim().toLowerCase();
+      final curEnc = curEmail.replaceAll('@', '%40');
       final firstName = (userMap['firstName'] ?? userMap['name'] ?? '').toString().trim();
       final lastName = (userMap['lastName'] ?? userMap['surname'] ?? '').toString().trim();
       final phone = (userMap['phoneNumber'] ?? '').toString().trim();
@@ -197,8 +197,16 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
       final desigRaw = (userMap['designation'] ?? '').toString().trim();
       final preferred = (userMap['preferredName'] ?? '').toString().trim();
       final manager = (userMap['managedBy'] ?? '').toString().trim();
-      final profileImageUrl = (userMap['profileImageUrl'] ?? '').toString().trim();
-      final profileImagePublicId = (userMap['profileImagePublicId'] ?? '').toString().trim();
+      String profileImageUrl = (userMap['profileImageUrl'] ?? '').toString().trim();
+      String profileImagePublicId = (userMap['profileImagePublicId'] ?? '').toString().trim();
+      if (profileImageUrl.isNotEmpty && !profileImageUrl.toLowerCase().contains(curEmail) && !profileImageUrl.contains(curEnc)) {
+        profileImageUrl = '';
+        profileImagePublicId = '';
+      }
+      if (profileImagePublicId.isNotEmpty && !profileImagePublicId.toLowerCase().contains(curEmail) && !profileImagePublicId.contains(curEnc)) {
+        profileImageUrl = '';
+        profileImagePublicId = '';
+      }
       final entity = (userMap['entity'] ?? '').toString().trim();
       final moduleAccess = (userMap['moduleAccess'] ?? '').toString().trim();
       final responseEmailDisplay = (userMap['email'] ?? email).toString().trim();
@@ -259,6 +267,18 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
 
     try {
       final authProvider = context.read<AuthProvider>();
+      final saveEmail = (authProvider.userEmail ?? '').trim().toLowerCase();
+      final saveEnc = saveEmail.replaceAll('@', '%40');
+      String saveProfileUrl = _profileImageUrl ?? '';
+      String saveProfileId = _profileImagePublicId ?? '';
+      if (saveProfileUrl.isNotEmpty && !saveProfileUrl.toLowerCase().contains(saveEmail) && !saveProfileUrl.contains(saveEnc)) {
+        saveProfileUrl = '';
+        saveProfileId = '';
+      }
+      if (saveProfileId.isNotEmpty && !saveProfileId.toLowerCase().contains(saveEmail) && !saveProfileId.contains(saveEnc)) {
+        saveProfileUrl = '';
+        saveProfileId = '';
+      }
       final Map<String, dynamic> profileData = {
         'firstName': _firstNameController.text.trim(),
         'surname': _surnameController.text.trim(),
@@ -268,8 +288,8 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         'designation': _selectedDesignation ?? '',
         'preferredName': _preferredNameController.text.trim(),
         'managedBy': _managerController.text.trim(),
-        'profileImageUrl': _profileImageUrl ?? '',
-        'profileImagePublicId': _profileImagePublicId ?? '',
+        'profileImageUrl': saveProfileUrl,
+        'profileImagePublicId': saveProfileId,
       };
 
       final response = await http.put(
@@ -366,6 +386,8 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                               fontSize: 16,
                               fontFamily: 'Poppins',
                             ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
                         ],
                       ),
@@ -525,6 +547,8 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
               fontSize: 14,
               fontFamily: 'Poppins',
             ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
           ),
         ),
       ],
