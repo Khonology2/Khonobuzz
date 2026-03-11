@@ -14,7 +14,10 @@ GeneratedPluginRegistrant.java
 .packages
 .pub-cache/
 .pub/
-build/
+/android/build/
+build/*
+!build/web/
+!build/web/**
 **/doc/api/
 
 # Remember to never publicly share your keystore.
