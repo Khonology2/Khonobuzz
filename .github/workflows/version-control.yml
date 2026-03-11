@@ -1,8 +1,8 @@
 # Version Control Workflow
-# Only runs version update when the commit message STARTS WITH "Feature" (case-insensitive).
+# Runs version update for every non-skipped weekday push.
 # Format: YYYY.MM.[W][D][n] then display as "Ver YYYY.MM.WD<n> SIT"
 #   YYYY=year, MM=month, W=week 1-4 (A-D), D=weekday Mon-Fri (A-E). n=commit count, SIT=suffix
-#   Weekend commits and commits not starting with "Feature" do not update version.
+#   Weekend commits do not update version. Commits starting with "Feature" also refresh latest feature metadata.
 
 name: Version Control
 
@@ -52,7 +52,7 @@ jobs:
           else
             echo "skip_weekend=false" >> $GITHUB_OUTPUT
           fi
-          # Only update version when commit message starts with "Feature" (case-insensitive)
+          # Track whether the commit starts with "Feature" (case-insensitive)
           TRIMMED=$(echo "$MSG" | sed 's/^[[:space:]]*//')
           if echo "$TRIMMED" | grep -qi '^Feature'; then
             echo "starts_with_feature=true" >> $GITHUB_OUTPUT
@@ -63,7 +63,7 @@ jobs:
           echo "$MSG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           echo "date=$COMMIT_DATE" >> $GITHUB_OUTPUT
-          if echo "$MSG" | grep -qi 'feature:'; then
+          if echo "$TRIMMED" | grep -qi '^Feature'; then
             echo "is_feature=true" >> $GITHUB_OUTPUT
           else
             echo "is_feature=false" >> $GITHUB_OUTPUT
@@ -71,7 +71,7 @@ jobs:
 
       - name: Read or initialize version.json
         id: version
-        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true' && steps.commit.outputs.starts_with_feature == 'true'
+        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
         run: |
           VERSION_FILE="assets/data/version.json"
           COMMIT_DATE="${{ steps.commit.outputs.date }}"
@@ -133,7 +133,7 @@ jobs:
           echo "feature_date=$NEW_FEATURE_DATE" >> $GITHUB_OUTPUT
 
       - name: Write version.json
-        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true' && steps.commit.outputs.starts_with_feature == 'true'
+        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
         run: |
           mkdir -p assets/data
           jq -n \
@@ -146,7 +146,7 @@ jobs:
           cp assets/data/version.json version.json
 
       - name: Commit and push version.json
-        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true' && steps.commit.outputs.starts_with_feature == 'true'
+        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Actions"
@@ -159,23 +159,21 @@ jobs:
           fi
 
       - name: Summary
-        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true' && steps.commit.outputs.starts_with_feature == 'true'
+        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
         run: |
           echo "## Version Control Update" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Feature commit**: ${{ steps.commit.outputs.is_feature }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commits since feature**: ${{ steps.version.outputs.new_count }}" >> $GITHUB_STEP_SUMMARY
 
-      - name: Skipped (version-bump, weekend, or not starting with Feature)
-        if: steps.commit.outputs.skip == 'true' || steps.commit.outputs.skip_weekend == 'true' || steps.commit.outputs.starts_with_feature != 'true'
+      - name: Skipped (version-bump or weekend)
+        if: steps.commit.outputs.skip == 'true' || steps.commit.outputs.skip_weekend == 'true'
         run: |
           echo "## Skipped" >> $GITHUB_STEP_SUMMARY
           echo "Commit message: \`${{ steps.commit.outputs.message }}\`" >> $GITHUB_STEP_SUMMARY
           echo "Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.commit.outputs.skip }}" = "true" ]; then
             echo "Version not updated (commit contained [skip ci])." >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ steps.commit.outputs.skip_weekend }}" = "true" ]; then
-            echo "Version not updated (commit on Saturday/Sunday; weekend days are not counted)." >> $GITHUB_STEP_SUMMARY
           else
-            echo "Version not updated (commit message does not start with 'Feature'; checked case-insensitive)." >> $GITHUB_STEP_SUMMARY
+            echo "Version not updated (commit on Saturday/Sunday; weekend days are not counted)." >> $GITHUB_STEP_SUMMARY
           fi
