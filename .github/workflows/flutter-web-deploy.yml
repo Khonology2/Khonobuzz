@@ -40,14 +40,6 @@ jobs:
         env:
           CI: true
 
-      - name: Push build/web to GitHub (optional)
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add build/web
-          git commit -m "Add build/web for Render" || echo "No changes"
-          git push origin khono-v2
-          
       - name: Trigger Render Deploy
         env:
           RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
