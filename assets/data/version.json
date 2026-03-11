@@ -1,6 +1,6 @@
 {
-  "version": "2026.03.BC6",
+  "version": "2026.03.BC7",
   "last_feature_commit": "Feature - Enabled admin login on KhonoBuzz allowing PDH users to switch roles to Admin and access the PDH admin portal.",
   "feature_date": "2026-03-11",
-  "commit_count_since_feature": 6
+  "commit_count_since_feature": 7
 }
