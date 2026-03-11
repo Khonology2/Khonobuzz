@@ -335,6 +335,7 @@ async def startup_warmup():
 cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
 PRODUCTION_FRONTEND_URLS = [
     'https://khonobuzz-web-app.onrender.com',
+    'https://khonobuzz-web-app-llfi.onrender.com',
     'https://pdh-web-app.onrender.com',
 ]
 is_production = (
