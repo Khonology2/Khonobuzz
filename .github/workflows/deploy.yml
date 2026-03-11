@@ -1,4 +1,4 @@
-name: Build Flutter Web & Deploy to Render
+name: Trigger Render Deploy
 
 on:
   push:
@@ -6,35 +6,13 @@ on:
       - khono-v2
 
 jobs:
-  build-and-deploy:
+  trigger-render-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "stable"
-
-      - name: Cache Flutter Dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-            build
-          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-flutter-
-
-      - name: Install Dependencies
-        run: flutter pub get
-
-      - name: Build Flutter Web
-        run: flutter build web --release --base-href /
-
       - name: Trigger Render Deploy
+        env:
+          RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
           echo "Triggering Render Deploy..."
-          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
+          curl -X POST "$RENDER_HOOK"
