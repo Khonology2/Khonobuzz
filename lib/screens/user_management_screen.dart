@@ -1093,6 +1093,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
                             ),
+                            const SizedBox(height: 4.0),
+                            Text(
+                              'Last logged in: ${_formatLastSignIn(user.lastSignInAt)}',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11.0,
+                                fontFamily: 'Poppins',
+                                fontStyle: FontStyle.italic,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
                           ],
                         ),
                       ),
