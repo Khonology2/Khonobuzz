@@ -8,6 +8,10 @@ on:
     - cron: '30 16 * * *'
   workflow_dispatch:
 
+concurrency:
+  group: generate-daily-commits-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -20,6 +24,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync branch before generating
+        run: |
+          git pull --ff-only origin ${GITHUB_REF#refs/heads/}
 
       - name: Generate daily commits JSON
         id: gen
@@ -62,6 +71,5 @@ jobs:
             echo "No changes to daily-commits.json"
           else
             git commit -m "Update daily commits data [${{ steps.gen.outputs.today }}] [skip ci]"
-            git pull --rebase origin ${GITHUB_REF#refs/heads/} 2>/dev/null || true
             git push
           fi

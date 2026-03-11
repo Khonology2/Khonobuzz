@@ -2,7 +2,6 @@ name: Version Control API
 
 on:
   push:
-    branches: [ main, develop ]
   workflow_dispatch:
 
 jobs:
