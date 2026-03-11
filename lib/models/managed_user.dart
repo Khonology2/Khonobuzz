@@ -16,6 +16,7 @@ class ManagedUser {
   String? profilePictureUrl; // New field for profile picture URL
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final DateTime? lastSignInAt;
 
   String get name => '$firstName $lastName'.trim();
 
@@ -77,6 +78,7 @@ class ManagedUser {
     this.profilePictureUrl,
     this.createdAt,
     this.updatedAt,
+    this.lastSignInAt,
   });
 
   /// Copy with optional overrides so the updated user can be sorted to the top.
@@ -86,6 +88,7 @@ class ManagedUser {
     String? moduleAccess,
     String? moduleRole,
     String? moduleAccessRole,
+    DateTime? lastSignInAt,
   }) {
     return ManagedUser(
       id: id,
@@ -105,6 +108,7 @@ class ManagedUser {
       profilePictureUrl: profilePictureUrl,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      lastSignInAt: lastSignInAt ?? this.lastSignInAt,
     );
   }
 
@@ -198,6 +202,7 @@ class ManagedUser {
   factory ManagedUser.fromApi(Map<String, dynamic> data) {
     final createdAtRaw = data['createdAt'];
     final updatedAtRaw = data['updatedAt'];
+    final lastSignInAtRaw = data['lastSignInAt'];
 
     final moduleAccessRaw = (data['moduleAccess'] as String?)?.isNotEmpty == true
         ? data['moduleAccess'] as String
@@ -236,6 +241,9 @@ class ManagedUser {
           : null,
       updatedAt: updatedAtRaw is String && updatedAtRaw.isNotEmpty
           ? DateTime.tryParse(updatedAtRaw)
+          : null,
+      lastSignInAt: lastSignInAtRaw is String && lastSignInAtRaw.isNotEmpty
+          ? DateTime.tryParse(lastSignInAtRaw)
           : null,
     );
   }

@@ -56,6 +56,26 @@ def error_log(message: str):
 def info_log(message: str):
     logger.info(message)
     print(f"[INFO] {message}")
+
+
+def append_agent_debug_log(hypothesis_id: str, location: str, message: str, data: Dict[str, Any]):
+    try:
+        payload = {
+            "sessionId": "7ef484",
+            "runId": "pre-fix",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        log_path = Path(__file__).resolve().parent.parent / "debug-7ef484.log"
+        with log_path.open("a", encoding="utf-8") as debug_file:
+            debug_file.write(json.dumps(payload, ensure_ascii=True) + "\n")
+    except Exception:
+        pass
+
+
 LOGIN_CACHE_TTL_SECONDS = int(os.environ.get('LOGIN_CACHE_TTL_SECONDS', '600'))
 USER_CACHE: Dict[str, Dict[str, Any]] = {}
 
@@ -426,12 +446,48 @@ async def get_version(request: Request):
         else:
             # Default: version.json in repo root (parent of backend/)
             path = (Path(__file__).resolve().parent.parent / "version.json")
+        # region agent log
+        append_agent_debug_log(
+            "H3",
+            "backend/fastapi_app.py:445",
+            "Resolved version.json path for /api/version",
+            {
+                "cwd": str(Path.cwd()),
+                "path": str(path),
+                "exists": path.exists(),
+                "versionJsonPathEnvSet": bool(path_str),
+                "origin": request.headers.get("origin", ""),
+            },
+        )
+        # endregion
         if not path.exists():
+            # region agent log
+            append_agent_debug_log(
+                "H3",
+                "backend/fastapi_app.py:458",
+                "Returning 404 because version.json was not found",
+                {
+                    "path": str(path),
+                },
+            )
+            # endregion
             resp = JSONResponse(status_code=404, content={"error": "version.json not found"})
             resp.headers.update(_cors_headers_for_request(request))
             return resp
         raw = path.read_text(encoding="utf-8")
         data = json.loads(raw)
+        # region agent log
+        append_agent_debug_log(
+            "H5",
+            "backend/fastapi_app.py:470",
+            "Loaded version.json for /api/version",
+            {
+                "path": str(path),
+                "version": data.get("version"),
+                "featureDate": data.get("feature_date"),
+            },
+        )
+        # endregion
         response = JSONResponse(content=data)
         response.headers.update(_cors_headers_for_request(request))
         return response
@@ -922,6 +978,8 @@ async def list_users():
             created_at_dt = created_at_val if isinstance(created_at_val, datetime) else None
             updated_at_val = user_info.get('updated_at')
             updated_at_dt = updated_at_val if isinstance(updated_at_val, datetime) else None
+            last_sign_in_val = user_info.get('lastSignInAt')
+            last_sign_in_dt = last_sign_in_val if isinstance(last_sign_in_val, datetime) else None
             try:
                 doc_create = getattr(user_doc, 'create_time', None)
                 doc_update = getattr(user_doc, 'update_time', None)
@@ -942,6 +1000,7 @@ async def list_users():
                     updated_at_dt = doc_create
             created_at_str = created_at_dt.isoformat() + 'Z' if created_at_dt else None
             updated_at_str = updated_at_dt.isoformat() + 'Z' if updated_at_dt else None
+            last_sign_in_str = last_sign_in_dt.isoformat() + 'Z' if last_sign_in_dt else None
             module_access_raw = user_info.get('moduleAccess') or onboarding_info.get('moduleAccess', '')
             module_access_role_raw = user_info.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', '')
             final_module_access = derive_module_access_from_role(module_access_raw, module_access_role_raw)
@@ -963,6 +1022,7 @@ async def list_users():
                 'profileImageUrl': profile_image_url,
                 'createdAt': created_at_str,
                 'updatedAt': updated_at_str,
+                'lastSignInAt': last_sign_in_str,
             }
             sort_key = updated_at_dt or created_at_dt
             users_with_sort_keys.append((sort_key, user_payload))
@@ -1482,6 +1542,7 @@ async def login_user(user_login: UserLogin, request: Request):
         roles = parse_module_access_role_to_roles(module_access_role)
         if is_special_session:
             roles = ['admin']
+        last_sign_in_at = datetime.utcnow()
         first_name = safe_onboarding_for_response.get('firstName') or safe_onboarding_for_response.get('name') or user_data.get('firstName') or ''
         last_name = safe_onboarding_for_response.get('lastName') or safe_onboarding_for_response.get('surname') or user_data.get('lastName') or ''
         full_name = f"{first_name} {last_name}".strip()
@@ -1499,6 +1560,14 @@ async def login_user(user_login: UserLogin, request: Request):
         except Exception:
             pass
         token_gen_end = time.time()
+        if not is_special_session:
+            try:
+                db.collection('users').document(user_id).update({
+                    'lastSignInAt': last_sign_in_at,
+                })
+                user_data['lastSignInAt'] = last_sign_in_at
+            except Exception as sign_in_error:
+                error_log(f"Failed to update lastSignInAt for {normalized_email}: {sign_in_error}")
         if encrypted_token:
             if onboarding_data:
                 try:

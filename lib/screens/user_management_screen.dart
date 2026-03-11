@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../utils/pdh_firebase.dart'
     show
@@ -76,6 +77,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final rest = fromUsers.difference(desigOrder.toSet()).toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return [...desigOrder, ...rest];
+  }
+
+  String _formatLastSignIn(DateTime? value) {
+    if (value == null) {
+      return 'Never signed in';
+    }
+    return DateFormat('MMM d, yyyy • h:mm a').format(value.toLocal());
   }
 
   final Map<String, Color> userStatusColors = {
@@ -1595,6 +1603,26 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16.0),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: RichText(
+              text: TextSpan(
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Poppins',
+                  fontSize: 14.0,
+                ),
+                children: [
+                  const TextSpan(
+                    text: 'Last sign in: ',
+                    style: TextStyle(color: Colors.white60),
+                  ),
+                  TextSpan(text: _formatLastSignIn(user.lastSignInAt)),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 16.0),
 
