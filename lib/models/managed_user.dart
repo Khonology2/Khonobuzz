@@ -10,7 +10,7 @@ class ManagedUser {
   String? entity;
   String? manager;
   String? moduleAccess; // PDH or SOW Builder
-  String? moduleRole; // Employee or Manager (depends on moduleAccess)
+  String? moduleRole; // Employee, Manager, or Admin (depends on moduleAccess)
   String? moduleAccessRole; // Combined field like "PDH - Employee, Skills Heatmap - Manager"
   String? phoneNumber; // New field for phone number
   String? profilePictureUrl; // New field for profile picture URL

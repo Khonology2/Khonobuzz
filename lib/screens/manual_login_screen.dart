@@ -245,7 +245,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                       ),
                       const SizedBox(height: 32),
                       _LoadingConfirmButtonWrapper(
-                        text: 'CONFIRM',
+                        text: 'LOG IN',
                         color: const Color(0xFFC10D00),
                         animationKey: _animationKey,
                         onLoadingChanged: (isLoading) {
@@ -375,21 +375,18 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
 
                           final authProvider = context.read<AuthProvider>();
                           final navigator = Navigator.of(context);
-                          final currentContext = context;
                           try {
                             final success = await authProvider.manualLogin(
                               normalizedEmail,
                             );
-
                             if (!mounted) return;
                             if (success) {
                               navigator.pushAndRemoveUntil(
                                 MaterialPageRoute(
-                                  builder: (context) =>
-                                      const MainScreen(
-                                        initialIndex: 8,
-                                        playLoginSuccessSound: true,
-                                      ),
+                                  builder: (context) => const MainScreen(
+                                    initialIndex: 8,
+                                    playLoginSuccessSound: true,
+                                  ),
                                 ),
                                 (route) => false,
                               );
@@ -397,139 +394,17 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                               await _playErrorSound();
                               _showValidationError(
                                 'Login Failed',
-                                'Login failed. Please check your email address and try again.',
+                                'Login failed. Please check your email or try again later.',
                               );
                             }
                           } catch (e) {
                             if (!mounted) return;
-                            String errorMessage = e.toString().replaceFirst(
-                              'Exception: ',
-                              '',
-                            );
-
-                            if (errorMessage.toLowerCase().contains(
-                                  'status is',
-                                ) ||
-                                errorMessage.toLowerCase().contains(
-                                  'pending',
-                                ) ||
-                                errorMessage.toLowerCase().contains(
-                                  'admin approval',
-                                ) ||
-                                errorMessage.toLowerCase().contains(
-                                  'admin is reviewing',
-                                )) {
-                              if (!mounted) return;
-                              showDialog(
-                                // ignore: use_build_context_synchronously
-                                context: currentContext,
-                                barrierColor: Colors.black54,
-                                builder: (BuildContext context) {
-                                  return Dialog(
-                                    backgroundColor: Colors.transparent,
-                                    child: BackdropFilter(
-                                      filter: ImageFilter.blur(
-                                        sigmaX: 10,
-                                        sigmaY: 10,
-                                      ),
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: const Color(
-                                            0xFF2C3E50,
-                                          ).withValues(alpha: 0.85),
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                        ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(24.0),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Text(
-                                                'Account Pending Approval',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontFamily: 'Poppins',
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                              const SizedBox(height: 16),
-                                              const Text(
-                                                'Your account is pending approval. The admin is reviewing your onboarding process. Please wait until your account is activated.',
-                                                style: TextStyle(
-                                                  color: Colors.white70,
-                                                  fontFamily: 'Poppins',
-                                                  fontSize: 14,
-                                                ),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                              const SizedBox(height: 24),
-                                              TextButton(
-                                                onPressed: () {
-                                                  SoundSystem.playButtonClick();
-                                                  Navigator.of(context).pop();
-                                                },
-                                                style: TextButton.styleFrom(
-                                                  backgroundColor: const Color(
-                                                    0xFFC10D00,
-                                                  ),
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 32,
-                                                        vertical: 12,
-                                                      ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          8,
-                                                        ),
-                                                  ),
-                                                ),
-                                                child: const Text(
-                                                  'OK',
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontFamily: 'Poppins',
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              );
-                              return;
-                            }
-
-                            if (errorMessage.contains('SocketException') ||
-                                errorMessage.contains('Failed host lookup')) {
-                              errorMessage =
-                                  'Cannot connect to server. Please check your internet connection.';
-                            } else if (errorMessage.contains('timeout') ||
-                                errorMessage.contains('TimeoutException')) {
-                              errorMessage =
-                                  'Request timed out. Please check your internet connection and try again.';
-                            } else if (errorMessage.contains(
-                              'Connection refused',
-                            )) {
-                              errorMessage =
-                                  'Cannot connect to server. Please ensure the backend is running.';
-                            }
-
-                            if (!mounted) return;
                             await _playErrorSound();
                             _showValidationError(
-                              'Login Error',
-                              errorMessage.isNotEmpty
-                                  ? errorMessage
-                                  : 'Login failed. Please check your email address and try again.',
+                              'Error',
+                              e.toString().replaceFirst('Exception: ', '').isNotEmpty
+                                  ? e.toString().replaceFirst('Exception: ', '')
+                                  : 'Login failed. Please try again.',
                             );
                           }
                         },

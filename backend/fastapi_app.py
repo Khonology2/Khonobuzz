@@ -58,6 +58,7 @@ def info_log(message: str):
     print(f"[INFO] {message}")
 LOGIN_CACHE_TTL_SECONDS = int(os.environ.get('LOGIN_CACHE_TTL_SECONDS', '600'))
 USER_CACHE: Dict[str, Dict[str, Any]] = {}
+
 def derive_module_access_from_role(module_access: Optional[str], module_access_role: Optional[str]) -> Optional[str]:
     if module_access and module_access.strip():
         return module_access
@@ -253,6 +254,8 @@ class UserRegister(BaseModel):
     entity: Optional[str] = None
 class UserLogin(BaseModel):
     email: str
+
+
 class AccessPermissions(BaseModel):
     create: bool = False
     read: bool = False
@@ -355,9 +358,8 @@ else:
     info_log(
         f"CORS configured with {len(cors_origins)} origins from CORS_ORIGINS env var",
     )
-cors_origin_regex = None
-if is_production:
-    cors_origin_regex = LOCALHOST_ORIGIN_REGEX
+# Allow localhost with any port (prod and dev) so Flutter web dev works
+cors_origin_regex = LOCALHOST_ORIGIN_REGEX
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -398,8 +400,21 @@ async def health_check():
     }
 
 
+def _cors_headers_for_request(request: Request) -> dict:
+    """Return CORS headers so browser allows the response (avoids net::ERR_FAILED 200)."""
+    origin = request.headers.get("origin") or ""
+    if origin and (
+        origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1")
+    ):
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
+    return {}
+
+
 @app.get("/api/version")
-async def get_version():
+async def get_version(request: Request):
     """
     Returns version.json content so the app can display the latest version without rebuild.
     Reads from VERSION_JSON_PATH env, or repo root version.json when running from backend/.
@@ -412,13 +427,19 @@ async def get_version():
             # Default: version.json in repo root (parent of backend/)
             path = (Path(__file__).resolve().parent.parent / "version.json")
         if not path.exists():
-            return JSONResponse(status_code=404, content={"error": "version.json not found"})
+            resp = JSONResponse(status_code=404, content={"error": "version.json not found"})
+            resp.headers.update(_cors_headers_for_request(request))
+            return resp
         raw = path.read_text(encoding="utf-8")
         data = json.loads(raw)
-        return data
+        response = JSONResponse(content=data)
+        response.headers.update(_cors_headers_for_request(request))
+        return response
     except Exception as e:
         error_log(f"Failed to serve version: {e}")
-        return JSONResponse(status_code=500, content={"error": "Failed to load version"})
+        resp = JSONResponse(status_code=500, content={"error": "Failed to load version"})
+        resp.headers.update(_cors_headers_for_request(request))
+        return resp
 
 
 class TokenValidationRequest(BaseModel):
@@ -1334,6 +1355,8 @@ async def create_initial_roles():
     except Exception as e:
         print(f"[ERROR] During initial role creation: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @app.post("/api/auth/login")
 async def login_user(user_login: UserLogin, request: Request):
     request_start = time.time()

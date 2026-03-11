@@ -352,7 +352,6 @@ class AuthProvider extends ChangeNotifier {
         headers['X-Session-Type'] = 'special';
       }
 
-      // Shorter first attempt (18s) + one retry (18s) so cold backend can respond on retry; warm backend responds in 2–8s
       final response = await _postWithTimeoutAndRetry(
         url,
         headers: headers,
