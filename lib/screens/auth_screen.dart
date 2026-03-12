@@ -9,6 +9,7 @@ import 'manual_login_screen.dart';
 import '../main.dart';
 import 'onboarding_screen.dart';
 import '../widgets/floating_circles_particle_animation.dart';
+import '../widgets/version_control_widget.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -303,6 +304,15 @@ class AuthScreenState extends State<AuthScreen> {
                     ],
                   ),
                 ),
+              ),
+            ),
+            Positioned(
+              bottom: 20,
+              left: 0,
+              right: 0,
+              child: Align(
+                alignment: Alignment.center,
+                child: const VersionControlWidget(),
               ),
             ),
           ],
