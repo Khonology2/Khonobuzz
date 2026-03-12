@@ -52,9 +52,13 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
       });
     });
 
-    // Wake up backend (e.g. Render cold start) so login is faster when user taps Login
+    // Fallback prewarm in case this screen is opened directly.
     Future.delayed(const Duration(milliseconds: 400), () {
+      if (!mounted) {
+        return;
+      }
       AuthProvider.warmUpBackendForLogin();
+      unawaited(context.read<UserProvider>().prefetchUsersForLogin());
     });
   }
 
@@ -402,7 +406,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                             await _playErrorSound();
                             _showValidationError(
                               'Error',
-                              e.toString().replaceFirst('Exception: ', '').isNotEmpty
+                              e
+                                      .toString()
+                                      .replaceFirst('Exception: ', '')
+                                      .isNotEmpty
                                   ? e.toString().replaceFirst('Exception: ', '')
                                   : 'Login failed. Please try again.',
                             );

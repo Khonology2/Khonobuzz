@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
-import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/sound_system.dart';
@@ -204,17 +202,7 @@ class _LandingScreenState extends State<LandingScreen> {
     try {
       debugPrint('[LandingScreen] Starting backend warm-up and user prefetch');
       final userProvider = context.read<UserProvider>();
-      debugPrint('[LandingScreen] Obtained UserProvider instance for prefetch');
-      final uri = Uri.parse(ApiConfig.baseUrl);
-      debugPrint('[LandingScreen] Pinging backend at: ${uri.toString()}');
-      final response = await http.get(uri).timeout(const Duration(seconds: 25));
-      debugPrint(
-        '[LandingScreen] Backend ping completed with status: ${response.statusCode}',
-      );
-      debugPrint(
-        '[LandingScreen] Triggering initial user fetch from backend (forceRefresh=true)',
-      );
-      userProvider.fetchUsers(forceRefresh: true);
+      await userProvider.prefetchUsersForLogin(forceRefresh: true);
     } catch (e) {
       debugPrint('[LandingScreen] Backend warm-up or user prefetch failed: $e');
     }

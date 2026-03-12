@@ -37,6 +37,66 @@ class UserProvider extends ChangeNotifier {
     }
   }
 
+  void _setUsersFromApiPayload(List<dynamic> rawUsers) {
+    final usersData = rawUsers.whereType<Map<String, dynamic>>().toList();
+    final users = usersData
+        .map((user) => ManagedUser.fromApi(user))
+        .toList(growable: false);
+
+    users.sort((a, b) {
+      final aKey =
+          a.updatedAt ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bKey =
+          b.updatedAt ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bKey.compareTo(aKey);
+    });
+
+    _users = users;
+    _lastFetchTime = DateTime.now();
+  }
+
+  Future<List<dynamic>> _fetchUsersPayload({
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    final response = await http
+        .get(Uri.parse(ApiConfig.usersEndpoint))
+        .timeout(
+          timeout,
+          onTimeout: () {
+            throw Exception('Request timeout. Please check your connection.');
+          },
+        );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to fetch users: ${response.statusCode}');
+    }
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return decoded['users'] as List<dynamic>? ?? const [];
+  }
+
+  Future<void> prefetchUsersForLogin({bool forceRefresh = false}) async {
+    if (!forceRefresh && isCacheValid && _users.isNotEmpty) {
+      return;
+    }
+
+    if (_isLoading) {
+      return;
+    }
+
+    try {
+      final rawUsers = await _fetchUsersPayload(
+        timeout: const Duration(seconds: 15),
+      );
+      _setUsersFromApiPayload(rawUsers);
+      _hasError = false;
+      _errorMessage = null;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Login user prefetch failed: $e');
+    }
+  }
+
   Future<void> fetchUsers({bool forceRefresh = false}) async {
     // Return cached data if available and valid, unless force refresh
     if (!forceRefresh && isCacheValid && _users.isNotEmpty) {
@@ -54,43 +114,8 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await http
-          .get(Uri.parse(ApiConfig.usersEndpoint))
-          .timeout(
-            const Duration(seconds: 20),
-            onTimeout: () {
-              throw Exception('Request timeout. Please check your connection.');
-            },
-          );
-
-      if (response.statusCode != 200) {
-        throw Exception('Failed to fetch users: ${response.statusCode}');
-      }
-
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final usersData = (decoded['users'] as List<dynamic>? ?? [])
-          .whereType<Map<String, dynamic>>()
-          .toList();
-
-      final users = usersData
-          .map((user) => ManagedUser.fromApi(user))
-          .toList(growable: false);
-
-      // Sort by updatedAt/createdAt
-      users.sort((a, b) {
-        final aKey =
-            a.updatedAt ??
-            a.createdAt ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        final bKey =
-            b.updatedAt ??
-            b.createdAt ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        return bKey.compareTo(aKey);
-      });
-
-      _users = users;
-      _lastFetchTime = DateTime.now();
+      final rawUsers = await _fetchUsersPayload();
+      _setUsersFromApiPayload(rawUsers);
       _hasError = false;
       _errorMessage = null;
     } catch (e) {
@@ -148,35 +173,9 @@ class UserProvider extends ChangeNotifier {
     if (_isLoading) return;
 
     try {
-      final response = await http
-          .get(Uri.parse(ApiConfig.usersEndpoint))
-          .timeout(const Duration(seconds: 20));
-
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        final usersData = (decoded['users'] as List<dynamic>? ?? [])
-            .cast<Map<String, dynamic>>();
-
-        final users = usersData
-            .map((user) => ManagedUser.fromApi(user))
-            .toList(growable: false);
-
-        users.sort((a, b) {
-          final aKey =
-              a.updatedAt ??
-              a.createdAt ??
-              DateTime.fromMillisecondsSinceEpoch(0);
-          final bKey =
-              b.updatedAt ??
-              b.createdAt ??
-              DateTime.fromMillisecondsSinceEpoch(0);
-          return bKey.compareTo(aKey);
-        });
-
-        _users = users;
-        _lastFetchTime = DateTime.now();
-        notifyListeners();
-      }
+      final rawUsers = await _fetchUsersPayload();
+      _setUsersFromApiPayload(rawUsers);
+      notifyListeners();
     } catch (e) {
       debugPrint('Background refresh failed: $e');
       // Don't update error state for background refresh
@@ -192,20 +191,20 @@ class UserProvider extends ChangeNotifier {
 
   // Fetch all user emails for selection (silent operation)
   Future<List<String>> fetchAllUserEmails() async {
+    if (_users.isNotEmpty) {
+      return _users
+          .map((user) => user.email.trim())
+          .where((email) => email.isNotEmpty)
+          .toList(growable: false);
+    }
+
     try {
-      final response = await http
-          .get(Uri.parse(ApiConfig.usersEndpoint))
-          .timeout(const Duration(seconds: 15));
-
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        final usersData = (decoded['users'] as List<dynamic>? ?? [])
-            .cast<Map<String, dynamic>>();
-
-        return usersData
-            .map((user) => (user['email'] as String? ?? '').trim())
+      await prefetchUsersForLogin();
+      if (_users.isNotEmpty) {
+        return _users
+            .map((user) => user.email.trim())
             .where((email) => email.isNotEmpty)
-            .toList();
+            .toList(growable: false);
       }
     } catch (_) {
       // Silent error handling

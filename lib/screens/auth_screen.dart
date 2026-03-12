@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/user_provider.dart';
 import '../services/sound_system.dart';
 import 'manual_login_screen.dart';
 import '../main.dart';
@@ -117,6 +118,11 @@ class AuthScreenState extends State<AuthScreen> {
     } finally {
       _isCheckingRedirect = false;
     }
+  }
+
+  void _prepareManualLogin() {
+    AuthProvider.warmUpBackendForLogin();
+    context.read<UserProvider>().prefetchUsersForLogin();
   }
 
   @override
@@ -253,6 +259,7 @@ class AuthScreenState extends State<AuthScreen> {
                           if (_isAnimatingNavigation) {
                             return;
                           }
+                          _prepareManualLogin();
                           _isAnimatingNavigation = true;
                           final navigator = Navigator.of(context);
                           _pendingNavigation = () {
