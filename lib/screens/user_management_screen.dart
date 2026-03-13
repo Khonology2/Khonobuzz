@@ -81,7 +81,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   String _formatLastSignIn(DateTime? value) {
     if (value == null) {
-      return 'Never signed in';
+      return '—';
     }
     return DateFormat('MMM d, yyyy • h:mm a').format(value.toLocal());
   }

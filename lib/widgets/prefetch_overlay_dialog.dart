@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 
+/// Loading overlay shown after successful login for all users (admin and staff).
+/// Displays progress messages, then "Enjoy your session, {name}!" and navigates to main app.
 class PrefetchOverlayDialog extends StatefulWidget {
   const PrefetchOverlayDialog({
     super.key,
@@ -23,40 +26,93 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
     with TickerProviderStateMixin {
   static const List<String> _progressMessages = [
     'Getting ready...',
-    'Setting up...',
-    'Gathering your data...',
+    'Authenticating...',
+    'Granting access...',
     'Loading your profile...',
-    'Getting your roles...',
+    'Authentication passed...',
     'Syncing preferences...',
-    'Loading modules...',
+    'Loading your modules...',
     'Loading your module roles...',
-    'Ready to go!',
+    'Finilizing your session...',
     'Logging you in...',
   ];
 
-  static const Duration _messageDuration = Duration(seconds: 3);
+  static const Duration _messageDuration = Duration(milliseconds: 2500);
+  static const Duration _messageOutDuration = Duration(milliseconds: 420);
+  static const Duration _messageInDuration = Duration(milliseconds: 400);
+
+  static const TextStyle _messageStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+    fontFamily: 'Poppins',
+  );
+
+  /// Derives display name from email, e.g. nkosinathi.radebe@khonology.com → "Nkosinathi Radebe".
+  static String _displayNameFromEmail(String? email) {
+    if (email == null || email.trim().isEmpty) return '';
+    final local = email.split('@').first.trim();
+    if (local.isEmpty) return '';
+    final parts = local.split(RegExp(r'[.\-_]'));
+    return parts
+        .where((s) => s.isNotEmpty)
+        .map((s) => s.length > 1
+            ? '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}'
+            : s.toUpperCase())
+        .join(' ');
+  }
+
+  String get _welcomeMessage {
+    final name = _displayNameFromEmail(widget.authProvider.userEmail);
+    return name.isEmpty
+        ? 'Enjoy your session!'
+        : 'Enjoy your session, $name!';
+  }
 
   int _currentMessageIndex = 0;
-  double _mockProgress = 0.115;
+  int _displayedMessageIndex = 0;
+  bool _isMaterializing = false;
+  bool _isDropping = false;
   bool _prefetchSuccess = false;
   bool _prefetchDone = false;
   bool _canShowReady = false;
   bool _showingReady = false;
   Timer? _messageTimer;
   Timer? _finalDelayTimer;
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
+  late AnimationController _loaderController;
+  late AnimationController _messageOutController;
+  late AnimationController _messageInController;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
+    _loaderController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+      duration: const Duration(seconds: 1),
+    )..repeat();
+    _messageOutController = AnimationController(
+      vsync: this,
+      duration: _messageOutDuration,
     );
+    _messageInController = AnimationController(
+      vsync: this,
+      duration: _messageInDuration,
+    );
+    _messageOutController.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() {
+          _displayedMessageIndex = _currentMessageIndex;
+          _isMaterializing = false;
+          _isDropping = true;
+        });
+        _messageInController.forward(from: 0);
+      }
+    });
+    _messageInController.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => _isDropping = false);
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startMessageSequence();
       _runPrefetch();
@@ -67,7 +123,9 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
   void dispose() {
     _messageTimer?.cancel();
     _finalDelayTimer?.cancel();
-    _pulseController.dispose();
+    _loaderController.dispose();
+    _messageOutController.dispose();
+    _messageInController.dispose();
     super.dispose();
   }
 
@@ -75,21 +133,117 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
     _messageTimer?.cancel();
     _messageTimer = Timer.periodic(_messageDuration, (_) {
       if (!mounted) return;
-      setState(() {
-        if (_currentMessageIndex < _progressMessages.length - 1) {
+      if (_currentMessageIndex < _progressMessages.length - 1) {
+        setState(() {
           _currentMessageIndex++;
-          _mockProgress = (_currentMessageIndex + 1) / _progressMessages.length * 0.92;
-        } else {
-          _messageTimer?.cancel();
-          _finalDelayTimer?.cancel();
-          _finalDelayTimer = Timer(_messageDuration, () {
-            if (!mounted) return;
-            setState(() => _canShowReady = true);
-            _tryShowReady();
-          });
-        }
-      });
+          _isMaterializing = true;
+        });
+        _messageOutController.forward(from: 0);
+      } else {
+        _messageTimer?.cancel();
+        _finalDelayTimer?.cancel();
+        _finalDelayTimer = Timer(_messageDuration, () {
+          if (!mounted) return;
+          setState(() => _canShowReady = true);
+          _tryShowReady();
+        });
+      }
     });
+  }
+
+  static const double _messageMaxWidth = 304; // 360 - 56 padding
+
+  List<Offset> _getCharacterOffsets(String message) {
+    final painter = TextPainter(
+      text: TextSpan(text: message, style: _messageStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: _messageMaxWidth);
+    final offsets = <Offset>[];
+    for (var i = 0; i < message.length; i++) {
+      offsets.add(painter.getOffsetForCaret(TextPosition(offset: i), Rect.zero));
+    }
+    return offsets;
+  }
+
+  Widget _buildMessageTransition() {
+    final message = _progressMessages[_displayedMessageIndex.clamp(0, _progressMessages.length - 1)];
+    final text = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _messageMaxWidth),
+      child: Text(
+        message,
+        style: _messageStyle,
+        maxLines: 2,
+        overflow: TextOverflow.visible,
+        textAlign: TextAlign.center,
+      ),
+    );
+    if (_isMaterializing) {
+      return _buildParticleMaterialize(message);
+    }
+    if (_isDropping) {
+      return FadeTransition(
+        opacity: _messageInController.drive(
+          Tween<double>(begin: 0, end: 1).chain(CurveTween(curve: Curves.easeOut)),
+        ),
+        child: SlideTransition(
+          position: _messageInController.drive(
+            Tween<Offset>(begin: const Offset(0, -1.2), end: Offset.zero)
+                .chain(CurveTween(curve: Curves.easeOutCubic)),
+          ),
+          child: text,
+        ),
+      );
+    }
+    return text;
+  }
+
+  Widget _buildParticleMaterialize(String message) {
+    final offsets = _getCharacterOffsets(message);
+    if (offsets.isEmpty) return const SizedBox.shrink();
+    final painter = TextPainter(
+      text: TextSpan(text: message, style: _messageStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: _messageMaxWidth);
+    final size = painter.size;
+    return SizedBox(
+      width: size.width,
+      height: size.height,
+      child: AnimatedBuilder(
+        animation: _messageOutController,
+        builder: (context, _) {
+          final t = Curves.easeIn.transform(_messageOutController.value);
+          return Stack(
+            clipBehavior: Clip.none,
+            children: List.generate(message.length, (i) {
+              final dx = ((i * 31) % 37) - 18.0;
+              final dy = ((i * 17) % 29) - 14.0;
+              final scatter = 1.0 - t;
+              final x = offsets[i].dx + dx * scatter;
+              final y = offsets[i].dy + dy * scatter;
+              final opacity = (1.0 - t).clamp(0.0, 1.0);
+              final scale = 1.0 - 0.4 * t;
+              return Positioned(
+                left: x,
+                top: y,
+                child: Opacity(
+                  opacity: opacity,
+                  child: Transform.scale(
+                    scale: scale,
+                    alignment: Alignment.topLeft,
+                    child: Text(
+                      message.substring(i, i + 1),
+                      style: _messageStyle,
+                    ),
+                  ),
+                ),
+              );
+            }),
+          );
+        },
+      ),
+    );
   }
 
   void _tryShowReady() {
@@ -99,13 +253,13 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
     _finalDelayTimer?.cancel();
     setState(() {
       _prefetchSuccess = true;
-      _mockProgress = 1.0;
     });
     Future.delayed(const Duration(milliseconds: 700), () {
       if (mounted) widget.onComplete();
     });
   }
 
+  /// All users (admin and staff) go through this dialog. Only admin runs user-list prefetch.
   Future<void> _runPrefetch() async {
     try {
       final role = (widget.authProvider.userRole ?? '').toLowerCase();
@@ -135,10 +289,12 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
           height: double.infinity,
           color: Colors.black54,
           child: Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
-              margin: const EdgeInsets.symmetric(horizontal: 40),
-              decoration: BoxDecoration(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                decoration: BoxDecoration(
                 color: const Color(0xFF2C3E50).withValues(alpha: 0.95),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
@@ -153,135 +309,92 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (_prefetchSuccess)
-                    const Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 56)
+                    const Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 56),
+                  if (_prefetchSuccess) const SizedBox(height: 20),
+                  Center(
+                    child: _prefetchSuccess
+                        ? Text(
+                            _welcomeMessage,
+                            style: _messageStyle,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.visible,
+                          )
+                        : _buildMessageTransition(),
+                  ),
+                  const SizedBox(height: 20),
+                  if (_prefetchSuccess)
+                    const SizedBox(height: 50)
                   else
-                    const SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: CircularProgressIndicator(
-                        color: Color(0xFFC10D00),
-                        strokeWidth: 3,
+                    SizedBox(
+                      width: 50,
+                      height: 50,
+                      child: AnimatedBuilder(
+                        animation: _loaderController,
+                        builder: (context, _) {
+                          return CustomPaint(
+                            size: const Size(50, 50),
+                            painter: _LoaderPainter(
+                              _loaderController.value * 2 * math.pi,
+                            ),
+                          );
+                        },
                       ),
                     ),
-                  const SizedBox(height: 20),
-                  Builder(
-                    builder: (context) {
-                      final message = _prefetchSuccess
-                          ? 'Ready!'
-                          : _progressMessages[_currentMessageIndex.clamp(0, _progressMessages.length - 1)];
-                      return AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        child: Text(
-                          message,
-                          key: ValueKey<String>(message),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  AnimatedBuilder(
-                    animation: _pulseAnimation,
-                    builder: (context, child) {
-                      final barColor = _prefetchSuccess
-                          ? const Color(0xFF4CAF50)
-                          : const Color(0xFFC10D00);
-                      final pulseOpacity = 0.2 + 0.25 * _pulseAnimation.value;
-                      return Container(
-                        width: 220,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
-                          boxShadow: [
-                            BoxShadow(
-                              color: barColor.withValues(alpha: pulseOpacity),
-                              blurRadius: 6 + 4 * _pulseAnimation.value,
-                              spreadRadius: 0.5 * _pulseAnimation.value,
-                            ),
-                          ],
-                        ),
-                        child: child,
-                      );
-                    },
-                    child: SizedBox(
-                      width: 220,
-                      height: 6,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: Stack(
-                          alignment: Alignment.centerLeft,
-                          children: [
-                            Container(
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: Colors.white24,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                final fillWidth = constraints.maxWidth * _mockProgress;
-                                final barColor = _prefetchSuccess
-                                    ? const Color(0xFF4CAF50)
-                                    : const Color(0xFFC10D00);
-                                return Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    AnimatedContainer(
-                                      duration: const Duration(milliseconds: 300),
-                                      curve: Curves.easeOut,
-                                      width: fillWidth,
-                                      height: 6,
-                                      decoration: BoxDecoration(
-                                        color: barColor,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                    ),
-                                    if (fillWidth > 4)
-                                      Positioned(
-                                        left: fillWidth - 6,
-                                        top: 0,
-                                        child: AnimatedBuilder(
-                                          animation: _pulseAnimation,
-                                          builder: (context, _) {
-                                            return Container(
-                                              width: 12,
-                                              height: 6,
-                                              decoration: BoxDecoration(
-                                                borderRadius: BorderRadius.circular(3),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: barColor.withValues(
-                                                      alpha: 0.4 * _pulseAnimation.value,
-                                                    ),
-                                                    blurRadius: 6,
-                                                    spreadRadius: 1,
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                  ],
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
               ),
+            ),
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+class _LoaderPainter extends CustomPainter {
+  _LoaderPainter(this.angle);
+
+  final double angle;
+
+  static const double _size = 50;
+  static const double _strokeWidth = 8;
+  static const double _radius = (_size / 2) - (_strokeWidth / 2);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final rect = Rect.fromCircle(center: center, radius: _radius);
+
+    final redPaint = Paint()
+      ..color = const Color(0xFFC10D00)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final bluePaint = Paint()
+      ..color = const Color.fromARGB(255, 253, 254, 255)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(angle);
+    canvas.translate(-center.dx, -center.dy);
+    canvas.drawArc(rect, 0, math.pi / 2, false, redPaint);
+    canvas.restore();
+
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(-angle);
+    canvas.translate(-center.dx, -center.dy);
+    canvas.drawArc(rect, math.pi, math.pi / 2, false, bluePaint);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _LoaderPainter oldDelegate) {
+    return oldDelegate.angle != angle;
   }
 }
