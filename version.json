@@ -1,6 +1,6 @@
 {
-  "version": "2026.03.BE1",
+  "version": "2026.03.BE2",
   "last_feature_commit": "Feature - Introduced PrefetchOverlayDialog for smoother authentication, refactored user prefetching with background updates, improved Auth/ManualLogin navigation, and enhanced ModuleAccessScreen with sorting, access visualization, and loading skeleton UI.",
   "feature_date": "2026-03-13",
-  "commit_count_since_feature": 1
+  "commit_count_since_feature": 2
 }
