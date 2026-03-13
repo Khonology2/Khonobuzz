@@ -98,8 +98,14 @@ class UserProvider extends ChangeNotifier {
   }
 
   Future<void> fetchUsers({bool forceRefresh = false}) async {
-    // Return cached data if available and valid, unless force refresh
-    if (!forceRefresh && isCacheValid && _users.isNotEmpty) {
+    // Stale-while-revalidate: if we have cached data, show it and refresh in background
+    if (_users.isNotEmpty) {
+      refreshUsersInBackground();
+      return;
+    }
+
+    // Return cached data if available and valid, unless force refresh (only when empty - handled above)
+    if (!forceRefresh && isCacheValid) {
       return;
     }
 

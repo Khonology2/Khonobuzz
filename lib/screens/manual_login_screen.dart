@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../services/sound_system.dart';
 import '../widgets/animations/loading_button.dart';
 import '../widgets/floating_circles_particle_animation.dart';
+import '../widgets/prefetch_overlay_dialog.dart';
 import '../widgets/version_control_widget.dart';
 import 'package:audioplayers/audioplayers.dart';
 
@@ -385,14 +386,12 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                             );
                             if (!mounted) return;
                             if (success) {
-                              navigator.pushAndRemoveUntil(
-                                MaterialPageRoute(
-                                  builder: (context) => const MainScreen(
-                                    initialIndex: 8,
-                                    playLoginSuccessSound: true,
-                                  ),
-                                ),
-                                (route) => false,
+                              await _prefetchUsersAndNavigate(
+                                // ignore: use_build_context_synchronously
+                                context,
+                                navigator,
+                                authProvider,
+                                playLoginSuccessSound: true,
                               );
                             } else {
                               await _playErrorSound();
@@ -480,6 +479,40 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
         }
       },
       animationKey: null,
+    );
+  }
+
+  Future<void> _prefetchUsersAndNavigate(
+    BuildContext context,
+    NavigatorState navigator,
+    AuthProvider authProvider, {
+    bool playLoginSuccessSound = false,
+  }) async {
+    if (!mounted) return;
+    final dialogContext = context;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (BuildContext _) => PrefetchOverlayDialog(
+        authProvider: authProvider,
+        onComplete: () {
+          Navigator.of(dialogContext).pop();
+          navigator.pushAndRemoveUntil(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => MainScreen(
+                initialIndex: 8,
+                playLoginSuccessSound: playLoginSuccessSound,
+              ),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+              transitionDuration: const Duration(milliseconds: 350),
+            ),
+            (route) => false,
+          );
+        },
+      ),
     );
   }
 
@@ -605,14 +638,12 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
 
         if (!mounted) return;
         if (success) {
-          navigator.pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (context) => const MainScreen(
-                initialIndex: 8,
-                playLoginSuccessSound: true,
-              ),
-            ),
-            (route) => false,
+          await _prefetchUsersAndNavigate(
+            // ignore: use_build_context_synchronously
+            context,
+            navigator,
+            authProvider,
+            playLoginSuccessSound: true,
           );
         } else {
           _showValidationError(

@@ -9,6 +9,7 @@ import 'manual_login_screen.dart';
 import '../main.dart';
 import 'onboarding_screen.dart';
 import '../widgets/floating_circles_particle_animation.dart';
+import '../widgets/prefetch_overlay_dialog.dart';
 import '../widgets/version_control_widget.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -70,11 +71,31 @@ class AuthScreenState extends State<AuthScreen> {
           }
 
           if (success) {
-            navigator.pushAndRemoveUntil(
-              MaterialPageRoute(
-                builder: (context) => const MainScreen(initialIndex: 8),
+            if (!mounted) {
+              _isCheckingRedirect = false;
+              return;
+            }
+            final dialogContext = context;
+            showDialog<void>(
+              context: context,
+              barrierDismissible: false,
+              barrierColor: Colors.black54,
+              builder: (BuildContext _) => PrefetchOverlayDialog(
+                authProvider: authProvider,
+                onComplete: () {
+                  Navigator.of(dialogContext).pop();
+                  navigator.pushAndRemoveUntil(
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation, secondaryAnimation) => const MainScreen(initialIndex: 8),
+                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                        return FadeTransition(opacity: animation, child: child);
+                      },
+                      transitionDuration: const Duration(milliseconds: 350),
+                    ),
+                    (route) => false,
+                  );
+                },
               ),
-              (route) => false,
             );
           } else {
             await fb_auth.FirebaseAuth.instance.signOut();
