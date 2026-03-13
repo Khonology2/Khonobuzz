@@ -32,12 +32,12 @@ RUN adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Expose port (Render uses $PORT dynamically)
+# Expose port (platforms like Render set PORT; default 5000 for local runs)
 EXPOSE 5000
 
-# Health check
+# Health check uses same port as app (PORT env or 5000)
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5000/health || exit 1
+    CMD sh -c "curl -f http://localhost:${PORT:-5000}/health || exit 1"
 
-# Use shell to expand $PORT variable
-CMD ["sh", "-c", "gunicorn -w 4 -k uvicorn.workers.UvicornWorker fastapi_app:app --bind 0.0.0.0:$PORT"]
+# Bind to 0.0.0.0 so container accepts external connections; PORT default 5000
+CMD ["sh", "-c", "gunicorn -w 4 -k uvicorn.workers.UvicornWorker fastapi_app:app --bind 0.0.0.0:${PORT:-5000}"]
