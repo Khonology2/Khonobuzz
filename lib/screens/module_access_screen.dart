@@ -49,6 +49,39 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   bool _isSelectionMode = false;
   final Set<String> _selectedUserIds = <String>{};
 
+  String _sortOption = 'name';
+
+  List<ManagedUser> get _sortedFilteredUsers {
+    final list = List<ManagedUser>.from(_filteredUsers);
+    switch (_sortOption) {
+      case 'department':
+        list.sort((a, b) => a.department.compareTo(b.department));
+        break;
+      case 'modules_desc':
+        list.sort((a, b) {
+          final aCount = _moduleCount(a);
+          final bCount = _moduleCount(b);
+          if (bCount != aCount) return bCount.compareTo(aCount);
+          return a.name.compareTo(b.name);
+        });
+        break;
+      case 'name':
+      default:
+        list.sort((a, b) => a.name.compareTo(b.name));
+        break;
+    }
+    return list;
+  }
+
+  int _moduleCount(ManagedUser user) {
+    if (user.moduleAccess == null || user.moduleAccess!.isEmpty) return 0;
+    return user.moduleAccess!
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .length;
+  }
+
   final Map<String, String?> _selectedRecruitmentRoles = {};
 
   final Map<String, String?> _selectedSOWBuilderRoles = {};
@@ -66,6 +99,106 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     'Manager': Colors.purple.shade600,
     'Admin': const Color(0xFFC10D00),
   };
+
+  static const Map<String, Color> _moduleDotColors = {
+    'Personal Development Hub': Color(0xFFC10D00),
+    'Resource & Capacity Skills Heatmap': Color(0xFF0D9488),
+    'Automated Recruitment Workflow': Color(0xFF2563EB),
+    'Proposal & SOW Builder': Color(0xFFD97706),
+    'Deliverables & Sprint Sign-Off Hub': Color(0xFF7C3AED),
+  };
+
+  static List<String> get _moduleLegendOrder => [
+    'Personal Development Hub',
+    'Resource & Capacity Skills Heatmap',
+    'Automated Recruitment Workflow',
+    'Proposal & SOW Builder',
+    'Deliverables & Sprint Sign-Off Hub',
+  ];
+
+  String? _canonicalModuleName(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty) return null;
+    if (t == 'PDH' || t == 'Personal Development Hub') return 'Personal Development Hub';
+    if (t == 'Skills Heatmap' || t == 'Resource & Capacity Skills Heatmap') return 'Resource & Capacity Skills Heatmap';
+    if (t == 'Automated Recruitment Workflow') return t;
+    if (t == 'SOW Builder' || t == 'Proposal & SOW Builder') return 'Proposal & SOW Builder';
+    if (t == 'Deliverables & Sprint Sign-Off Hub') return t;
+    return t;
+  }
+
+  List<Widget> _buildModuleAccessDots(String? moduleAccess) {
+    if (moduleAccess == null || moduleAccess.isEmpty) {
+      return [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white24,
+          ),
+        ),
+        const SizedBox(width: 8.0),
+        Text(
+          'No modules assigned · Tap to assign',
+          style: TextStyle(
+            color: Colors.white54,
+            fontSize: 12.0,
+            fontFamily: 'Poppins',
+          ),
+        ),
+      ];
+    }
+    final accessList = moduleAccess
+        .split(',')
+        .map((e) => _canonicalModuleName(e))
+        .where((e) => e != null)
+        .cast<String>()
+        .toList();
+    if (accessList.isEmpty) {
+      return [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white24,
+          ),
+        ),
+        const SizedBox(width: 8.0),
+        Text(
+          'No modules assigned · Tap to assign',
+          style: TextStyle(
+            color: Colors.white54,
+            fontSize: 12.0,
+            fontFamily: 'Poppins',
+          ),
+        ),
+      ];
+    }
+    return accessList.map((name) {
+      final color = _moduleDotColors[name] ?? Colors.white54;
+      return Tooltip(
+        message: name,
+        child: Container(
+          margin: const EdgeInsets.only(right: 6.0),
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color,
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.5),
+                blurRadius: 4,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+        ),
+      );
+    }).toList();
+  }
 
   List<ManagedUser> get _filteredUsers {
     final userProvider = Provider.of<UserProvider>(context);
@@ -1321,6 +1454,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         _buildSearch(),
                         const SizedBox(height: 16.0),
                         _buildUserList(),
+                        const SizedBox(height: 24.0),
+                        _buildModuleLegend(),
+                        const SizedBox(height: 24.0),
                       ],
                     ),
                   ),
@@ -1390,6 +1526,74 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     );
   }
 
+  Widget _buildLoadingSkeleton() {
+    return Column(
+      children: List.generate(5, (_) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: Container(
+            height: 100,
+            decoration: BoxDecoration(
+              color: const Color(0x801F2840),
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white12,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 12.0),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 14,
+                        width: 140,
+                        decoration: BoxDecoration(
+                          color: Colors.white12,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 8.0),
+                      Container(
+                        height: 12,
+                        width: 180,
+                        decoration: BoxDecoration(
+                          color: Colors.white10,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 12.0),
+                      Row(
+                        children: List.generate(4, (_) => Container(
+                          margin: const EdgeInsets.only(right: 6.0),
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white12,
+                          ),
+                        )),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
   Widget _buildUserList() {
     final userProvider = Provider.of<UserProvider>(context);
 
@@ -1408,23 +1612,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     }
 
     if (userProvider.isLoading && userProvider.users.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(color: Color(0xFFC10D00)),
-            const SizedBox(height: 24.0),
-            Text(
-              'Fetching user records...',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16.0,
-                fontFamily: 'Poppins',
-              ),
-            ),
-          ],
-        ),
-      );
+      return _buildLoadingSkeleton();
     }
 
     if (_filteredUsers.isEmpty) {
@@ -1437,7 +1625,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     }
 
     return Column(
-      children: _filteredUsers.map((user) {
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSortBar(),
+        const SizedBox(height: 12.0),
+        ..._sortedFilteredUsers.map((user) {
         final isExpanded = expandedUserId == user.id;
         return Padding(
           padding: const EdgeInsets.only(bottom: 16.0),
@@ -1448,7 +1640,69 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             ],
           ),
         );
-      }).toList(),
+        }),
+      ],
+    );
+  }
+
+  Widget _buildSortBar() {
+    return Row(
+      children: [
+        Text(
+          'Sort by:',
+          style: TextStyle(
+            color: Colors.white54,
+            fontSize: 12.0,
+            fontFamily: 'Poppins',
+          ),
+        ),
+        const SizedBox(width: 8.0),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _sortChip('Name', 'name'),
+                const SizedBox(width: 6.0),
+                _sortChip('Department', 'department'),
+                const SizedBox(width: 6.0),
+                _sortChip('Most modules', 'modules_desc'),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _sortChip(String label, String value) {
+    final isSelected = _sortOption == value;
+    return GestureDetector(
+      onTap: () {
+        SoundSystem.playButtonClick();
+        setState(() => _sortOption = value);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFFC10D00).withValues(alpha: 0.3)
+              : const Color(0x801F2840),
+          borderRadius: BorderRadius.circular(20.0),
+          border: isSelected
+              ? Border.all(color: const Color(0xFFC10D00), width: 1)
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.white70,
+            fontSize: 12.0,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            fontFamily: 'Poppins',
+          ),
+        ),
+      ),
     );
   }
 
@@ -1470,7 +1724,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   }
 
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
-    final moduleAccessChips = _buildModuleAccessChips(user.moduleAccess);
+    final moduleAccessDots = _buildModuleAccessDots(user.moduleAccess);
     final isSelected = _selectedUserIds.contains(user.id);
     return GestureDetector(
       onLongPress: () {
@@ -1516,20 +1770,20 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           border: isSelected
               ? Border.all(color: const Color(0xFFC10D00), width: 2.0)
               : null,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         padding: const EdgeInsets.all(16.0),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final availableWidth = constraints.maxWidth;
-            final checkboxWidth = _isSelectionMode ? 48.0 : 0.0;
-            final spacingWidth = 8.0 * 2;
-            final columnWidth =
-                ((availableWidth - checkboxWidth) - spacingWidth) / 3;
-            final leftPadding = columnWidth * 0.12;
-
-            final secondColumnWidth = columnWidth - leftPadding;
-
-            return Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
               children: [
                 if (_isSelectionMode) ...[
                   Checkbox(
@@ -1552,13 +1806,12 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   ),
                   const SizedBox(width: 8.0),
                 ],
-                SizedBox(
-                  width: columnWidth,
+                Expanded(
                   child: Row(
                     children: [
                       _buildUserAvatar(user),
                       const SizedBox(width: 12.0),
-                      Flexible(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -1589,161 +1842,129 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8.0),
-                Padding(
-                  padding: EdgeInsets.only(left: leftPadding),
-                  child: SizedBox(
-                    width: secondColumnWidth,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          user.designation,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 14.0,
-                            fontFamily: 'Poppins',
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                        const SizedBox(height: 4.0),
-                        Text(
-                          user.department,
-                          style: const TextStyle(
-                            color: Colors.white60,
-                            fontSize: 12.0,
-                            fontFamily: 'Poppins',
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8.0),
-                SizedBox(
-                  width: columnWidth,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                const SizedBox(width: 12.0),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Flexible(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          reverse: true,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: moduleAccessChips,
-                          ),
+                      Text(
+                        user.designation,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14.0,
+                          fontFamily: 'Poppins',
                         ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
-                      const SizedBox(width: 8.0),
-                      if (!_isSelectionMode)
-                        Transform.rotate(
-                          angle: isExpanded ? 3.14 : 0,
-                          child: const Icon(
-                            Icons.keyboard_arrow_down,
-                            color: Colors.white54,
-                          ),
+                      const SizedBox(height: 4.0),
+                      Text(
+                        user.department,
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 12.0,
+                          fontFamily: 'Poppins',
                         ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
                     ],
                   ),
                 ),
+                if (!_isSelectionMode)
+                  Transform.rotate(
+                    angle: isExpanded ? 3.14 : 0,
+                    child: const Icon(
+                      Icons.keyboard_arrow_down,
+                      color: Colors.white54,
+                      size: 28,
+                    ),
+                  ),
               ],
-            );
-          },
+            ),
+            const SizedBox(height: 12.0),
+            Row(
+              children: [
+                Text(
+                  'Modules:',
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 12.0,
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                const SizedBox(width: 8.0),
+                Wrap(
+                  spacing: 2.0,
+                  runSpacing: 4.0,
+                  children: moduleAccessDots,
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 
-  List<Widget> _buildModuleAccessChips(String? moduleAccess) {
-    if (moduleAccess == null || moduleAccess.isEmpty) {
-      return [
-        Padding(
-          padding: const EdgeInsets.only(right: 8.0),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12.0,
-              vertical: 4.0,
-            ),
-            decoration: BoxDecoration(
-              color: const Color(0x33FFFFFF),
-              borderRadius: BorderRadius.circular(20.0),
-            ),
-            child: Text(
-              _notAssignedValue,
-              style: const TextStyle(
-                fontSize: 12.0,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Poppins',
-                color: Colors.white,
-              ),
-            ),
-          ),
+  Widget _buildModuleLegend() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      decoration: BoxDecoration(
+        color: const Color(0x801F2840),
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.08),
+          width: 1,
         ),
-      ];
-    }
-
-    final accessList = moduleAccess
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-
-    if (accessList.isEmpty) {
-      return [
-        Padding(
-          padding: const EdgeInsets.only(right: 8.0),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12.0,
-              vertical: 4.0,
-            ),
-            decoration: BoxDecoration(
-              color: const Color(0x33FFFFFF),
-              borderRadius: BorderRadius.circular(20.0),
-            ),
-            child: Text(
-              _notAssignedValue,
-              style: const TextStyle(
-                fontSize: 12.0,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Poppins',
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ];
-    }
-
-    return accessList.map((access) {
-      return Padding(
-        padding: const EdgeInsets.only(right: 8.0),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-          decoration: BoxDecoration(
-            color: const Color(0x33FFFFFF),
-            borderRadius: BorderRadius.circular(20.0),
-          ),
-          child: Text(
-            access,
-            style: const TextStyle(
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Module legend',
+            style: TextStyle(
+              color: Colors.white70,
               fontSize: 12.0,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               fontFamily: 'Poppins',
-              color: Colors.white,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            softWrap: false,
           ),
-        ),
-      );
-    }).toList();
+          const SizedBox(height: 10.0),
+          Wrap(
+            spacing: 16.0,
+            runSpacing: 8.0,
+            children: _moduleLegendOrder.map((name) {
+              final color = _moduleDotColors[name] ?? Colors.white54;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color,
+                    ),
+                  ),
+                  const SizedBox(width: 6.0),
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11.0,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildModuleAccessPanel(ManagedUser user) {
@@ -1878,6 +2099,23 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       _selectedDeliverablesRoles[user.id] = selectedDeliverablesRole;
     }
 
+    final roleSummary = <String>[];
+    if (pdhSelected) {
+      roleSummary.add('PDH: ${selectedModuleRole ?? _notAssignedValue}');
+    }
+    if (skillsHeatmapSelected) {
+      roleSummary.add('Skills Heatmap: Manager');
+    }
+    if (recruitmentSelected) {
+      roleSummary.add('Recruitment: ${selectedRecruitmentRole ?? _notAssignedValue}');
+    }
+    if (sowBuilderSelected) {
+      roleSummary.add('SOW Builder: ${selectedSOWBuilderRole ?? _notAssignedValue}');
+    }
+    if (deliverablesSelected) {
+      roleSummary.add('Deliverables: ${selectedDeliverablesRole ?? _notAssignedValue}');
+    }
+
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: const BoxDecoration(
@@ -1889,6 +2127,42 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       ),
       child: Column(
         children: [
+          if (roleSummary.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: Wrap(
+                spacing: 8.0,
+                runSpacing: 6.0,
+                children: [
+                  Text(
+                    'Current roles:',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 12.0,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  ...roleSummary.map((s) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                    decoration: BoxDecoration(
+                      color: const Color(0x1AFFFFFF),
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                    child: Text(
+                      s,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11.0,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  )),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4.0),
+          ],
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
