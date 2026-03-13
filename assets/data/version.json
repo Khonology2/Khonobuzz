@@ -1,6 +1,6 @@
 {
-  "version": "2026.03.BD2",
+  "version": "2026.03.BD3",
   "last_feature_commit": "Feature - Added VersionControlWidget to AuthScreen for version display and enabled KhonoBuzz admin login with PDH role switch for admin portal access.",
   "feature_date": "2026-03-12",
-  "commit_count_since_feature": 2
+  "commit_count_since_feature": 3
 }
