@@ -19,16 +19,19 @@ class PrefetchOverlayDialog extends StatefulWidget {
   State<PrefetchOverlayDialog> createState() => _PrefetchOverlayDialogState();
 }
 
-class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog> {
+class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
+    with TickerProviderStateMixin {
   static const List<String> _progressMessages = [
     'Getting ready...',
     'Setting up...',
     'Gathering your data...',
-    'Loading your workspace...',
-    'Preparing your dashboard...',
+    'Loading your profile...',
+    'Getting your roles...',
     'Syncing preferences...',
-    'Almost there...',
-    'Logging You In...',
+    'Loading modules...',
+    'Loading your module roles...',
+    'Ready to go!',
+    'Logging you in...',
   ];
 
   static const Duration _messageDuration = Duration(seconds: 3);
@@ -41,10 +44,19 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog> {
   bool _showingReady = false;
   Timer? _messageTimer;
   Timer? _finalDelayTimer;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startMessageSequence();
       _runPrefetch();
@@ -55,6 +67,7 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog> {
   void dispose() {
     _messageTimer?.cancel();
     _finalDelayTimer?.cancel();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -172,17 +185,94 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog> {
                     },
                   ),
                   const SizedBox(height: 20),
-                  SizedBox(
-                    width: 220,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: _mockProgress,
-                        backgroundColor: Colors.white24,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          _prefetchSuccess ? const Color(0xFF4CAF50) : const Color(0xFFC10D00),
+                  AnimatedBuilder(
+                    animation: _pulseAnimation,
+                    builder: (context, child) {
+                      final barColor = _prefetchSuccess
+                          ? const Color(0xFF4CAF50)
+                          : const Color(0xFFC10D00);
+                      final pulseOpacity = 0.2 + 0.25 * _pulseAnimation.value;
+                      return Container(
+                        width: 220,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          boxShadow: [
+                            BoxShadow(
+                              color: barColor.withValues(alpha: pulseOpacity),
+                              blurRadius: 6 + 4 * _pulseAnimation.value,
+                              spreadRadius: 0.5 * _pulseAnimation.value,
+                            ),
+                          ],
                         ),
-                        minHeight: 6,
+                        child: child,
+                      );
+                    },
+                    child: SizedBox(
+                      width: 220,
+                      height: 6,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Stack(
+                          alignment: Alignment.centerLeft,
+                          children: [
+                            Container(
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: Colors.white24,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final fillWidth = constraints.maxWidth * _mockProgress;
+                                final barColor = _prefetchSuccess
+                                    ? const Color(0xFF4CAF50)
+                                    : const Color(0xFFC10D00);
+                                return Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    AnimatedContainer(
+                                      duration: const Duration(milliseconds: 300),
+                                      curve: Curves.easeOut,
+                                      width: fillWidth,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        color: barColor,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                    if (fillWidth > 4)
+                                      Positioned(
+                                        left: fillWidth - 6,
+                                        top: 0,
+                                        child: AnimatedBuilder(
+                                          animation: _pulseAnimation,
+                                          builder: (context, _) {
+                                            return Container(
+                                              width: 12,
+                                              height: 6,
+                                              decoration: BoxDecoration(
+                                                borderRadius: BorderRadius.circular(3),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: barColor.withValues(
+                                                      alpha: 0.4 * _pulseAnimation.value,
+                                                    ),
+                                                    blurRadius: 6,
+                                                    spreadRadius: 1,
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
