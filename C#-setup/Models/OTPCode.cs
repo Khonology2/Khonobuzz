@@ -1,0 +1,29 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace MyApi.Models
+{
+    [Table("otp_codes")]
+    public class OTPCode
+    {
+        [Key]
+        [StringLength(255)]
+        public string Id { get; set; }
+
+        [Required]
+        [StringLength(255)]
+        public string Email { get; set; }
+
+        [Required]
+        [StringLength(10)]
+        public string Code { get; set; }
+
+        public bool IsUsed { get; set; } = false;
+
+        public int Attempts { get; set; } = 0;
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public DateTime ExpiresAt { get; set; }
+    }
+}
