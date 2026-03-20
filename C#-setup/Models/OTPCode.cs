@@ -8,15 +8,15 @@ namespace MyApi.Models
     {
         [Key]
         [StringLength(255)]
-        public string Id { get; set; }
+        public required string Id { get; set; }
 
         [Required]
         [StringLength(255)]
-        public string Email { get; set; }
+        public required string Email { get; set; }
 
         [Required]
         [StringLength(10)]
-        public string Code { get; set; }
+        public required string Code { get; set; }
 
         public bool IsUsed { get; set; } = false;
 

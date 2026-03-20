@@ -6,22 +6,22 @@ namespace MyApi.DTOs.Auth
     {
         [Required]
         [EmailAddress]
-        public string Email { get; set; }
+        public required string Email { get; set; }
 
         [Required]
         [StringLength(255)]
-        public string Name { get; set; }
+        public required string Name { get; set; }
 
         [StringLength(255)]
-        public string FirstName { get; set; }
+        public string? FirstName { get; set; }
 
         [StringLength(255)]
-        public string LastName { get; set; }
+        public string? LastName { get; set; }
 
         [StringLength(255)]
-        public string Department { get; set; }
+        public string? Department { get; set; }
 
         [StringLength(255)]
-        public string Designation { get; set; }
+        public string? Designation { get; set; }
     }
 }

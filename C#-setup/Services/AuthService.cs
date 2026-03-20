@@ -1,25 +1,25 @@
-using Microsoft.EntityFrameworkCore;
-using MyApi.Data;
+using System.Collections.Concurrent;
 using MyApi.Models;
 
 namespace MyApi.Services
 {
     public class AuthService : IAuthService
     {
-        private readonly ApplicationDbContext _context;
+        // In-memory storage for demonstration - replace with proper persistence as needed
+        private static readonly ConcurrentDictionary<string, User> _users = new();
+        private static readonly ConcurrentDictionary<string, Onboarding> _onboardings = new();
+
         private readonly IOtpService _otpService;
         private readonly ITokenService _tokenService;
         private readonly IFirebaseService _firebaseService;
         private readonly IEmailService _emailService;
 
         public AuthService(
-            ApplicationDbContext context,
             IOtpService otpService,
             ITokenService tokenService,
             IFirebaseService firebaseService,
             IEmailService emailService)
         {
-            _context = context;
             _otpService = otpService;
             _tokenService = tokenService;
             _firebaseService = firebaseService;
@@ -28,8 +28,7 @@ namespace MyApi.Services
 
         public async Task<User> RegisterAsync(string email, string name, string? firstName = null, string? lastName = null, string? department = null, string? designation = null)
         {
-            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
-            if (existingUser != null)
+            if (_users.Values.Any(u => u.Email == email))
             {
                 throw new InvalidOperationException("User already exists");
             }
@@ -38,18 +37,23 @@ namespace MyApi.Services
             {
                 Id = Guid.NewGuid().ToString(),
                 Email = email,
-                Name = name,
-                FirstName = firstName ?? "",
-                LastName = lastName ?? "",
-                Department = department ?? "",
-                Designation = designation ?? "",
+                Name = "Default User",
+                FirstName = "",
+                LastName = "",
+                Role = "user",
                 Status = "pending",
+                Department = "",
+                Designation = "",
+                Manager = "",
+                Entity = "",
+                ModuleAccess = "",
+                ModuleRole = "",
+                ModuleAccessRole = "",
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+            _users[user.Id] = user;
 
             // Generate OTP for email verification
             var otp = await _otpService.GenerateOtpAsync(email);
@@ -66,7 +70,7 @@ namespace MyApi.Services
                 return false;
             }
 
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            var user = _users.Values.FirstOrDefault(u => u.Email == email);
             if (user == null)
             {
                 return false;
@@ -80,7 +84,6 @@ namespace MyApi.Services
             {
                 user.Status = "active";
                 user.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
 
                 // Send welcome email
                 await _emailService.SendWelcomeEmailAsync(email, user.Name);
@@ -94,14 +97,17 @@ namespace MyApi.Services
 
         public async Task<User?> GetUserByEmailAsync(string email)
         {
-            return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            return _users.Values.FirstOrDefault(u => u.Email == email);
         }
 
         public async Task<User?> GetUserByIdAsync(string id)
         {
-            return await _context.Users
-                .Include(u => u.Onboarding)
-                .FirstOrDefaultAsync(u => u.Id == id);
+            _users.TryGetValue(id, out var user);
+            if (user != null && _onboardings.TryGetValue(id, out var onboarding))
+            {
+                user.Onboarding = onboarding;
+            }
+            return user;
         }
     }
 }

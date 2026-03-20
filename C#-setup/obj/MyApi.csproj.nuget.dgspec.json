@@ -1,19 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "C:\\apps\\khonoBUzz\\KhonoBuzz\\c#-backend\\MyApi\\MyApi.csproj": {}
+    "c:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj": {}
   },
   "projects": {
-    "C:\\apps\\khonoBUzz\\KhonoBuzz\\c#-backend\\MyApi\\MyApi.csproj": {
+    "c:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\apps\\khonoBUzz\\KhonoBuzz\\c#-backend\\MyApi\\MyApi.csproj",
+        "projectUniqueName": "c:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj",
         "projectName": "MyApi",
-        "projectPath": "C:\\apps\\khonoBUzz\\KhonoBuzz\\c#-backend\\MyApi\\MyApi.csproj",
+        "projectPath": "c:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj",
         "packagesPath": "C:\\Users\\Nkosinathi Radebe\\.nuget\\packages\\",
-        "outputPath": "C:\\apps\\khonoBUzz\\KhonoBuzz\\c#-backend\\MyApi\\obj\\",
+        "outputPath": "c:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
+          "c:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\NuGet.Config",
           "C:\\Users\\Nkosinathi Radebe\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
@@ -43,13 +44,49 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
+            "BCrypt.Net-Next": {
+              "target": "Package",
+              "version": "[4.0.3, )"
+            },
+            "CloudinaryDotNet": {
+              "target": "Package",
+              "version": "[1.26.2, )"
+            },
+            "FirebaseAdmin": {
+              "target": "Package",
+              "version": "[3.1.0, )"
+            },
+            "MailKit": {
+              "target": "Package",
+              "version": "[4.8.0, )"
+            },
+            "Microsoft.AspNetCore.Authentication.JwtBearer": {
+              "target": "Package",
+              "version": "[8.0.10, )"
+            },
             "Microsoft.AspNetCore.OpenApi": {
               "target": "Package",
-              "version": "[8.0.25, )"
+              "version": "[8.0.10, )"
+            },
+            "Microsoft.EntityFrameworkCore": {
+              "target": "Package",
+              "version": "[8.0.10, )"
+            },
+            "Npgsql.EntityFrameworkCore.PostgreSQL": {
+              "target": "Package",
+              "version": "[8.0.10, )"
+            },
+            "Serilog.AspNetCore": {
+              "target": "Package",
+              "version": "[8.0.2, )"
             },
             "Swashbuckle.AspNetCore": {
               "target": "Package",
               "version": "[6.6.2, )"
+            },
+            "System.IdentityModel.Tokens.Jwt": {
+              "target": "Package",
+              "version": "[8.5.0, )"
             }
           },
           "imports": [

@@ -5,21 +5,21 @@ namespace MyApi.DTOs.User
     public class UserUpdate
     {
         [StringLength(255)]
-        public string Name { get; set; }
+        public string? Name { get; set; }
 
         [StringLength(255)]
-        public string FirstName { get; set; }
+        public string? FirstName { get; set; }
 
         [StringLength(255)]
-        public string LastName { get; set; }
+        public string? LastName { get; set; }
 
         [StringLength(255)]
-        public string Department { get; set; }
+        public string? Department { get; set; }
 
         [StringLength(255)]
-        public string Designation { get; set; }
+        public string? Designation { get; set; }
 
         [StringLength(255)]
-        public string Role { get; set; }
+        public string? Role { get; set; }
     }
 }

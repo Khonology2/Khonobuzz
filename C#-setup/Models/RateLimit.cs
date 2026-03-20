@@ -8,11 +8,11 @@ namespace MyApi.Models
     {
         [Key]
         [StringLength(255)]
-        public string Id { get; set; }
+        public required string Id { get; set; }
 
         [Required]
         [StringLength(255)]
-        public string Identifier { get; set; }
+        public required string Identifier { get; set; }
 
         public int RequestCount { get; set; } = 0;
 

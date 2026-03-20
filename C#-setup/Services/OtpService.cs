@@ -1,5 +1,4 @@
-using Microsoft.EntityFrameworkCore;
-using MyApi.Data;
+using System.Collections.Concurrent;
 using MyApi.Models;
 using BCrypt.Net;
 
@@ -7,12 +6,13 @@ namespace MyApi.Services
 {
     public class OtpService : IOtpService
     {
-        private readonly ApplicationDbContext _context;
+        // In-memory storage for OTP codes
+        private static readonly ConcurrentDictionary<string, OTPCode> _otpCodes = new();
+
         private readonly IConfiguration _configuration;
 
-        public OtpService(ApplicationDbContext context, IConfiguration configuration)
+        public OtpService(IConfiguration configuration)
         {
-            _context = context;
             _configuration = configuration;
         }
 
@@ -36,20 +36,19 @@ namespace MyApi.Services
                 Attempts = 0
             };
 
-            _context.OTPCodes.Add(otpRecord);
-            await _context.SaveChangesAsync();
+            _otpCodes[email] = otpRecord;
 
             return otpCode; // Return plain OTP for email sending
         }
 
         public async Task<bool> VerifyOtpAsync(string email, string otp)
         {
-            var otpRecord = await _context.OTPCodes
-                .Where(o => o.Email == email && !o.IsUsed)
-                .OrderByDescending(o => o.CreatedAt)
-                .FirstOrDefaultAsync();
+            if (!_otpCodes.TryGetValue(email, out var otpRecord))
+            {
+                return false;
+            }
 
-            if (otpRecord == null || otpRecord.ExpiresAt < DateTime.UtcNow)
+            if (otpRecord.ExpiresAt < DateTime.UtcNow || otpRecord.IsUsed)
             {
                 return false;
             }
@@ -64,7 +63,6 @@ namespace MyApi.Services
             if (!isValid)
             {
                 otpRecord.Attempts++;
-                await _context.SaveChangesAsync();
                 return false;
             }
 
@@ -73,62 +71,49 @@ namespace MyApi.Services
 
         public async Task<bool> IsOtpExpiredAsync(string email)
         {
-            var otpRecord = await _context.OTPCodes
-                .Where(o => o.Email == email && !o.IsUsed)
-                .OrderByDescending(o => o.CreatedAt)
-                .FirstOrDefaultAsync();
+            if (!_otpCodes.TryGetValue(email, out var otpRecord))
+            {
+                return true;
+            }
 
-            return otpRecord == null || otpRecord.ExpiresAt < DateTime.UtcNow;
+            return otpRecord.ExpiresAt < DateTime.UtcNow || otpRecord.IsUsed;
         }
 
         public async Task MarkOtpAsUsedAsync(string email)
         {
-            var otpRecord = await _context.OTPCodes
-                .Where(o => o.Email == email && !o.IsUsed)
-                .OrderByDescending(o => o.CreatedAt)
-                .FirstOrDefaultAsync();
-
-            if (otpRecord != null)
+            if (_otpCodes.TryGetValue(email, out var otpRecord))
             {
                 otpRecord.IsUsed = true;
-                await _context.SaveChangesAsync();
             }
         }
 
         public async Task<int> GetAttemptsAsync(string email)
         {
-            var otpRecord = await _context.OTPCodes
-                .Where(o => o.Email == email && !o.IsUsed)
-                .OrderByDescending(o => o.CreatedAt)
-                .FirstOrDefaultAsync();
-
-            return otpRecord?.Attempts ?? 0;
+            if (_otpCodes.TryGetValue(email, out var otpRecord))
+            {
+                return otpRecord.Attempts;
+            }
+            return 0;
         }
 
         public async Task IncrementAttemptsAsync(string email)
         {
-            var otpRecord = await _context.OTPCodes
-                .Where(o => o.Email == email && !o.IsUsed)
-                .OrderByDescending(o => o.CreatedAt)
-                .FirstOrDefaultAsync();
-
-            if (otpRecord != null)
+            if (_otpCodes.TryGetValue(email, out var otpRecord))
             {
                 otpRecord.Attempts++;
-                await _context.SaveChangesAsync();
             }
         }
 
         private async Task CleanupExpiredOtpsAsync()
         {
-            var expiredOtps = await _context.OTPCodes
-                .Where(o => o.ExpiresAt < DateTime.UtcNow || o.IsUsed)
-                .ToListAsync();
+            var expiredKeys = _otpCodes.Where(kvp =>
+                kvp.Value.ExpiresAt < DateTime.UtcNow || kvp.Value.IsUsed)
+                .Select(kvp => kvp.Key)
+                .ToList();
 
-            if (expiredOtps.Any())
+            foreach (var key in expiredKeys)
             {
-                _context.OTPCodes.RemoveRange(expiredOtps);
-                await _context.SaveChangesAsync();
+                _otpCodes.TryRemove(key, out _);
             }
         }
     }

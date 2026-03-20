@@ -8,14 +8,14 @@ namespace MyApi.Models
     {
         [Key]
         [StringLength(255)]
-        public string Id { get; set; }
+        public required string Id { get; set; }
 
         [Required]
         [StringLength(255)]
-        public string Name { get; set; }
+        public required string Name { get; set; }
 
         [StringLength(500)]
-        public string Description { get; set; }
+        public required string Description { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

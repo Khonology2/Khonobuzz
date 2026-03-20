@@ -8,54 +8,54 @@ namespace MyApi.Models
     {
         [Key]
         [StringLength(255)]
-        public string Id { get; set; }
+        public required string Id { get; set; }
 
         [Required]
         [EmailAddress]
         [StringLength(255)]
-        public string Email { get; set; }
+        public required string Email { get; set; }
 
         [StringLength(255)]
-        public string Name { get; set; }
+        public required string Name { get; set; }
 
         [StringLength(255)]
-        public string FirstName { get; set; }
+        public required string FirstName { get; set; }
 
         [StringLength(255)]
-        public string LastName { get; set; }
+        public required string LastName { get; set; }
 
         [StringLength(255)]
-        public string Role { get; set; }
+        public required string Role { get; set; }
 
         [StringLength(50)]
-        public string Status { get; set; }
+        public required string Status { get; set; }
 
         [StringLength(255)]
-        public string Entity { get; set; }
+        public required string Entity { get; set; }
 
         [StringLength(255)]
-        public string Department { get; set; }
+        public required string Department { get; set; }
 
         [StringLength(255)]
-        public string Designation { get; set; }
+        public required string Designation { get; set; }
 
         [StringLength(255)]
-        public string Manager { get; set; }
+        public required string Manager { get; set; }
 
         [StringLength(500)]
-        public string ModuleAccess { get; set; }
+        public required string ModuleAccess { get; set; }
 
         [StringLength(255)]
-        public string ModuleRole { get; set; }
+        public required string ModuleRole { get; set; }
 
         [StringLength(255)]
-        public string ModuleAccessRole { get; set; }
+        public required string ModuleAccessRole { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation property
-        public virtual Onboarding Onboarding { get; set; }
+        public virtual Onboarding? Onboarding { get; set; }
     }
 }

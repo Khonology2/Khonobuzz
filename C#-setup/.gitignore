@@ -1,0 +1,90 @@
+# Binaries for programs and plugins
+*.exe
+*.exe.config
+*.dll
+*.pdb
+*.xml
+
+# NuGet Packages
+*.nupkg
+**/packages/*
+
+# MSTest test Results
+[TestResults]
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# Visual Studio 2015/2017/2019 cache/options directory
+.vs/
+
+# ASP.NET Core
+appsettings.Development.json
+
+# Bower dependency directory (https://bower.io/)
+bower_components/
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled output
+dist/
+
+# npm stuff
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Visual Studio Code
+.vscode/
+
+# Rider
+.idea/
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# MySQL
+*.ibd
+*.MYD
+*.MYI
+
+# Resharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+# dotCover
+*.dotCover
+
+# dotTrace
+*.dotTrace
+
+# NuGet packages
+*.nupkg
+*.snupkg
+packages/
+
+# Backup files
+*.bak
+
+# User-specific files
+*.user
+*.suo
+
+# Temporary files
+*.tmp
+*.temp

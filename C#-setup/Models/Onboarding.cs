@@ -8,55 +8,56 @@ namespace MyApi.Models
     {
         [Key]
         [StringLength(255)]
-        public string UserId { get; set; }
+        public required string UserId { get; set; }
 
         [StringLength(255)]
-        public string Email { get; set; }
+        public required string Email { get; set; }
 
         [StringLength(255)]
-        public string Name { get; set; }
+        public required string Name { get; set; }
 
         [StringLength(255)]
-        public string Surname { get; set; }
+        public required string Surname { get; set; }
 
         [StringLength(255)]
-        public string FullName { get; set; }
+        public required string FullName { get; set; }
 
         [StringLength(255)]
-        public string Department { get; set; }
+        public required string Department { get; set; }
 
         [StringLength(255)]
-        public string Designation { get; set; }
+        public required string Designation { get; set; }
 
         public DateTime? FirstValid { get; set; }
 
         public DateTime? LastValid { get; set; }
 
         [StringLength(255)]
-        public string OnboardingId { get; set; }
+        public required string OnboardingId { get; set; }
 
         [StringLength(255)]
-        public string StatusId { get; set; }
+        public required string StatusId { get; set; }
 
         [StringLength(255)]
-        public string UpdatedBy { get; set; }
+        public required string UpdatedBy { get; set; }
 
         [StringLength(255)]
-        public string InsertedBy { get; set; }
+        public required string InsertedBy { get; set; }
 
         [StringLength(255)]
-        public string Entity { get; set; }
+        public required string Entity { get; set; }
 
         [StringLength(500)]
-        public string ModuleAccess { get; set; }
+        public required string ModuleAccess { get; set; }
 
         [StringLength(255)]
-        public string ModuleRole { get; set; }
+        public required string ModuleRole { get; set; }
 
         [StringLength(255)]
-        public string ModuleAccessRole { get; set; }
+        public required string ModuleAccessRole { get; set; }
 
-        public string Token { get; set; }
+        [StringLength(255)]
+        public required string Token { get; set; }
 
         public DateTime? TokenUpdatedAt { get; set; }
 
@@ -66,6 +67,6 @@ namespace MyApi.Models
 
         // Navigation property
         [ForeignKey("UserId")]
-        public virtual User User { get; set; }
+        public virtual User? User { get; set; }
     }
 }
