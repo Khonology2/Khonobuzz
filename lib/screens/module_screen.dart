@@ -249,7 +249,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Hub',
                                   ],
                                   buttonText: 'Launch',
-                                  url: 'https://pdh-web-app-4in5.onrender.com',
+                                  url: 'https://personal-development-hub.onrender.com',
                                   moduleKey: 'pdh',
                                 ),
                               );
