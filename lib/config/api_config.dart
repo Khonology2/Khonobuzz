@@ -31,7 +31,7 @@ class ApiConfig {
       if (queryParams['backend'] == 'prod') {
         const hostedBackend = String.fromEnvironment(
           _backendUrlEnv,
-          defaultValue: 'https://khonology-buzz-backend.onrender.com',
+          defaultValue: 'https://khonobuzz-central-hub.onrender.com',
         );
         if (kDebugMode) {
           print(
@@ -57,7 +57,7 @@ class ApiConfig {
       if (host.contains('onrender.com') || host.contains('khonobuzz-web')) {
         const hostedBackend = String.fromEnvironment(
           _backendUrlEnv,
-          defaultValue: 'https://khonology-buzz-backend.onrender.com',
+          defaultValue: 'https://khonobuzz-central-hub.onrender.com',
         );
         if (kDebugMode) {
           print(
@@ -83,7 +83,7 @@ class ApiConfig {
     if (!kDebugMode) {
       final backendUrl = String.fromEnvironment(
         _backendUrlEnv,
-        defaultValue: 'https://khonology-buzz-backend.onrender.com',
+        defaultValue: 'https://khonobuzz-central-hub.onrender.com',
       );
       return backendUrl;
     }
@@ -141,6 +141,7 @@ class ApiConfig {
     }
     return base;
   }
+
   static String get pdhSyncUserEndpoint => '$baseUrl/api/pdh/sync-user';
   static String pdhUpdateUserEndpoint(String uid) =>
       '$baseUrl/api/pdh/update-user/$uid';
