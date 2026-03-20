@@ -363,9 +363,9 @@ if cors_origins_env == '*':
         cors_allow_credentials = True
         info_log(f"Production mode: CORS configured for {len(cors_origins)} origins")
     else:
-        cors_origins = ["*"]
-        cors_allow_credentials = False
-        info_log("Development mode: CORS configured to allow all origins (including localhost)")
+        cors_origins = PRODUCTION_FRONTEND_URLS + LOCALHOST_ORIGINS
+        cors_allow_credentials = True
+        info_log(f"Development mode: CORS configured for {len(cors_origins)} origins")
 else:
     cors_origins = [origin.strip() for origin in cors_origins_env.split(',')]
     for prod_url in PRODUCTION_FRONTEND_URLS:
