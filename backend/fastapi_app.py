@@ -333,6 +333,9 @@ async def startup_warmup():
     except Exception as e:
         error_log(f"Startup warm-up failed: {e}")
 cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
+PRODUCTION_BACKEND_URLS = [
+    'https://khonobuzz-central-hub.onrender.com',
+]
 PRODUCTION_FRONTEND_URLS = [
     'https://khono-buzz-central-hub-web.onrender.com',
 ]
