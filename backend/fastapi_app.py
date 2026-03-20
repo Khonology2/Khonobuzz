@@ -252,14 +252,16 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
     )
     error_log(error_msg)
     raise FileNotFoundError(error_msg)
+# Initialize PDH Firebase (optional)
+pdh_db = None
 try:
     pdh_cred = load_firebase_credentials('PDH_FIREBASE_CREDENTIALS', 'pdh-fe6eb-firebase-adminsdk-fbsvc-6fbc402974.json')
     pdh_app = initialize_app(pdh_cred, name='pdhApp')
     pdh_db = firestore.client(app=pdh_app)
     info_log("PDH Firebase credentials loaded successfully")
 except Exception as e:
-    error_log(f"Failed to initialize PDH Firebase: {e}")
-    raise
+    error_log(f"Failed to initialize PDH Firebase (continuing without it): {e}")
+    info_log("Backend will continue without PDH Firebase functionality")
 
 from fastapi import Body
 class UserRegister(BaseModel):
@@ -607,8 +609,11 @@ async def pdh_sync_user(data: dict):
                     print(f"[DEBUG] Token generated during PDH sync for user_id: {uid} with roles: {roles}")
                 except Exception as token_error:
                     print(f"[ERROR] Failed to generate token during PDH sync: {token_error}")
-        pdh_db.collection('users').document(uid).set(user_data, merge=True)
-        pdh_db.collection('onboarding').document(uid).set(onboarding_data, merge=True)
+        if pdh_db:
+            pdh_db.collection('users').document(uid).set(user_data, merge=True)
+            pdh_db.collection('onboarding').document(uid).set(onboarding_data, merge=True)
+        else:
+            print("[WARNING] PDH Firebase not initialized, skipping sync")
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH sync successful"})
     except Exception as e:
         print(f"[ERROR] During PDH sync: {e}")
@@ -628,10 +633,10 @@ async def pdh_update_user(uid: str, data: dict):
         elif user_fields and 'moduleAccessRole' in user_fields:
             should_regenerate_token = True
             new_module_access_role = user_fields.get('moduleAccessRole', '')
-        if user_fields:
+        if pdh_db and user_fields:
             pdh_db.collection('users').document(uid).set(user_fields, merge=True)
             user_email = user_fields.get('email', '')
-        if onboarding_fields:
+        if pdh_db and onboarding_fields:
             if not user_email:
                 user_email = onboarding_fields.get('email', '')
             if user_email and not onboarding_fields.get('email'):
@@ -656,7 +661,8 @@ async def pdh_update_user(uid: str, data: dict):
                     print(f"[DEBUG] Token regenerated during PDH update for user_id: {uid} with roles: {roles}")
                 except Exception as token_error:
                     print(f"[ERROR] Failed to regenerate token during PDH update: {token_error}")
-            pdh_db.collection('onboarding').document(uid).set(onboarding_fields, merge=True)
+            if pdh_db:
+                pdh_db.collection('onboarding').document(uid).set(onboarding_fields, merge=True)
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH update successful"})
     except Exception as e:
         print(f"[ERROR] During PDH update: {e}")
@@ -1137,18 +1143,21 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
                         onboarding_doc.reference.update(update_data)
                         print(f"[DEBUG] Token regenerated and updated in main onboarding collection for user_id: {user_id}")
                         # Sync new token to PDH
-                        try:
-                            pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
-                            pdh_onboarding_ref.set({
-                                'email': user_email,
-                                'token': encrypted_token,
-                                'fullName': full_name,
-                                'token_updated_at': datetime.utcnow(),
-                                'updated_at': datetime.utcnow(),
-                            }, merge=True)
-                            print(f"[DEBUG] New token synced to PDH onboarding collection for user_id: {user_id}")
-                        except Exception as pdh_sync_error:
-                            print(f"[ERROR] Failed to sync new token to PDH: {pdh_sync_error}")
+                        if pdh_db:
+                            try:
+                                pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
+                                pdh_onboarding_ref.set({
+                                    'email': user_email,
+                                    'token': encrypted_token,
+                                    'fullName': full_name,
+                                    'token_updated_at': datetime.utcnow(),
+                                    'updated_at': datetime.utcnow(),
+                                }, merge=True)
+                                print(f"[DEBUG] New token synced to PDH onboarding collection for user_id: {user_id}")
+                            except Exception as pdh_sync_error:
+                                print(f"[ERROR] Failed to sync new token to PDH: {pdh_sync_error}")
+                        else:
+                            print("[WARNING] PDH Firebase not initialized, skipping token sync")
                     except Exception as token_error:
                         print(f"[ERROR] Failed to regenerate token: {token_error}")
         updated_doc = user_ref.get()
@@ -1214,32 +1223,34 @@ async def delete_user(user_id: str):
         if onboarding_doc.exists:
             onboarding_doc_ref.delete()
             print(f"[DEBUG] Deleted user {user_id} from onboarding collection (by document ID)")
-        try:
-            pdh_user_ref = pdh_db.collection('users').document(user_id)
-            pdh_user_doc = pdh_user_ref.get()
-            if pdh_user_doc.exists:
-                pdh_user_ref.delete()
-                print(f"[DEBUG] Deleted user {user_id} from PDH users collection")
-        except Exception as pdh_error:
-            print(f"[WARNING] Failed to delete from PDH users collection: {pdh_error}")
-        try:
-            pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
-            pdh_onboarding_doc = pdh_onboarding_ref.get()
-            if pdh_onboarding_doc.exists:
-                pdh_onboarding_ref.delete()
-                print(f"[DEBUG] Deleted user {user_id} from PDH onboarding collection")
-            pdh_onboarding_query = (
-                pdh_db.collection('onboarding')
-                .where('user_id', '==', user_id)
-                .limit(1)
-                .stream()
-            )
-            for pdh_onboarding_doc in pdh_onboarding_query:
-                pdh_onboarding_doc.reference.delete()
-                print(f"[DEBUG] Deleted user {user_id} from PDH onboarding collection (by query)")
-                break
-        except Exception as pdh_error:
-            print(f"[WARNING] Failed to delete from PDH onboarding collection: {pdh_error}")
+        if pdh_db:
+            try:
+                pdh_user_ref = pdh_db.collection('users').document(user_id)
+                pdh_user_doc = pdh_user_ref.get()
+                if pdh_user_doc.exists:
+                    pdh_user_ref.delete()
+                    print(f"[DEBUG] Deleted user {user_id} from PDH users collection")
+            except Exception as pdh_error:
+                print(f"[WARNING] Failed to delete from PDH users collection: {pdh_error}")
+        if pdh_db:
+            try:
+                pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
+                pdh_onboarding_doc = pdh_onboarding_ref.get()
+                if pdh_onboarding_doc.exists:
+                    pdh_onboarding_ref.delete()
+                    print(f"[DEBUG] Deleted user {user_id} from PDH onboarding collection")
+                pdh_onboarding_query = (
+                    pdh_db.collection('onboarding')
+                    .where('user_id', '==', user_id)
+                    .limit(1)
+                    .stream()
+                )
+                for pdh_onboarding_doc in pdh_onboarding_query:
+                    pdh_onboarding_doc.reference.delete()
+                    print(f"[DEBUG] Deleted user {user_id} from PDH onboarding collection (by query)")
+                    break
+            except Exception as pdh_error:
+                print(f"[WARNING] Failed to delete from PDH onboarding collection: {pdh_error}")
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
@@ -1612,19 +1623,20 @@ async def login_user(user_login: UserLogin, request: Request):
                     db.collection('onboarding').add(onboarding_data)
                 except Exception:
                     pass
-            try:
-                pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
-                pdh_data = {
-                    'email': user_data['email'],
-                    'token': encrypted_token,
-                    'fullName': full_name,
-                    'token_updated_at': datetime.utcnow(),
-                }
-                if not is_special_session:
-                    pdh_data['updated_at'] = datetime.utcnow()
-                pdh_onboarding_ref.set(pdh_data, merge=True)
-            except Exception:
-                pass
+            if pdh_db:
+                try:
+                    pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
+                    pdh_data = {
+                        'email': user_data['email'],
+                        'token': encrypted_token,
+                        'fullName': full_name,
+                        'token_updated_at': datetime.utcnow(),
+                    }
+                    if not is_special_session:
+                        pdh_data['updated_at'] = datetime.utcnow()
+                    pdh_onboarding_ref.set(pdh_data, merge=True)
+                except Exception:
+                    pass
         module_access_raw = user_data.get('moduleAccess') or onboarding_data.get('moduleAccess', '')
         final_module_access = derive_module_access_from_role(module_access_raw, module_access_role)
         response_name = full_name or user_data.get('name', '')
@@ -1750,18 +1762,19 @@ async def get_user_token(
                     }
                     db.collection('onboarding').add(onboarding_data)
                     print(f"[DEBUG] Created onboarding document with token for user_id: {user_id}")
-                try:
-                    pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
-                    pdh_onboarding_ref.set({
-                        'email': user_data['email'],
-                        'token': encrypted_token,
-                        'fullName': full_name,
-                        'token_updated_at': datetime.utcnow(),
-                        'updated_at': datetime.utcnow(),
-                    }, merge=True)
-                    print(f"[DEBUG] Token synced to PDH onboarding collection for user_id: {user_id}")
-                except Exception as pdh_sync_error:
-                    print(f"[ERROR] Failed to sync token to PDH: {pdh_sync_error}")
+                if pdh_db:
+                    try:
+                        pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
+                        pdh_onboarding_ref.set({
+                            'email': user_data['email'],
+                            'token': encrypted_token,
+                            'fullName': full_name,
+                            'token_updated_at': datetime.utcnow(),
+                            'updated_at': datetime.utcnow(),
+                        }, merge=True)
+                        print(f"[DEBUG] Token synced to PDH onboarding collection for user_id: {user_id}")
+                    except Exception as pdh_sync_error:
+                        print(f"[ERROR] Failed to sync token to PDH: {pdh_sync_error}")
         except Exception as token_error:
             print(f"[ERROR] Failed to generate token: {token_error}")
             return JSONResponse(status_code=500, content={"error": "Failed to generate token"})
