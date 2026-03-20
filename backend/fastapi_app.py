@@ -334,9 +334,7 @@ async def startup_warmup():
         error_log(f"Startup warm-up failed: {e}")
 cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
 PRODUCTION_FRONTEND_URLS = [
-    'https://khonobuzz-web-app.onrender.com',
-    'https://khonobuzz-web-app-llfi.onrender.com',
-    'https://pdh-web-app.onrender.com',
+    'https://khono-buzz-central-hub-web.onrender.com',
 ]
 is_production = (
     os.environ.get('RENDER') is not None
