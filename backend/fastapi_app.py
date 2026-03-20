@@ -431,7 +431,6 @@ def _cors_headers_for_request(request: Request) -> dict:
         }
     return {}
 
-
 @app.get("/api/version")
 async def get_version(request: Request):
     """
