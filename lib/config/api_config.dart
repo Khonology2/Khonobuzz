@@ -31,7 +31,7 @@ class ApiConfig {
       if (queryParams['backend'] == 'prod') {
         const hostedBackend = String.fromEnvironment(
           _backendUrlEnv,
-          defaultValue: 'https://khonobuzz-central-hub.onrender.com',
+          defaultValue: 'https://khono-buzz-central-hub-web.onrender.com',
         );
         if (kDebugMode) {
           print(
@@ -53,18 +53,16 @@ class ApiConfig {
         return localBackend;
       }
 
-      // Hosted web builds (onrender) use the hosted backend
+      // Hosted web builds (onrender): use same origin when frontend & backend
+      // are deployed together at khono-buzz-central-hub-web.onrender.com
       if (host.contains('onrender.com') || host.contains('khonobuzz-web')) {
-        const hostedBackend = String.fromEnvironment(
-          _backendUrlEnv,
-          defaultValue: 'https://khonobuzz-central-hub.onrender.com',
-        );
+        final sameOriginBackend = Uri.base.origin;
         if (kDebugMode) {
           print(
-            '[ApiConfig] Web: detected hosted environment, using backend: $hostedBackend',
+            '[ApiConfig] Web: detected hosted environment, using backend: $sameOriginBackend',
           );
         }
-        return hostedBackend;
+        return sameOriginBackend;
       }
 
       // Default for local web development is the local backend
@@ -83,7 +81,7 @@ class ApiConfig {
     if (!kDebugMode) {
       final backendUrl = String.fromEnvironment(
         _backendUrlEnv,
-        defaultValue: 'https://khonobuzz-central-hub.onrender.com',
+        defaultValue: 'https://khono-buzz-central-hub-web.onrender.com',
       );
       return backendUrl;
     }
@@ -124,7 +122,7 @@ class ApiConfig {
   static String get corsOrigin {
     return String.fromEnvironment(
       _corsOriginEnv,
-      defaultValue: 'https://khonobuzz-web-app-llfi.onrender.com',
+      defaultValue: 'https://khono-buzz-central-hub-web.onrender.com',
     );
   }
 

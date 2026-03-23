@@ -56,23 +56,38 @@ class UserProvider extends ChangeNotifier {
   }
 
   Future<List<dynamic>> _fetchUsersPayload({
-    Duration timeout = const Duration(seconds: 20),
+    Duration timeout = const Duration(seconds: 90),
+    int retries = 2,
   }) async {
-    final response = await http
-        .get(Uri.parse(ApiConfig.usersEndpoint))
-        .timeout(
-          timeout,
-          onTimeout: () {
-            throw Exception('Request timeout. Please check your connection.');
-          },
-        );
+    // Render free tier cold start can take 50+ seconds; use 90s timeout and retries
+    Exception? lastError;
+    for (var attempt = 0; attempt <= retries; attempt++) {
+      try {
+        final response = await http
+            .get(Uri.parse(ApiConfig.usersEndpoint))
+            .timeout(
+              timeout,
+              onTimeout: () {
+                throw Exception(
+                  'Request timeout. The server may be waking up—please try again.',
+                );
+              },
+            );
 
-    if (response.statusCode != 200) {
-      throw Exception('Failed to fetch users: ${response.statusCode}');
+        if (response.statusCode != 200) {
+          throw Exception('Failed to fetch users: ${response.statusCode}');
+        }
+
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        return decoded['users'] as List<dynamic>? ?? const [];
+      } catch (e) {
+        lastError = e is Exception ? e : Exception(e.toString());
+        if (attempt < retries) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+        }
+      }
     }
-
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    return decoded['users'] as List<dynamic>? ?? const [];
+    throw lastError ?? Exception('Failed to fetch users');
   }
 
   Future<void> prefetchUsersForLogin({bool forceRefresh = false}) async {

@@ -340,6 +340,8 @@ PRODUCTION_BACKEND_URLS = [
 ]
 PRODUCTION_FRONTEND_URLS = [
     'https://khono-buzz-central-hub-web.onrender.com',
+    'https://khonobuzz-web-app-llfi.onrender.com',
+    'https://khonology-buzz-build.onrender.com',
 ]
 is_production = (
     os.environ.get('RENDER') is not None
@@ -382,8 +384,10 @@ else:
     info_log(
         f"CORS configured with {len(cors_origins)} origins from CORS_ORIGINS env var",
     )
-# Allow localhost with any port (prod and dev) so Flutter web dev works
-cors_origin_regex = LOCALHOST_ORIGIN_REGEX
+# Allow localhost with any port (prod and dev) so Flutter web dev works.
+# Also allow any Render subdomain so frontends deployed at custom URLs work.
+RENDER_ORIGIN_REGEX = r"https://[a-z0-9-]+\.onrender\.com"
+cors_origin_regex = "|".join([LOCALHOST_ORIGIN_REGEX, RENDER_ORIGIN_REGEX])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,

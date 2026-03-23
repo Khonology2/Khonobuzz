@@ -404,6 +404,43 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       );
     }
 
+    if (userProvider.hasError && userProvider.users.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_off, size: 48, color: Colors.red.shade300),
+              const SizedBox(height: 16.0),
+              Text(
+                userProvider.errorMessage ??
+                    'Failed to load users. The server may be waking up.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14.0,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              const SizedBox(height: 24.0),
+              FilledButton.icon(
+                onPressed: () {
+                  SoundSystem.playButtonClick();
+                  userProvider.fetchUsers(forceRefresh: true);
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry', style: TextStyle(fontFamily: 'Poppins')),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFC10D00),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (_filteredUsers.isEmpty) {
       return const Center(
         child: Text(
