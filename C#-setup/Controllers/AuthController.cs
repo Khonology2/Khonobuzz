@@ -13,20 +13,34 @@ namespace MyApi.Controllers
         private readonly IAuthService _authService;
         private readonly IOtpService _otpService;
         private readonly IRateLimiterService _rateLimiter;
+        private readonly IFirestoreService _firestore;
+        private readonly ITokenService _tokenService;
+        private readonly IPdhFirestoreService? _pdhFirestore;
 
         public AuthController(
             IAuthService authService,
             IOtpService otpService,
-            IRateLimiterService rateLimiter)
+            IRateLimiterService rateLimiter,
+            IFirestoreService firestore,
+            ITokenService tokenService,
+            IPdhFirestoreService? pdhFirestore = null)
         {
             _authService = authService;
             _otpService = otpService;
             _rateLimiter = rateLimiter;
+            _firestore = firestore;
+            _tokenService = tokenService;
+            _pdhFirestore = pdhFirestore;
         }
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] UserRegister request)
         {
+            var email = request.Email?.Trim() ?? "";
+            if (!email.EndsWith("@khonology.com", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { error = "Only Khonology work emails (@khonology.com) are allowed" });
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(request.Name?.Trim()))
+                return BadRequest(new { error = "Email, password, and name required" });
 
             try
             {
@@ -38,24 +52,35 @@ namespace MyApi.Controllers
                     request.Department,
                     request.Designation);
 
-                var response = new
-                {
-                    user.Id,
-                    user.Email,
-                    user.Name,
-                    user.Status,
-                    Message = "Registration successful. Please check your email for OTP."
-                };
+                var roles = ParseModuleAccessRoleToRoles("");
+                var plainToken = _tokenService.GenerateToken(user, roles);
+                var encryptedToken = _tokenService.EncryptToken(plainToken);
 
-                return Ok(response);
+                var obUpdates = new Dictionary<string, object>
+                {
+                    ["token"] = encryptedToken,
+                    ["token_updated_at"] = DateTime.UtcNow
+                };
+                await _firestore.UpdateOnboardingByUserIdAsync(user.Id, obUpdates);
+
+                return StatusCode(201, new
+                {
+                    message = "User created successfully",
+                    user = new { id = user.Id, email = user.Email, name = user.Name ?? "", role = user.Role ?? "Staff" },
+                    token = encryptedToken
+                });
+            }
+            catch (InvalidOperationException ex) when (ex.Message?.Contains("already exists", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return StatusCode(409, new { error = "User already exists" });
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { Message = ex.Message });
+                return BadRequest(new { error = ex.Message });
             }
             catch (Exception)
             {
-                return StatusCode(500, new { Message = "An error occurred during registration." });
+                return StatusCode(500, new { error = "An error occurred during registration." });
             }
         }
 
@@ -93,61 +118,160 @@ namespace MyApi.Controllers
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] UserLogin request)
+        [AllowAnonymous]
+        public async Task<IActionResult> Login([FromBody] UserLogin request, [FromHeader(Name = "X-Session-Type")] string? sessionType = null)
         {
-            // Rate limiting
-            if (await _rateLimiter.IsRateLimitedAsync($"login_{request.Email}"))
-            {
-                return StatusCode(429, new { Message = "Too many login attempts. Please try again later." });
-            }
+            var email = request.Email?.Trim() ?? "";
+            if (string.IsNullOrEmpty(email))
+                return BadRequest(new { error = "Email is required" });
+            if (!email.EndsWith("@khonology.com", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { error = "Only Khonology work emails (@khonology.com) are allowed" });
 
+            if (await _rateLimiter.IsRateLimitedAsync($"login_{email}"))
+                return StatusCode(429, new { error = "Too many login attempts. Please try again later." });
+
+            var normalizedEmail = email.ToLowerInvariant();
+            var isSpecialSession = "special".Equals(sessionType?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+            var user = await _firestore.GetUserByEmailAsync(normalizedEmail);
+            if (user == null)
+                return NotFound(new { error = "User not found" });
+
+            var userId = user.GetValueOrDefault("id")?.ToString() ?? "";
+            var ob = await _firestore.GetOnboardingByUserIdAsync(userId);
+            var userPayload = BuildLoginUserResponse(user, ob, isSpecialSession);
+
+            var status = user.GetValueOrDefault("status")?.ToString() ?? "Active";
+            if (!isSpecialSession && !"Active".Equals(status, StringComparison.OrdinalIgnoreCase))
+                return StatusCode(403, new { error = $"Your account status is '{status}'. Please wait for admin approval to activate your account.", status });
+
+            var modRole = user.GetValueOrDefault("moduleAccessRole")?.ToString() ?? ob?.GetValueOrDefault("moduleAccessRole")?.ToString() ?? "";
+            var roles = ParseModuleAccessRoleToRoles(modRole);
+            if (isSpecialSession) roles = new List<string> { "admin" };
+
+            var fullName = (userPayload["name"] ?? "").ToString();
+            var plainToken = _tokenService.GenerateTokenFromDict(userId, normalizedEmail, fullName, roles: roles);
+            var encryptedToken = _tokenService.EncryptToken(plainToken);
 
             try
             {
-                var isValid = await _authService.VerifyOtpAndLoginAsync(request.Email, request.Otp);
-                if (!isValid)
-                {
-                    await _rateLimiter.RecordRequestAsync($"login_{request.Email}");
-                    return BadRequest(new { Message = "Invalid OTP or user not found." });
-                }
-
-                var user = await _authService.GetUserByEmailAsync(request.Email);
-                if (user == null)
-                {
-                    return BadRequest(new { Message = "User not found." });
-                }
-
-                // Generate JWT token
-                var tokenService = HttpContext.RequestServices.GetService<ITokenService>();
-                if (tokenService == null)
-                {
-                    return StatusCode(500, new { Message = "Token service unavailable." });
-                }
-                var token = tokenService.GenerateToken(user);
-
-                var response = new
-                {
-                    Token = token,
-                    User = new
-                    {
-                        user.Id,
-                        user.Email,
-                        user.Name,
-                        user.FirstName,
-                        user.LastName,
-                        user.Department,
-                        user.Designation,
-                        user.Status
-                    },
-                    Message = "Login successful."
-                };
-
-                return Ok(response);
+                await _firestore.UpdateUserAsync(userId, new Dictionary<string, object> { ["lastSignInAt"] = DateTime.UtcNow });
             }
-            catch (Exception)
+            catch { }
+            try
             {
-                return StatusCode(500, new { Message = "Login failed." });
+                var obUpdates = new Dictionary<string, object>
+                {
+                    ["token"] = encryptedToken,
+                    ["token_updated_at"] = DateTime.UtcNow,
+                    ["fullName"] = fullName,
+                    ["email"] = normalizedEmail
+                };
+                if (!isSpecialSession) obUpdates["updated_at"] = DateTime.UtcNow;
+                await _firestore.UpdateOnboardingByUserIdAsync(userId, obUpdates);
             }
+            catch { }
+            if (_pdhFirestore?.IsConfigured == true)
+            {
+                try
+                {
+                    await _pdhFirestore.SetOnboardingAsync(userId, new Dictionary<string, object>
+                    {
+                        ["email"] = normalizedEmail,
+                        ["token"] = encryptedToken,
+                        ["fullName"] = fullName,
+                        ["token_updated_at"] = DateTime.UtcNow,
+                        ["updated_at"] = DateTime.UtcNow
+                    });
+                }
+                catch { }
+            }
+
+            return Ok(new { message = "Login successful", user = userPayload, token = encryptedToken });
+        }
+
+        [HttpGet("token")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetToken([FromQuery] string email, [FromQuery] string? module = null)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+                return BadRequest(new { error = "email is required" });
+
+            var user = await _firestore.GetUserByEmailAsync(email.Trim().ToLowerInvariant());
+            if (user == null)
+                return NotFound(new { error = "User not found" });
+
+            var userId = user.GetValueOrDefault("id")?.ToString() ?? "";
+            var ob = await _firestore.GetOnboardingByUserIdAsync(userId);
+            var modRole = user.GetValueOrDefault("moduleAccessRole")?.ToString() ?? ob?.GetValueOrDefault("moduleAccessRole")?.ToString() ?? "";
+            var firstName = ob?.GetValueOrDefault("firstName")?.ToString() ?? ob?.GetValueOrDefault("name")?.ToString() ?? user.GetValueOrDefault("firstName")?.ToString() ?? "";
+            var lastName = ob?.GetValueOrDefault("lastName")?.ToString() ?? ob?.GetValueOrDefault("surname")?.ToString() ?? user.GetValueOrDefault("lastName")?.ToString() ?? "";
+            var fullName = $"{firstName} {lastName}".Trim();
+            if (string.IsNullOrEmpty(fullName)) fullName = user.GetValueOrDefault("name")?.ToString() ?? "";
+
+            var isArw = module != null && new[] { "recruitment", "arw" }.Contains(module.Trim().ToLowerInvariant());
+            var roles = isArw ? ParseModuleAccessRoleToArwRoles(modRole) : ParseModuleAccessRoleToRoles(modRole);
+
+            var plainToken = _tokenService.GenerateTokenFromDict(userId, user.GetValueOrDefault("email")?.ToString() ?? "", fullName, roles: roles);
+            var encryptedToken = _tokenService.EncryptToken(plainToken);
+
+            if (!isArw)
+            {
+                try
+                {
+                    var obUpdates = new Dictionary<string, object> { ["token"] = encryptedToken, ["token_updated_at"] = DateTime.UtcNow, ["fullName"] = fullName, ["email"] = user.GetValueOrDefault("email") ?? "", ["updated_at"] = DateTime.UtcNow };
+                    await _firestore.UpdateOnboardingByUserIdAsync(userId, obUpdates);
+                }
+                catch { }
+                if (_pdhFirestore?.IsConfigured == true)
+                {
+                    try
+                    {
+                        await _pdhFirestore.SetOnboardingAsync(userId, new Dictionary<string, object> { ["email"] = user.GetValueOrDefault("email"), ["token"] = encryptedToken, ["fullName"] = fullName, ["token_updated_at"] = DateTime.UtcNow, ["updated_at"] = DateTime.UtcNow });
+                    }
+                    catch { }
+                }
+            }
+
+            return Ok(new { token = encryptedToken, email = user.GetValueOrDefault("email") ?? "", moduleAccessRole = modRole });
+        }
+
+        private static Dictionary<string, object> BuildLoginUserResponse(Dictionary<string, object> user, Dictionary<string, object>? ob, bool isSpecialSession)
+        {
+            var uid = user.GetValueOrDefault("id")?.ToString() ?? "";
+            var firstName = ob?.GetValueOrDefault("firstName")?.ToString() ?? ob?.GetValueOrDefault("name")?.ToString() ?? user.GetValueOrDefault("firstName")?.ToString() ?? "";
+            var lastName = ob?.GetValueOrDefault("lastName")?.ToString() ?? ob?.GetValueOrDefault("surname")?.ToString() ?? user.GetValueOrDefault("lastName")?.ToString() ?? "";
+            var fullName = $"{firstName} {lastName}".Trim();
+            if (string.IsNullOrEmpty(fullName)) fullName = user.GetValueOrDefault("name")?.ToString() ?? "";
+            var modAccess = user.GetValueOrDefault("moduleAccess")?.ToString() ?? ob?.GetValueOrDefault("moduleAccess")?.ToString() ?? "";
+            var modRole = user.GetValueOrDefault("moduleAccessRole")?.ToString() ?? ob?.GetValueOrDefault("moduleAccessRole")?.ToString() ?? "";
+            if (string.IsNullOrEmpty(modAccess) && !string.IsNullOrEmpty(modRole) && modRole.Contains("PDH", StringComparison.OrdinalIgnoreCase))
+                modAccess = "Personal Development Hub";
+            return new Dictionary<string, object>
+            {
+                ["id"] = uid,
+                ["email"] = user.GetValueOrDefault("email") ?? "",
+                ["name"] = fullName,
+                ["role"] = isSpecialSession ? "Admin" : (user.GetValueOrDefault("role")?.ToString() ?? "Staff"),
+                ["status"] = user.GetValueOrDefault("status") ?? "Active",
+                ["moduleAccess"] = modAccess,
+                ["moduleAccessRole"] = modRole,
+                ["profileImageUrl"] = ob?.GetValueOrDefault("profileImageUrl")?.ToString() ?? "",
+                ["profileImagePublicId"] = ob?.GetValueOrDefault("profileImagePublicId")?.ToString() ?? ""
+            };
+        }
+
+        private static List<string> ParseModuleAccessRoleToRoles(string moduleAccessRole)
+        {
+            if (string.IsNullOrWhiteSpace(moduleAccessRole)) return new List<string>();
+            return moduleAccessRole.Split(',').Select(r => r.Trim()).Where(r => r.Length > 0).ToList();
+        }
+
+        private static List<string> ParseModuleAccessRoleToArwRoles(string moduleAccessRole)
+        {
+            if (string.IsNullOrWhiteSpace(moduleAccessRole)) return new List<string>();
+            const string prefix = "Automated Recruitment Workflow - ";
+            return moduleAccessRole.Split(',').Select(p => p.Trim()).Where(p => p.StartsWith(prefix)).Select(p => "ARW - " + p[prefix.Length..].Trim()).Where(r => r.Length > 5).ToList();
         }
 
         [HttpPost("otp/verify")]

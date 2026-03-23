@@ -1,7 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
+using Cryptography;
 using Microsoft.IdentityModel.Tokens;
 using MyApi.Models;
 
@@ -16,22 +16,58 @@ namespace MyApi.Services
             _configuration = configuration;
         }
 
-        public string GenerateToken(User user)
+        private string GetEncryptionKey()
         {
-            var claims = new[]
+            var key = Environment.GetEnvironmentVariable("ENCRYPTION_KEY")?.Trim()
+                ?? _configuration["Encryption:Key"]?.Trim();
+            if (string.IsNullOrEmpty(key))
+                throw new InvalidOperationException("ENCRYPTION_KEY or Encryption:Key not configured");
+            return key;
+        }
+
+        public string GenerateToken(User user, IReadOnlyList<string>? roles = null)
+        {
+            var claimsList = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim(JwtRegisteredClaimNames.Name, user.Name),
+                new Claim(JwtRegisteredClaimNames.Name, user.Name ?? ""),
                 new Claim("department", user.Department ?? ""),
                 new Claim("designation", user.Designation ?? ""),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
+            if (roles != null && roles.Count > 0)
+            {
+                foreach (var r in roles)
+                    claimsList.Add(new Claim(ClaimTypes.Role, r));
+            }
+            return CreateToken(claimsList);
+        }
 
+        public string GenerateTokenFromDict(string id, string email, string name, string department = "", string designation = "", IReadOnlyList<string>? roles = null)
+        {
+            var claimsList = new List<Claim>
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, id),
+                new Claim(JwtRegisteredClaimNames.Email, email),
+                new Claim(JwtRegisteredClaimNames.Name, name ?? ""),
+                new Claim("department", department ?? ""),
+                new Claim("designation", designation ?? ""),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            };
+            if (roles != null && roles.Count > 0)
+            {
+                foreach (var r in roles)
+                    claimsList.Add(new Claim(ClaimTypes.Role, r));
+            }
+            return CreateToken(claimsList);
+        }
+
+        private string CreateToken(List<Claim> claims)
+        {
             var secretKey = _configuration["Jwt:SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
             var expirationHours = _configuration.GetValue<int>("Jwt:ExpirationHours", 24);
             var token = new JwtSecurityToken(
                 issuer: null,
@@ -39,14 +75,36 @@ namespace MyApi.Services
                 claims: claims,
                 expires: DateTime.UtcNow.AddHours(expirationHours),
                 signingCredentials: creds);
-
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        public string EncryptToken(string plainJwt)
+        {
+            var key = GetEncryptionKey();
+            return Fernet.Encrypt(key, plainJwt);
+        }
+
+        public string DecryptToken(string encryptedToken)
+        {
+            var key = GetEncryptionKey();
+            return Fernet.Decrypt(key, encryptedToken);
+        }
+
+        public bool IsEncryptedToken(string token)
+        {
+            if (string.IsNullOrEmpty(token)) return false;
+            return token.StartsWith("gAAAA", StringComparison.Ordinal) || !token.Contains('.');
         }
 
         public string? GetUserIdFromToken(string token)
         {
             try
             {
+                var jwt = token;
+                if (IsEncryptedToken(token))
+                {
+                    try { jwt = DecryptToken(token); } catch { return null; }
+                }
                 var tokenHandler = new JwtSecurityTokenHandler();
                 var secretKey = _configuration["Jwt:SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
                 var key = Encoding.UTF8.GetBytes(secretKey);
@@ -61,7 +119,7 @@ namespace MyApi.Services
                     ClockSkew = TimeSpan.Zero
                 };
 
-                var principal = tokenHandler.ValidateToken(token, validationParameters, out _);
+                var principal = tokenHandler.ValidateToken(jwt, validationParameters, out _);
                 var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier) ??
                                  principal.FindFirst(JwtRegisteredClaimNames.Sub);
 
@@ -73,48 +131,14 @@ namespace MyApi.Services
             }
         }
 
-        public async Task<string> EncryptTokenAsync(string token)
+        public Task<string> EncryptTokenAsync(string token)
         {
-            var key = _configuration["Encryption:Key"];
-            if (string.IsNullOrEmpty(key))
-            {
-                throw new InvalidOperationException("Encryption key not configured");
-            }
-
-            using var aes = Aes.Create();
-            aes.Key = Encoding.UTF8.GetBytes(key.PadRight(32).Substring(0, 32));
-            aes.IV = new byte[16]; // Use zero IV for simplicity, in production use random IV
-
-            using var encryptor = aes.CreateEncryptor();
-            using var ms = new MemoryStream();
-            using var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write);
-            using var sw = new StreamWriter(cs);
-
-            await sw.WriteAsync(token);
-            await sw.FlushAsync();
-            cs.FlushFinalBlock();
-
-            return Convert.ToBase64String(ms.ToArray());
+            return Task.FromResult(EncryptToken(token));
         }
 
-        public async Task<string> DecryptTokenAsync(string encryptedToken)
+        public Task<string> DecryptTokenAsync(string encryptedToken)
         {
-            var key = _configuration["Encryption:Key"];
-            if (string.IsNullOrEmpty(key))
-            {
-                throw new InvalidOperationException("Encryption key not configured");
-            }
-
-            using var aes = Aes.Create();
-            aes.Key = Encoding.UTF8.GetBytes(key.PadRight(32).Substring(0, 32));
-            aes.IV = new byte[16];
-
-            using var decryptor = aes.CreateDecryptor();
-            using var ms = new MemoryStream(Convert.FromBase64String(encryptedToken));
-            using var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read);
-            using var sr = new StreamReader(cs);
-
-            return await sr.ReadToEndAsync();
+            return Task.FromResult(DecryptToken(encryptedToken));
         }
     }
 }

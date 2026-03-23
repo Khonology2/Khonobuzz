@@ -8,8 +8,6 @@ namespace MyApi.DTOs.Auth
         [EmailAddress]
         public required string Email { get; set; }
 
-        [Required]
-        [StringLength(10)]
-        public required string Otp { get; set; }
+        public string? Otp { get; set; }
     }
 }

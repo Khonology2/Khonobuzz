@@ -1,113 +1,136 @@
-using System.Collections.Concurrent;
 using MyApi.Models;
 
 namespace MyApi.Services
 {
     public class AuthService : IAuthService
     {
-        // In-memory storage for demonstration - replace with proper persistence as needed
-        private static readonly ConcurrentDictionary<string, User> _users = new();
-        private static readonly ConcurrentDictionary<string, Onboarding> _onboardings = new();
-
         private readonly IOtpService _otpService;
         private readonly ITokenService _tokenService;
         private readonly IFirebaseService _firebaseService;
+        private readonly IFirestoreService _firestore;
         private readonly IEmailService _emailService;
 
         public AuthService(
             IOtpService otpService,
             ITokenService tokenService,
             IFirebaseService firebaseService,
+            IFirestoreService firestore,
             IEmailService emailService)
         {
             _otpService = otpService;
             _tokenService = tokenService;
             _firebaseService = firebaseService;
+            _firestore = firestore;
             _emailService = emailService;
         }
 
         public async Task<User> RegisterAsync(string email, string name, string? firstName = null, string? lastName = null, string? department = null, string? designation = null)
         {
-            if (_users.Values.Any(u => u.Email == email))
-            {
+            var normalized = email.Trim().ToLowerInvariant();
+            var existing = await _firestore.GetUserByEmailAsync(normalized);
+            if (existing != null)
                 throw new InvalidOperationException("User already exists");
-            }
 
-            var user = new User
+            var fullName = $"{firstName ?? ""} {lastName ?? ""}".Trim();
+            if (string.IsNullOrEmpty(fullName)) fullName = name;
+
+            var userData = new Dictionary<string, object>
             {
-                Id = Guid.NewGuid().ToString(),
-                Email = email,
-                Name = "Default User",
-                FirstName = "",
-                LastName = "",
-                Role = "user",
-                Status = "pending",
-                Department = "",
-                Designation = "",
-                Manager = "",
-                Entity = "",
-                ModuleAccess = "",
-                ModuleRole = "",
-                ModuleAccessRole = "",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                ["email"] = normalized,
+                ["name"] = fullName,
+                ["role"] = "user",
+                ["status"] = "Pending",
+                ["entity"] = "",
+                ["department"] = department ?? "",
+                ["designation"] = designation ?? "",
+                ["moduleAccess"] = "",
+                ["moduleRole"] = "",
+                ["moduleAccessRole"] = "",
+                ["manager"] = "",
+                ["created_at"] = DateTime.UtcNow,
+                ["updated_at"] = DateTime.UtcNow
             };
+            var userId = await _firestore.AddUserAsync(userData);
 
-            _users[user.Id] = user;
+            var onboardingData = new Dictionary<string, object>
+            {
+                ["email"] = normalized,
+                ["name"] = firstName ?? "",
+                ["surname"] = lastName ?? "",
+                ["fullName"] = fullName,
+                ["department"] = department ?? "",
+                ["designation"] = designation ?? "",
+                ["first_valid"] = new DateTime(2025, 9, 25),
+                ["last_valid"] = new DateTime(2039, 12, 31),
+                ["onboarding_id"] = userId,
+                ["status_id"] = "",
+                ["inserted_by"] = normalized,
+                ["updated_by"] = normalized,
+                ["entity"] = "",
+                ["moduleAccess"] = "",
+                ["moduleRole"] = "",
+                ["moduleAccessRole"] = "",
+                ["created_at"] = DateTime.UtcNow,
+                ["updated_at"] = DateTime.UtcNow
+            };
+            await _firestore.AddOnboardingAsync(userId, onboardingData);
 
-            // Generate OTP for email verification
-            var otp = await _otpService.GenerateOtpAsync(email);
-            await _emailService.SendOtpEmailAsync(email, otp);
-
-            return user;
+            return DictToUser(userId, userData);
         }
 
         public async Task<bool> VerifyOtpAndLoginAsync(string email, string otp)
         {
             var isValid = await _otpService.VerifyOtpAsync(email, otp);
-            if (!isValid)
-            {
-                return false;
-            }
+            if (!isValid) return false;
 
-            var user = _users.Values.FirstOrDefault(u => u.Email == email);
-            if (user == null)
-            {
-                return false;
-            }
+            var user = await _firestore.GetUserByEmailAsync(email.Trim());
+            if (user == null) return false;
 
-            // Mark OTP as used
             await _otpService.MarkOtpAsUsedAsync(email);
 
-            // Update user status if pending
-            if (user.Status == "pending")
+            var userId = user.GetValueOrDefault("id")?.ToString() ?? "";
+            if (!string.IsNullOrEmpty(userId) && "Pending".Equals(user.GetValueOrDefault("status")?.ToString(), StringComparison.OrdinalIgnoreCase))
             {
-                user.Status = "active";
-                user.UpdatedAt = DateTime.UtcNow;
-
-                // Send welcome email
-                await _emailService.SendWelcomeEmailAsync(email, user.Name);
-
-                // Sync to Firebase
-                await _firebaseService.SyncUserToFirebaseAsync(user);
+                await _firestore.UpdateUserAsync(userId, new Dictionary<string, object> { ["status"] = "Active" });
+                try { await _firestore.UpdateOnboardingByUserIdAsync(userId, new Dictionary<string, object> { ["status"] = "Active" }); } catch { }
             }
-
             return true;
         }
 
         public async Task<User?> GetUserByEmailAsync(string email)
         {
-            return _users.Values.FirstOrDefault(u => u.Email == email);
+            var d = await _firestore.GetUserByEmailAsync(email.Trim());
+            if (d == null) return null;
+            var id = d.GetValueOrDefault("id")?.ToString() ?? "";
+            return DictToUser(id, d);
         }
 
         public async Task<User?> GetUserByIdAsync(string id)
         {
-            _users.TryGetValue(id, out var user);
-            if (user != null && _onboardings.TryGetValue(id, out var onboarding))
+            var d = await _firestore.GetUserByIdAsync(id);
+            if (d == null) return null;
+            return DictToUser(id, d);
+        }
+
+        private static User DictToUser(string id, Dictionary<string, object> d)
+        {
+            return new User
             {
-                user.Onboarding = onboarding;
-            }
-            return user;
+                Id = id,
+                Email = d.GetValueOrDefault("email")?.ToString() ?? "",
+                Name = d.GetValueOrDefault("name")?.ToString() ?? "",
+                FirstName = d.GetValueOrDefault("firstName")?.ToString() ?? "",
+                LastName = d.GetValueOrDefault("lastName")?.ToString() ?? "",
+                Role = d.GetValueOrDefault("role")?.ToString() ?? "Staff",
+                Status = d.GetValueOrDefault("status")?.ToString() ?? "Active",
+                Entity = d.GetValueOrDefault("entity")?.ToString() ?? "",
+                Department = d.GetValueOrDefault("department")?.ToString() ?? "",
+                Designation = d.GetValueOrDefault("designation")?.ToString() ?? "",
+                Manager = d.GetValueOrDefault("manager")?.ToString() ?? "",
+                ModuleAccess = d.GetValueOrDefault("moduleAccess")?.ToString() ?? "",
+                ModuleRole = d.GetValueOrDefault("moduleRole")?.ToString() ?? "",
+                ModuleAccessRole = d.GetValueOrDefault("moduleAccessRole")?.ToString() ?? ""
+            };
         }
     }
 }

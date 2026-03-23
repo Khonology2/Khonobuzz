@@ -88,3 +88,17 @@ packages/
 # Temporary files
 *.tmp
 *.temp
+
+# Environment and secrets (use .env.example as template)
+.env
+
+# App settings with secrets - use .env or appsettings.Development.json locally
+appsettings.json
+
+# Firebase / Google service account credentials (never commit)
+*firebase*adminsdk*.json
+*-firebase-adminsdk-*.json
+
+# User-specific / generated
+*.http
+$null

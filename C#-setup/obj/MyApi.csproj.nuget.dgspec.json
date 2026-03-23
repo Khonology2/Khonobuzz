@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "c:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj": {}
+    "C:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj": {}
   },
   "projects": {
-    "c:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj": {
+    "C:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj",
+        "projectUniqueName": "C:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj",
         "projectName": "MyApi",
-        "projectPath": "c:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj",
+        "projectPath": "C:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj",
         "packagesPath": "C:\\Users\\Nkosinathi Radebe\\.nuget\\packages\\",
-        "outputPath": "c:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\obj\\",
+        "outputPath": "C:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "c:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\NuGet.Config",
+          "C:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\NuGet.Config",
           "C:\\Users\\Nkosinathi Radebe\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
@@ -52,9 +52,21 @@
               "target": "Package",
               "version": "[1.26.2, )"
             },
+            "Cryptography.Fernet": {
+              "target": "Package",
+              "version": "[1.1.1, )"
+            },
+            "DotNetEnv": {
+              "target": "Package",
+              "version": "[3.1.1, )"
+            },
             "FirebaseAdmin": {
               "target": "Package",
               "version": "[3.1.0, )"
+            },
+            "Google.Cloud.Firestore": {
+              "target": "Package",
+              "version": "[4.2.0, )"
             },
             "MailKit": {
               "target": "Package",
@@ -65,14 +77,6 @@
               "version": "[8.0.10, )"
             },
             "Microsoft.AspNetCore.OpenApi": {
-              "target": "Package",
-              "version": "[8.0.10, )"
-            },
-            "Microsoft.EntityFrameworkCore": {
-              "target": "Package",
-              "version": "[8.0.10, )"
-            },
-            "Npgsql.EntityFrameworkCore.PostgreSQL": {
               "target": "Package",
               "version": "[8.0.10, )"
             },

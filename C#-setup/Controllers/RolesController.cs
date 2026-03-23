@@ -1,9 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using MyApi.Services;
-using MyApi.Models;
-using MyApi.Data;
-using Microsoft.EntityFrameworkCore;
 
 namespace MyApi.Controllers
 {
@@ -12,114 +9,65 @@ namespace MyApi.Controllers
     [Authorize]
     public class RolesController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IFirestoreService _firestore;
 
-        public RolesController(ApplicationDbContext context)
+        public RolesController(IFirestoreService firestore)
         {
-            _context = context;
+            _firestore = firestore;
         }
 
         [HttpGet]
         public async Task<IActionResult> GetRoles()
         {
-            var roles = await _context.Roles
-                .Select(r => new
-                {
-                    r.Id,
-                    r.Name,
-                    r.Description,
-                    r.CreatedAt
-                })
-                .ToListAsync();
-
-            return Ok(new { Roles = roles });
-        }
-
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetRole(string id)
-        {
-            var role = await _context.Roles
-                .FirstOrDefaultAsync(r => r.Id == id);
-
-            if (role == null)
+            var roles = await _firestore.GetRolesAsync();
+            return Ok(new { roles = roles.Select(r => new
             {
-                return NotFound(new { Message = "Role not found." });
-            }
-
-            var response = new
-            {
-                role.Id,
-                role.Name,
-                role.Description,
-                role.CreatedAt
-            };
-
-            return Ok(response);
+                id = r.GetValueOrDefault("id"),
+                name = r.GetValueOrDefault("name") ?? r.GetValueOrDefault("roleName"),
+                description = r.GetValueOrDefault("description"),
+                createdAt = r.GetValueOrDefault("created_at")
+            }).ToList() });
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin")]
-        public async Task<IActionResult> CreateRole([FromBody] Role role)
+        public async Task<IActionResult> CreateRole([FromBody] RoleCreateRequest role)
         {
-            role.Id = Guid.NewGuid().ToString();
-            role.CreatedAt = DateTime.UtcNow;
-            role.UpdatedAt = DateTime.UtcNow;
-
-            _context.Roles.Add(role);
-            await _context.SaveChangesAsync();
-
-            var response = new
+            var roleData = new Dictionary<string, object>
             {
-                role.Id,
-                role.Name,
-                role.Description,
-                Message = "Role created successfully."
+                ["roleName"] = role.RoleName ?? "",
+                ["description"] = role.Description ?? ""
             };
-
-            return CreatedAtAction(nameof(GetRole), new { id = role.Id }, response);
+            if (role.PageAccess != null)
+                roleData["pageAccess"] = role.PageAccess;
+            await _firestore.AddRoleAsync(roleData);
+            return StatusCode(201, new { message = "Role created successfully", role = roleData });
         }
 
-        [HttpPut("{id}")]
-        [Authorize(Roles = "admin")]
-        public async Task<IActionResult> UpdateRole(string id, [FromBody] Role updateRole)
+        [HttpPost]
+        [Route("/api/create_initial_roles")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CreateInitialRoles()
         {
-            var role = await _context.Roles.FirstOrDefaultAsync(r => r.Id == id);
-            if (role == null)
+            var rolesData = new[]
             {
-                return NotFound(new { Message = "Role not found." });
-            }
-
-            role.Name = updateRole.Name ?? role.Name;
-            role.Description = updateRole.Description ?? role.Description;
-            role.UpdatedAt = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-
-            var response = new
-            {
-                role.Id,
-                role.Name,
-                role.Description,
-                Message = "Role updated successfully."
+                new Dictionary<string, object> { ["roleName"] = "staff", ["pageAccess"] = new Dictionary<string, object>() },
+                new Dictionary<string, object> { ["roleName"] = "admin", ["description"] = "Strategic administrator with full system access except for deletion.", ["pageAccess"] = new Dictionary<string, object>() },
+                new Dictionary<string, object> { ["roleName"] = "manager", ["pageAccess"] = new Dictionary<string, object>() }
             };
-
-            return Ok(response);
-        }
-
-        [HttpDelete("{id}")]
-        [Authorize(Roles = "admin")]
-        public async Task<IActionResult> DeleteRole(string id)
-        {
-            var role = await _context.Roles.FirstOrDefaultAsync(r => r.Id == id);
-            if (role == null)
+            foreach (var roleData in rolesData)
             {
-                return NotFound(new { Message = "Role not found." });
+                roleData["first_valid"] = new DateTime(2025, 9, 25);
+                roleData["last_valid"] = new DateTime(2039, 12, 31);
+                await _firestore.AddRoleAsync(roleData);
             }
-
-            _context.Roles.Remove(role);
-            await _context.SaveChangesAsync();
-
-            return Ok(new { Message = "Role deleted successfully." });
+            return StatusCode(201, new { message = "Initial roles created successfully" });
         }
+    }
+
+    public class RoleCreateRequest
+    {
+        public string? RoleName { get; set; }
+        public string? Description { get; set; }
+        public Dictionary<string, object>? PageAccess { get; set; }
     }
 }

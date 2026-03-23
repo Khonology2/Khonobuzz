@@ -1,9 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using MyApi.Services;
-using MyApi.Models;
-using MyApi.Data;
-using Microsoft.EntityFrameworkCore;
 
 namespace MyApi.Controllers
 {
@@ -13,12 +10,10 @@ namespace MyApi.Controllers
     public class ProfileController : ControllerBase
     {
         private readonly ICloudinaryService _cloudinaryService;
-        private readonly ApplicationDbContext _context;
 
-        public ProfileController(ICloudinaryService cloudinaryService, ApplicationDbContext context)
+        public ProfileController(ICloudinaryService cloudinaryService)
         {
             _cloudinaryService = cloudinaryService;
-            _context = context;
         }
 
         [HttpPost("upload-image")]

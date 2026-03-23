@@ -28,8 +28,12 @@ namespace MyApi.Services
 
     public interface ITokenService
     {
-        string GenerateToken(User user);
+        string GenerateToken(User user, IReadOnlyList<string>? roles = null);
+        string GenerateTokenFromDict(string id, string email, string name, string department = "", string designation = "", IReadOnlyList<string>? roles = null);
         string? GetUserIdFromToken(string token);
+        string EncryptToken(string plainJwt);
+        string DecryptToken(string encryptedToken);
+        bool IsEncryptedToken(string token);
         Task<string> EncryptTokenAsync(string token);
         Task<string> DecryptTokenAsync(string encryptedToken);
     }
