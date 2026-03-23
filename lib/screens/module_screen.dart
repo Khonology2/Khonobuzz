@@ -269,7 +269,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Skills heatmap',
                                   ],
                                   buttonText: 'Launch',
-                                  url: 'https://resource-capacity-hczd.onrender.com',
+                                  url: 'https://resource-capacity.netlify.app/',
                                   moduleKey: 'skills_heatmap',
                                 ),
                               );
