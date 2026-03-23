@@ -144,7 +144,7 @@ class _MainScreenState extends State<MainScreen> {
       authProvider.clearInitialScreenIndex();
       if ((authProvider.userRole ?? '').toLowerCase() == 'admin') {
         final userProvider = context.read<UserProvider>();
-        userProvider.fetchUsers();
+        userProvider.fetchUsers(forceRefresh: true);
         if (userProvider.hasCachedData) {
           userProvider.refreshUsersInBackground();
         }

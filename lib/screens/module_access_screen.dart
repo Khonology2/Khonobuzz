@@ -247,7 +247,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     super.initState();
     final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-    userProvider.fetchUsers();
+    userProvider.fetchUsers(forceRefresh: true);
 
     if (userProvider.hasCachedData) {
       userProvider.refreshUsersInBackground();
@@ -264,6 +264,37 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         });
       }
     });
+  }
+
+  Future<void> _refreshUsers() async {
+    SoundSystem.playButtonClick();
+    final userProvider = context.read<UserProvider>();
+    await userProvider.fetchUsers(forceRefresh: true);
+    if (!mounted) return;
+
+    if (userProvider.hasError) {
+      SoundSystem.playError();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userProvider.errorMessage ?? 'Failed to refresh users.',
+            style: const TextStyle(fontFamily: 'Poppins'),
+          ),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'User list refreshed.',
+          style: TextStyle(fontFamily: 'Poppins'),
+        ),
+        backgroundColor: Color(0xFFC10D00),
+      ),
+    );
   }
 
   void _refreshRecruitmentRoleCache(ManagedUser user) {
@@ -1540,16 +1571,37 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   }
 
   Widget _buildHeader() {
+    final userProvider = context.watch<UserProvider>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Module Access',
-          style: TextStyle(
-            fontSize: 28.0,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Poppins',
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Module Access',
+                style: TextStyle(
+                  fontSize: 28.0,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Refresh users',
+              onPressed: userProvider.isLoading ? null : _refreshUsers,
+              icon: userProvider.isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFFC10D00),
+                      ),
+                    )
+                  : const Icon(Icons.refresh, color: Colors.white),
+            ),
+          ],
         ),
         const SizedBox(height: 4.0),
         Text(

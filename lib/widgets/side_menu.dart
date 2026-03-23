@@ -457,9 +457,61 @@ class _SideMenuState extends State<SideMenu> {
                 // Logout item with hover functionality - directly below version control
                 _LogoutMenuItem(
                   isExpanded: _isExpanded,
-                  onTap: () {
+                  onTap: () async {
                     SoundSystem.playButtonClick();
-                    context.read<AuthProvider>().logout();
+                    final shouldLogout = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        backgroundColor: const Color(0xFF2C3E50),
+                        title: const Text(
+                          'Confirm logout',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        content: const Text(
+                          'Are you sure you want to logout?',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(dialogContext).pop(false);
+                            },
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(dialogContext).pop(true);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFC10D00),
+                            ),
+                            child: const Text(
+                              'Yes',
+                              style: TextStyle(fontFamily: 'Poppins'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (shouldLogout != true || !context.mounted) {
+                      return;
+                    }
+
+                    await context.read<AuthProvider>().logout();
+                    if (!context.mounted) return;
+
+                    context.read<UserProvider>().clearCache();
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(
                         builder: (context) => const LandingScreen(),
