@@ -134,10 +134,18 @@ class ApiConfig {
   static String get authLoginEndpoint => '$baseUrl/api/auth/login';
   static String userByEmailEndpoint(String email) =>
       '$baseUrl/api/users/by-email?email=${Uri.encodeComponent(email)}';
-  static String authTokenEndpoint(String email, {String? module}) {
+  static String authTokenEndpoint(
+    String email, {
+    String? module,
+    String? role,
+  }) {
     final base = '$baseUrl/api/auth/token?email=${Uri.encodeComponent(email)}';
     if (module != null && module.isNotEmpty) {
-      return '$base&module=${Uri.encodeComponent(module)}';
+      final encodedModule = Uri.encodeComponent(module);
+      if (role != null && role.isNotEmpty) {
+        return '$base&module=$encodedModule&role=${Uri.encodeComponent(role)}';
+      }
+      return '$base&module=$encodedModule';
     }
     return base;
   }

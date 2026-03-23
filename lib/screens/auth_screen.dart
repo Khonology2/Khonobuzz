@@ -1,3 +1,5 @@
+// ignore_for_file: unused_local_variable, unused_import
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
@@ -8,7 +10,6 @@ import '../services/sound_system.dart';
 import 'manual_login_screen.dart';
 import '../main.dart';
 import 'onboarding_screen.dart';
-import '../widgets/floating_circles_particle_animation.dart';
 import '../widgets/prefetch_overlay_dialog.dart';
 import '../widgets/version_control_widget.dart';
 
@@ -22,9 +23,6 @@ class AuthScreen extends StatefulWidget {
 class AuthScreenState extends State<AuthScreen> {
   double _discsOpacity = 0.0;
   bool _isCheckingRedirect = false;
-  final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
-      GlobalKey();
-  VoidCallback? _pendingNavigation;
   bool _isAnimatingNavigation = false;
 
   @override
@@ -142,6 +140,7 @@ class AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  // ignore: unused_element
   void _prepareManualLogin() {
     AuthProvider.warmUpBackendForLogin();
     context.read<UserProvider>().prefetchUsersForLogin();
@@ -160,19 +159,7 @@ class AuthScreenState extends State<AuthScreen> {
         ),
         child: Stack(
           children: [
-            FloatingCirclesParticleAnimation(
-              key: _animationKey,
-              onAnimationComplete: () {
-                if (_pendingNavigation != null) {
-                  final nav = _pendingNavigation!;
-                  _pendingNavigation = null;
-                  _isAnimatingNavigation = false;
-                  if (mounted) {
-                    nav();
-                  }
-                }
-              },
-            ),
+
             Center(
               child: SingleChildScrollView(
                 child: Padding(
@@ -281,16 +268,15 @@ class AuthScreenState extends State<AuthScreen> {
                           if (_isAnimatingNavigation) {
                             return;
                           }
-                          _prepareManualLogin();
                           _isAnimatingNavigation = true;
                           final navigator = Navigator.of(context);
-                          _pendingNavigation = () {
-                            navigator.push(
-                              MaterialPageRoute(
-                                builder: (context) => const ManualLoginScreen(),
-                              ),
-                            );
-                          };
+                          navigator.push(
+                            MaterialPageRoute(
+                              builder: (context) => const ManualLoginScreen(),
+                            ),
+                          ).then((_) {
+                            _isAnimatingNavigation = false;
+                          });
                         },
                       ),
                       const SizedBox(height: 16),
@@ -303,13 +289,13 @@ class AuthScreenState extends State<AuthScreen> {
                           }
                           _isAnimatingNavigation = true;
                           final navigator = Navigator.of(context);
-                          _pendingNavigation = () {
-                            navigator.push(
-                              MaterialPageRoute(
-                                builder: (context) => const OnboardingScreen(),
-                              ),
-                            );
-                          };
+                          navigator.push(
+                            MaterialPageRoute(
+                              builder: (context) => const OnboardingScreen(),
+                            ),
+                          ).then((_) {
+                            _isAnimatingNavigation = false;
+                          });
                         },
                       ),
                       const SizedBox(height: 48),
@@ -355,12 +341,8 @@ class AuthScreenState extends State<AuthScreen> {
         if (onPressed == null) {
           return;
         }
-        if (_animationKey.currentState != null) {
-          _animationKey.currentState!.triggerParticleExplosion();
-        }
         onPressed();
       },
-      animationKey: null,
     );
   }
 }
@@ -589,12 +571,10 @@ class _ClickBubblyButton extends StatefulWidget {
   final String text;
   final Color color;
   final VoidCallback? onPressed;
-  final GlobalKey<FloatingCirclesParticleAnimationState>? animationKey;
   const _ClickBubblyButton({
     required this.text,
     required this.color,
     required this.onPressed,
-    this.animationKey,
   });
 
   @override

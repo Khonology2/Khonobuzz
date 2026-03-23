@@ -7,7 +7,6 @@ import '../providers/user_provider.dart';
 import 'package:provider/provider.dart';
 import '../services/sound_system.dart';
 import '../widgets/animations/loading_button.dart';
-import '../widgets/floating_circles_particle_animation.dart';
 import '../widgets/prefetch_overlay_dialog.dart';
 import '../widgets/version_control_widget.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -22,15 +21,10 @@ class ManualLoginScreen extends StatefulWidget {
 class ManualLoginScreenState extends State<ManualLoginScreen>
     with TickerProviderStateMixin {
   final TextEditingController _emailController = TextEditingController();
-  double _discsOpacity = 0.0;
   bool _isLoading = false;
+  late AudioPlayer _audioPlayer;
   late AnimationController _blinkController;
   late Animation<double> _blinkAnimation;
-  final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
-      GlobalKey();
-  VoidCallback? _pendingNavigation;
-  bool _isAnimatingNavigation = false;
-  late AudioPlayer _audioPlayer;
 
   @override
   void initState() {
@@ -47,12 +41,6 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
       CurvedAnimation(parent: _blinkController, curve: Curves.easeInOut),
     );
 
-    Future.delayed(const Duration(milliseconds: 500), () {
-      setState(() {
-        _discsOpacity = 1.0;
-      });
-    });
-
     // Fallback prewarm in case this screen is opened directly.
     Future.delayed(const Duration(milliseconds: 400), () {
       if (!mounted) {
@@ -64,10 +52,6 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
   }
 
   void _startBlinking() {
-    _blinkController.duration = const Duration(milliseconds: 500);
-    _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(parent: _blinkController, curve: Curves.easeInOut),
-    );
     _blinkController.repeat(reverse: true);
   }
 
@@ -161,7 +145,6 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
   @override
   void dispose() {
     _emailController.dispose();
-    _blinkController.dispose();
     _audioPlayer.dispose();
 
     super.dispose();
@@ -180,19 +163,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
         ),
         child: Stack(
           children: [
-            FloatingCirclesParticleAnimation(
-              key: _animationKey,
-              onAnimationComplete: () {
-                if (_pendingNavigation != null) {
-                  final nav = _pendingNavigation!;
-                  _pendingNavigation = null;
-                  _isAnimatingNavigation = false;
-                  if (mounted) {
-                    nav();
-                  }
-                }
-              },
-            ),
+
             Center(
               child: SingleChildScrollView(
                 child: Padding(
@@ -202,12 +173,21 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                     children: [
                       Image.asset('assets/images/khono.png', height: 100),
                       const SizedBox(height: 48),
-                      const Text(
-                        'Manual Login',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white,
-                          fontSize: 20,
+                      AnimatedBuilder(
+                        animation: _blinkAnimation,
+                        builder: (context, child) {
+                          return Opacity(
+                            opacity: _isLoading ? _blinkAnimation.value : 1.0,
+                            child: child,
+                          );
+                        },
+                        child: const Text(
+                          'Manual Login',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                            fontSize: 20,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -252,7 +232,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                       _LoadingConfirmButtonWrapper(
                         text: 'LOG IN',
                         color: const Color(0xFFC10D00),
-                        animationKey: _animationKey,
+
                         onLoadingChanged: (isLoading) {
                           setState(() {
                             _isLoading = isLoading;
@@ -426,20 +406,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                       ),
                       const SizedBox(height: 48),
 
-                      AnimatedBuilder(
-                        animation: _blinkAnimation,
-                        builder: (context, child) {
-                          return Opacity(
-                            opacity: _isLoading
-                                ? _blinkAnimation.value * _discsOpacity
-                                : _discsOpacity,
-                            child: Image.asset(
-                              'assets/images/discs.png',
-                              height: 80,
-                            ),
-                          );
-                        },
-                      ),
+
                     ],
                   ),
                 ),
@@ -469,16 +436,9 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
       text: text,
       color: color,
       onPressed: () {
-        if (_isAnimatingNavigation) {
-          return;
-        }
-        _isAnimatingNavigation = true;
-        _pendingNavigation = onPressed;
-        if (_animationKey.currentState != null) {
-          _animationKey.currentState!.triggerParticleExplosion();
-        }
+        SoundSystem.playButtonClick();
+        onPressed();
       },
-      animationKey: null,
     );
   }
 
@@ -664,14 +624,12 @@ class _LoadingConfirmButtonWrapper extends StatefulWidget {
   final Color color;
   final Future<void> Function() onPressed;
   final ValueChanged<bool> onLoadingChanged;
-  final GlobalKey<FloatingCirclesParticleAnimationState>? animationKey;
 
   const _LoadingConfirmButtonWrapper({
     required this.text,
     required this.color,
     required this.onPressed,
     required this.onLoadingChanged,
-    this.animationKey,
   });
 
   @override
@@ -688,9 +646,7 @@ class _LoadingConfirmButtonWrapperState
       color: widget.color,
       onPressed: () async {
         SoundSystem.playButtonClick();
-        if (widget.animationKey?.currentState != null) {
-          widget.animationKey!.currentState!.triggerParticleExplosion();
-        }
+
         widget.onLoadingChanged(true);
         try {
           await widget.onPressed();
@@ -708,12 +664,10 @@ class _ClickBubblyButton extends StatefulWidget {
   final String text;
   final Color color;
   final VoidCallback onPressed;
-  final GlobalKey<FloatingCirclesParticleAnimationState>? animationKey;
   const _ClickBubblyButton({
     required this.text,
     required this.color,
     required this.onPressed,
-    this.animationKey,
   });
 
   @override

@@ -29,11 +29,8 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
     'Authenticating...',
     'Granting access...',
     'Loading your profile...',
-    'Authentication passed...',
-    'Syncing preferences...',
     'Loading your modules...',
     'Loading your module roles...',
-    'Finilizing your session...',
     'Logging you in...',
   ];
 

@@ -8,7 +8,6 @@ import 'package:audioplayers/audioplayers.dart';
 import 'dart:async';
 import '../services/sound_system.dart';
 import '../widgets/animations/loading_button.dart';
-import '../widgets/floating_circles_particle_animation.dart';
 import '../widgets/version_control_widget.dart';
 import 'lobby_screen.dart';
 
@@ -28,12 +27,10 @@ class OnboardingScreenState extends State<OnboardingScreen>
 
   double _discsOpacity = 0.0;
   bool _isLoading = false;
-  late AnimationController _blinkController;
-  late Animation<double> _blinkAnimation;
-  final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
-      GlobalKey();
 
   late AudioPlayer _audioPlayer;
+  late AnimationController _blinkController;
+  late Animation<double> _blinkAnimation;
 
   final List<String> _departments = const [
     'Management',
@@ -110,7 +107,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
         ),
         child: Stack(
           children: [
-            FloatingCirclesParticleAnimation(key: _animationKey),
+
             Center(
               child: SingleChildScrollView(
                 child: Padding(
@@ -455,7 +452,6 @@ class OnboardingScreenState extends State<OnboardingScreen>
                       _LoadingConfirmButtonWrapper(
                         text: 'CONFIRM',
                         color: const Color(0xFFC10D00),
-                        animationKey: _animationKey,
                         onLoadingChanged: (isLoading) {
                           setState(() {
                             _isLoading = isLoading;
@@ -855,7 +851,6 @@ class OnboardingScreenState extends State<OnboardingScreen>
       text: text,
       color: color,
       onPressed: onPressed,
-      animationKey: isBackButton ? null : _animationKey,
       isBackButton: isBackButton,
     );
   }
@@ -866,14 +861,12 @@ class _LoadingConfirmButtonWrapper extends StatefulWidget {
   final Color color;
   final Future<void> Function() onPressed;
   final ValueChanged<bool> onLoadingChanged;
-  final GlobalKey<FloatingCirclesParticleAnimationState>? animationKey;
 
   const _LoadingConfirmButtonWrapper({
     required this.text,
     required this.color,
     required this.onPressed,
     required this.onLoadingChanged,
-    this.animationKey,
   });
 
   @override
@@ -896,13 +889,7 @@ class _LoadingConfirmButtonWrapperState
           return;
         }
         _isAnimating = true;
-        if (widget.animationKey?.currentState != null && !_isAnimating) {
-          // Guard to avoid double trigger if state changed mid-frame
-          widget.animationKey!.currentState!.triggerParticleExplosion();
-        }
-        if (widget.animationKey?.currentState != null) {
-          widget.animationKey!.currentState!.triggerParticleExplosion();
-        }
+
         widget.onLoadingChanged(true);
         await widget.onPressed();
         if (mounted) {
@@ -918,13 +905,11 @@ class _ClickBubblyButton extends StatefulWidget {
   final String text;
   final Color color;
   final VoidCallback onPressed;
-  final GlobalKey<FloatingCirclesParticleAnimationState>? animationKey;
   final bool isBackButton;
   const _ClickBubblyButton({
     required this.text,
     required this.color,
     required this.onPressed,
-    this.animationKey,
     this.isBackButton = false,
   });
 
@@ -1057,18 +1042,12 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
               SoundSystem.playButtonClick();
               if (widget.isBackButton) {
                 _triggerDissolve();
-                if (widget.animationKey?.currentState != null) {
-                  widget.animationKey!.currentState!.triggerDissolve();
-                }
                 Future.delayed(
                   const Duration(milliseconds: 600),
                   widget.onPressed,
                 );
               } else {
                 _clickController.forward(from: 0);
-                if (widget.animationKey?.currentState != null) {
-                  widget.animationKey!.currentState!.triggerParticleExplosion();
-                }
                 Future.delayed(
                   const Duration(milliseconds: 1200),
                   widget.onPressed,

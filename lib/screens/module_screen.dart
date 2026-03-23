@@ -249,7 +249,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Hub',
                                   ],
                                   buttonText: 'Launch',
-                                  url: 'https://personal-development-hub.onrender.com',
+                                  url:
+                                      'https://personal-development-hub.onrender.com',
                                   moduleKey: 'pdh',
                                 ),
                               );
@@ -268,7 +269,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Skills heatmap',
                                   ],
                                   buttonText: 'Launch',
-                                  url: 'https://resource-capacity.netlify.app/',
+                                  url: 'https://resource-capacity-hczd.onrender.com',
                                   moduleKey: 'skills_heatmap',
                                 ),
                               );
@@ -605,39 +606,39 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                       const SizedBox(height: 18.0),
                                     ],
                                     ElevatedButton(
-                                        onPressed: _isLoading
-                                            ? null
-                                            : () async {
-                                                SoundSystem.playButtonClick();
-                                                _animationKey.currentState
-                                                    ?.triggerParticleExplosion();
+                                      onPressed: _isLoading
+                                          ? null
+                                          : () async {
+                                              SoundSystem.playButtonClick();
+                                              _animationKey.currentState
+                                                  ?.triggerParticleExplosion();
 
-                                                if (widget.isComingSoon) {
-                                                  if (!mounted) {
-                                                    return;
-                                                  }
-                                                  ScaffoldMessenger.of(
-                                                    context,
-                                                  ).showSnackBar(
-                                                    const SnackBar(
-                                                      content: Text(
-                                                        'Deliverables & Sprint Sign-Off Hub is coming soon.',
-                                                        style: TextStyle(
-                                                          fontFamily: 'Poppins',
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  );
+                                              if (widget.isComingSoon) {
+                                                if (!mounted) {
                                                   return;
                                                 }
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Deliverables & Sprint Sign-Off Hub is coming soon.',
+                                                      style: TextStyle(
+                                                        fontFamily: 'Poppins',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                                return;
+                                              }
 
-                                                setState(() => _isLoading = true);
-                                                try {
-                                                  await _launchUrlFromContext(
-                                                    widget.context,
-                                                    widget.url,
-                                                    widget.moduleKey,
-                                                  );
+                                              setState(() => _isLoading = true);
+                                              try {
+                                                await _launchUrlFromContext(
+                                                  widget.context,
+                                                  widget.url,
+                                                  widget.moduleKey,
+                                                );
                                                 if (mounted) {
                                                   setState(() {
                                                     _lastAccessedText =
@@ -652,31 +653,31 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                                 }
                                               }
                                             },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: primaryAccent,
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 36.0,
-                                            vertical: 14.4,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              45.0,
-                                            ),
-                                          ),
-                                          textStyle: const TextStyle(
-                                            fontSize: 16.2,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          elevation: widget.isComingSoon ? 0 : 10,
-                                          shadowColor: widget.isComingSoon
-                                              ? Colors.transparent
-                                              : primaryAccent.withValues(
-                                                  alpha: 0.5,
-                                                ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: primaryAccent,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 36.0,
+                                          vertical: 14.4,
                                         ),
-                                        child: Text(widget.buttonText),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            45.0,
+                                          ),
+                                        ),
+                                        textStyle: const TextStyle(
+                                          fontSize: 16.2,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        elevation: widget.isComingSoon ? 0 : 10,
+                                        shadowColor: widget.isComingSoon
+                                            ? Colors.transparent
+                                            : primaryAccent.withValues(
+                                                alpha: 0.5,
+                                              ),
                                       ),
+                                      child: Text(widget.buttonText),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -845,25 +846,103 @@ Future<void> _launchUrlFromContext(
           final tokenUri = Uri.parse(
             ApiConfig.authTokenEndpoint(email, module: 'recruitment'),
           );
-          final response = await http.get(
-            tokenUri,
-            headers: {
-              'Authorization': 'Bearer $existingToken',
-              'Accept': 'application/json',
-            },
-          ).timeout(const Duration(seconds: 10));
+          final response = await http
+              .get(
+                tokenUri,
+                headers: {
+                  'Authorization': 'Bearer $existingToken',
+                  'Accept': 'application/json',
+                },
+              )
+              .timeout(const Duration(seconds: 10));
           if (response.statusCode == 200) {
             final body = json.decode(response.body);
             if (body is Map<String, dynamic>) {
               final arwToken = body['token'] as String?;
               if (arwToken != null && arwToken.isNotEmpty) {
                 token = arwToken;
-                debugPrint('[ModuleLaunch] Using ARW token for recruitment app');
+                debugPrint(
+                  '[ModuleLaunch] Using ARW token for recruitment app',
+                );
               }
             }
           }
         } catch (e) {
-          debugPrint('[ModuleLaunch] ARW token fetch failed, using default token: $e');
+          debugPrint(
+            '[ModuleLaunch] ARW token fetch failed, using default token: $e',
+          );
+        }
+      }
+    } else if (moduleKey == 'skills_heatmap') {
+      final email = authProvider.userEmail;
+      if (email != null && email.isNotEmpty) {
+        // Get the user's selected skills heatmap role
+        String? selectedRole;
+        try {
+          final userProvider = context.read<UserProvider>();
+          if (userProvider.users.isNotEmpty) {
+            final currentUser = userProvider.users.firstWhere(
+              (u) => u.email.toLowerCase() == email.toLowerCase(),
+              orElse: () => throw StateError('Current user not found'),
+            );
+
+            if (currentUser.moduleAccessRole != null &&
+                currentUser.moduleAccessRole!.isNotEmpty) {
+              final parts = currentUser.moduleAccessRole!.split(', ');
+              for (var part in parts) {
+                final trimmedPart = part.trim();
+                if (trimmedPart.startsWith('Skills Heatmap - ')) {
+                  selectedRole = trimmedPart
+                      .replaceFirst('Skills Heatmap - ', '')
+                      .trim();
+                  break;
+                }
+              }
+            }
+
+            // Default to first role if no specific role found
+            if (selectedRole == null || selectedRole.isEmpty) {
+              selectedRole = 'Executive'; // Default role
+            }
+          }
+        } catch (e) {
+          debugPrint('[ModuleLaunch] Error getting skills heatmap role: $e');
+          selectedRole = 'Executive'; // Default role on error
+        }
+
+        try {
+          final tokenUri = Uri.parse(
+            ApiConfig.authTokenEndpoint(
+              email,
+              module: 'skills_heatmap',
+              role: selectedRole,
+            ),
+          );
+          final response = await http
+              .get(
+                tokenUri,
+                headers: {
+                  'Authorization': 'Bearer $existingToken',
+                  'Accept': 'application/json',
+                },
+              )
+              .timeout(const Duration(seconds: 10));
+          if (response.statusCode == 200) {
+            final body = json.decode(response.body);
+            if (body is Map<String, dynamic>) {
+              final skillsHeatmapToken = body['token'] as String?;
+              if (skillsHeatmapToken != null && skillsHeatmapToken.isNotEmpty) {
+                token = skillsHeatmapToken;
+                debugPrint(
+                  '[ModuleLaunch] Using skills heatmap token with role: $selectedRole',
+                );
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint(
+            '[ModuleLaunch] Skills heatmap token fetch failed, using default token: $e',
+          );
         }
       }
     }

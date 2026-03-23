@@ -235,7 +235,6 @@ class _BubblesPainter extends CustomPainter {
 }
 
 class LobbyScreenState extends State<LobbyScreen> {
-  double _discsOpacity = 0.0;
   VideoPlayerController? _videoController;
 
   @override
@@ -252,11 +251,7 @@ class LobbyScreenState extends State<LobbyScreen> {
             }
           });
 
-    Future.delayed(const Duration(milliseconds: 500), () {
-      setState(() {
-        _discsOpacity = 1.0;
-      });
-    });
+
   }
 
   @override
@@ -339,18 +334,7 @@ class LobbyScreenState extends State<LobbyScreen> {
                         },
                         bounceDelayMs: 250,
                       ),
-                      const SizedBox(height: 32),
-                      AnimatedOpacity(
-                        opacity: _discsOpacity,
-                        duration: const Duration(milliseconds: 1000),
-                        child: RotatedBox(
-                          quarterTurns: 1,
-                          child: Image.asset(
-                            'assets/videos/spinning_discs.gif',
-                            height: 122,
-                          ),
-                        ),
-                      ),
+
                     ],
                   ),
                 ),

@@ -39,6 +39,14 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     'Client',
     'Team member',
   ];
+  final List<String> _moduleRoleOptionsSkillsHeatmap = [
+    'Executive',
+    'Delivery Manager',
+    'HR',
+    'Sales Manager',
+    'Ops Manager',
+    'System Admin',
+  ];
   static const String _notAssignedValue = 'Not Assigned';
 
   String? expandedUserId;
@@ -88,6 +96,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   final Map<String, String?> _selectedDeliverablesRoles = {};
 
+  final Map<String, String?> _selectedSkillsHeatmapRoles = {};
+
   Map<String, Color> get userStatusColors => {
     'Active': Colors.green.shade600,
     'Inactive': Colors.grey.shade600,
@@ -119,11 +129,21 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   String? _canonicalModuleName(String raw) {
     final t = raw.trim();
     if (t.isEmpty) return null;
-    if (t == 'PDH' || t == 'Personal Development Hub') return 'Personal Development Hub';
-    if (t == 'Skills Heatmap' || t == 'Resource & Capacity Skills Heatmap') return 'Resource & Capacity Skills Heatmap';
-    if (t == 'Automated Recruitment Workflow') return t;
-    if (t == 'SOW Builder' || t == 'Proposal & SOW Builder') return 'Proposal & SOW Builder';
-    if (t == 'Deliverables & Sprint Sign-Off Hub') return t;
+    if (t == 'PDH' || t == 'Personal Development Hub') {
+      return 'Personal Development Hub';
+    }
+    if (t == 'Skills Heatmap' || t == 'Resource & Capacity Skills Heatmap') {
+      return 'Resource & Capacity Skills Heatmap';
+    }
+    if (t == 'Automated Recruitment Workflow') {
+      return t;
+    }
+    if (t == 'SOW Builder' || t == 'Proposal & SOW Builder') {
+      return 'Proposal & SOW Builder';
+    }
+    if (t == 'Deliverables & Sprint Sign-Off Hub') {
+      return t;
+    }
     return t;
   }
 
@@ -333,6 +353,39 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     _selectedDeliverablesRoles[user.id] = _notAssignedValue;
   }
 
+  void _refreshSkillsHeatmapRoleCache(ManagedUser user) {
+    if (user.moduleAccessRole != null && user.moduleAccessRole!.isNotEmpty) {
+      final parts = user.moduleAccessRole!.split(', ');
+      for (var part in parts) {
+        final trimmedPart = part.trim();
+        if (trimmedPart.startsWith('Skills Heatmap - ')) {
+          final extractedRole = trimmedPart
+              .replaceFirst('Skills Heatmap - ', '')
+              .trim();
+
+          final roleLower = extractedRole.toLowerCase();
+          for (var option in _moduleRoleOptionsSkillsHeatmap) {
+            if (option.toLowerCase() == roleLower) {
+              _selectedSkillsHeatmapRoles[user.id] = option;
+              return;
+            }
+          }
+
+          if (extractedRole.isNotEmpty && extractedRole != 'Manager') {
+            _selectedSkillsHeatmapRoles[user.id] = extractedRole;
+          } else if (extractedRole == 'Manager') {
+            // Default to first option for existing Manager roles
+            _selectedSkillsHeatmapRoles[user.id] =
+                _moduleRoleOptionsSkillsHeatmap.first;
+          }
+          return;
+        }
+      }
+    }
+
+    _selectedSkillsHeatmapRoles[user.id] = _notAssignedValue;
+  }
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
@@ -374,6 +427,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     String? newRecruitmentRole,
     String? newSOWBuilderRole,
     String? newDeliverablesRole,
+    String? newSkillsHeatmapRole,
   ) async {
     final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
     setState(() {
@@ -436,6 +490,16 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           : '';
     }
 
+    String sanitizedSkillsHeatmapRole = '';
+    if (skillsHeatmapSelected) {
+      sanitizedSkillsHeatmapRole =
+          (newSkillsHeatmapRole != null &&
+              newSkillsHeatmapRole.trim().isNotEmpty &&
+              newSkillsHeatmapRole != _notAssignedValue)
+          ? newSkillsHeatmapRole.trim()
+          : _moduleRoleOptionsSkillsHeatmap.first; // Default to first option
+    }
+
     List<String> combinedParts = [];
     if (pdhSelected && sanitizedModuleRole.isNotEmpty) {
       combinedParts.add('PDH - $sanitizedModuleRole');
@@ -443,7 +507,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       combinedParts.add('PDH');
     }
     if (skillsHeatmapSelected) {
-      combinedParts.add('Skills Heatmap - Manager');
+      combinedParts.add('Skills Heatmap - $sanitizedSkillsHeatmapRole');
     }
     if (recruitmentSelected && sanitizedRecruitmentRole.isNotEmpty) {
       combinedParts.add(
@@ -704,6 +768,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         String? selectedRecruitmentRole = _notAssignedValue;
         String? selectedSOWBuilderRole = _notAssignedValue;
         String? selectedDeliverablesRole = _notAssignedValue;
+        String? selectedSkillsHeatmapRole = _notAssignedValue;
         bool isUpdating = false;
 
         return StatefulBuilder(
@@ -875,7 +940,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String?>(
                                 value: skillsHeatmapSelected
-                                    ? 'Manager'
+                                    ? selectedSkillsHeatmapRole
                                     : _notAssignedValue,
                                 isExpanded: true,
                                 dropdownColor: const Color(0xFF2C3E50),
@@ -899,7 +964,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 onChanged: skillsHeatmapSelected
                                     ? (value) {
                                         SoundSystem.playButtonClick();
-                                        setStateDialog(() {});
+                                        setStateDialog(() {
+                                          selectedSkillsHeatmapRole = value;
+                                        });
                                       }
                                     : null,
                                 items: <DropdownMenuItem<String?>>[
@@ -908,9 +975,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                       value: _notAssignedValue,
                                       child: Text(_notAssignedValue),
                                     ),
-                                  DropdownMenuItem<String?>(
-                                    value: 'Manager',
-                                    child: Text('Manager'),
+                                  ..._moduleRoleOptionsSkillsHeatmap.map(
+                                    (option) => DropdownMenuItem<String?>(
+                                      value: option,
+                                      child: Text(option),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -1277,6 +1346,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedRecruitmentRole,
                                 selectedSOWBuilderRole,
                                 selectedDeliverablesRole,
+                                selectedSkillsHeatmapRole,
                               );
                             }
 
@@ -1573,15 +1643,18 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       ),
                       const SizedBox(height: 12.0),
                       Row(
-                        children: List.generate(4, (_) => Container(
-                          margin: const EdgeInsets.only(right: 6.0),
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white12,
+                        children: List.generate(
+                          4,
+                          (_) => Container(
+                            margin: const EdgeInsets.only(right: 6.0),
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white12,
+                            ),
                           ),
-                        )),
+                        ),
                       ),
                     ],
                   ),
@@ -1630,16 +1703,16 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         _buildSortBar(),
         const SizedBox(height: 12.0),
         ..._sortedFilteredUsers.map((user) {
-        final isExpanded = expandedUserId == user.id;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
-          child: Column(
-            children: [
-              _buildUserRow(user, isExpanded),
-              if (isExpanded) _buildModuleAccessPanel(user),
-            ],
-          ),
-        );
+          final isExpanded = expandedUserId == user.id;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Column(
+              children: [
+                _buildUserRow(user, isExpanded),
+                if (isExpanded) _buildModuleAccessPanel(user),
+              ],
+            ),
+          );
         }),
       ],
     );
@@ -1757,6 +1830,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               _refreshRecruitmentRoleCache(user);
               _refreshSOWBuilderRoleCache(user);
               _refreshDeliverablesRoleCache(user);
+              _refreshSkillsHeatmapRoleCache(user);
             } else {
               expandedUserId = null;
             }
@@ -1895,11 +1969,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   ),
                 ),
                 const SizedBox(width: 8.0),
-                Wrap(
-                  spacing: 2.0,
-                  runSpacing: 4.0,
-                  children: moduleAccessDots,
-                ),
+                Wrap(spacing: 2.0, runSpacing: 4.0, children: moduleAccessDots),
               ],
             ),
           ],
@@ -2099,21 +2169,62 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       _selectedDeliverablesRoles[user.id] = selectedDeliverablesRole;
     }
 
+    String? selectedSkillsHeatmapRole = _selectedSkillsHeatmapRoles[user.id];
+
+    if (selectedSkillsHeatmapRole == null) {
+      selectedSkillsHeatmapRole = _notAssignedValue;
+      if (user.moduleAccessRole != null && user.moduleAccessRole!.isNotEmpty) {
+        final parts = user.moduleAccessRole!.split(', ');
+        for (var part in parts) {
+          final trimmedPart = part.trim();
+          if (trimmedPart.startsWith('Skills Heatmap - ')) {
+            final extractedRole = trimmedPart
+                .replaceFirst('Skills Heatmap - ', '')
+                .trim();
+
+            final roleLower = extractedRole.toLowerCase();
+            for (var option in _moduleRoleOptionsSkillsHeatmap) {
+              if (option.toLowerCase() == roleLower) {
+                selectedSkillsHeatmapRole = option;
+                break;
+              }
+            }
+
+            if (selectedSkillsHeatmapRole == _notAssignedValue &&
+                extractedRole.isNotEmpty) {
+              selectedSkillsHeatmapRole = extractedRole;
+            }
+            break;
+          }
+        }
+      }
+
+      _selectedSkillsHeatmapRoles[user.id] = selectedSkillsHeatmapRole;
+    }
+
     final roleSummary = <String>[];
     if (pdhSelected) {
       roleSummary.add('PDH: ${selectedModuleRole ?? _notAssignedValue}');
     }
     if (skillsHeatmapSelected) {
-      roleSummary.add('Skills Heatmap: Manager');
+      roleSummary.add(
+        'Skills Heatmap: ${selectedSkillsHeatmapRole ?? _notAssignedValue}',
+      );
     }
     if (recruitmentSelected) {
-      roleSummary.add('Recruitment: ${selectedRecruitmentRole ?? _notAssignedValue}');
+      roleSummary.add(
+        'Recruitment: ${selectedRecruitmentRole ?? _notAssignedValue}',
+      );
     }
     if (sowBuilderSelected) {
-      roleSummary.add('SOW Builder: ${selectedSOWBuilderRole ?? _notAssignedValue}');
+      roleSummary.add(
+        'SOW Builder: ${selectedSOWBuilderRole ?? _notAssignedValue}',
+      );
     }
     if (deliverablesSelected) {
-      roleSummary.add('Deliverables: ${selectedDeliverablesRole ?? _notAssignedValue}');
+      roleSummary.add(
+        'Deliverables: ${selectedDeliverablesRole ?? _notAssignedValue}',
+      );
     }
 
     return Container(
@@ -2143,21 +2254,26 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       fontFamily: 'Poppins',
                     ),
                   ),
-                  ...roleSummary.map((s) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                    decoration: BoxDecoration(
-                      color: const Color(0x1AFFFFFF),
-                      borderRadius: BorderRadius.circular(8.0),
-                    ),
-                    child: Text(
-                      s,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11.0,
-                        fontFamily: 'Poppins',
+                  ...roleSummary.map(
+                    (s) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                        vertical: 4.0,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0x1AFFFFFF),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: Text(
+                        s,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11.0,
+                          fontFamily: 'Poppins',
+                        ),
                       ),
                     ),
-                  )),
+                  ),
                 ],
               ),
             ),
@@ -2345,7 +2461,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String?>(
                       value: skillsHeatmapSelected
-                          ? 'Manager'
+                          ? (_selectedSkillsHeatmapRoles[user.id] ??
+                                selectedSkillsHeatmapRole)
                           : _notAssignedValue,
                       isExpanded: true,
                       dropdownColor: const Color(0xFF2C3E50),
@@ -2369,18 +2486,26 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       onChanged: skillsHeatmapSelected
                           ? (value) {
                               SoundSystem.playButtonClick();
-                              setState(() {});
+                              setState(() {
+                                if (value == _notAssignedValue) {
+                                  _selectedSkillsHeatmapRoles[user.id] =
+                                      _notAssignedValue;
+                                } else {
+                                  _selectedSkillsHeatmapRoles[user.id] = value;
+                                }
+                              });
                             }
                           : null,
                       items: <DropdownMenuItem<String?>>[
-                        if (!skillsHeatmapSelected)
-                          DropdownMenuItem<String?>(
-                            value: _notAssignedValue,
-                            child: Text(_notAssignedValue),
-                          ),
                         DropdownMenuItem<String?>(
-                          value: 'Manager',
-                          child: Text('Manager'),
+                          value: _notAssignedValue,
+                          child: Text(_notAssignedValue),
+                        ),
+                        ..._moduleRoleOptionsSkillsHeatmap.map(
+                          (option) => DropdownMenuItem<String?>(
+                            value: option,
+                            child: Text(option),
+                          ),
                         ),
                       ],
                     ),
@@ -2751,7 +2876,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         selectedModuleRole,
                         _selectedRecruitmentRoles[user.id] ?? _notAssignedValue,
                         _selectedSOWBuilderRoles[user.id] ?? _notAssignedValue,
-                        _selectedDeliverablesRoles[user.id] ?? _notAssignedValue,
+                        _selectedDeliverablesRoles[user.id] ??
+                            _notAssignedValue,
+                        _selectedSkillsHeatmapRoles[user.id] ??
+                            _notAssignedValue,
                       );
                     },
               style: ElevatedButton.styleFrom(
