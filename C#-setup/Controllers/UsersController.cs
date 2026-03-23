@@ -157,6 +157,7 @@ namespace MyApi.Controllers
             var lastName = ob?.GetValueOrDefault("lastName")?.ToString() ?? ob?.GetValueOrDefault("surname")?.ToString() ?? user.GetValueOrDefault("lastName")?.ToString() ?? "";
             var dept = ob?.GetValueOrDefault("department")?.ToString() ?? user.GetValueOrDefault("department")?.ToString() ?? "";
             var desig = ob?.GetValueOrDefault("designation")?.ToString() ?? user.GetValueOrDefault("designation")?.ToString() ?? "";
+#pragma warning disable CS8601 // Possible null reference assignment.
             return new Dictionary<string, object>
             {
                 ["id"] = uid,
@@ -183,6 +184,7 @@ namespace MyApi.Controllers
                     ["statusId"] = ob.GetValueOrDefault("status_id")
                 } : null
             };
+#pragma warning restore CS8601 // Possible null reference assignment.
         }
     }
 }

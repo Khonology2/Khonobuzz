@@ -84,9 +84,9 @@ namespace MyApi.Services
         private static Dictionary<string, object> MergeUserWithOnboarding(Dictionary<string, object> user, Dictionary<string, object>? ob)
         {
             var obEmpty = ob == null || ob.Count == 0;
-            var firstName = (obEmpty ? null : ob!.GetValueOrDefault("firstName") ?? ob.GetValueOrDefault("name"))?.ToString()
+            var firstName = (obEmpty ? null : ob!.GetValueOrDefault("firstName") ?? ob!.GetValueOrDefault("name"))?.ToString()
                 ?? user.GetValueOrDefault("firstName")?.ToString() ?? "";
-            var lastName = (obEmpty ? null : ob!.GetValueOrDefault("lastName") ?? ob.GetValueOrDefault("surname"))?.ToString()
+            var lastName = (obEmpty ? null : ob!.GetValueOrDefault("lastName") ?? ob!.GetValueOrDefault("surname"))?.ToString()
                 ?? user.GetValueOrDefault("lastName")?.ToString() ?? "";
             var modAccess = user.GetValueOrDefault("moduleAccess")?.ToString() ?? ob?.GetValueOrDefault("moduleAccess")?.ToString() ?? "";
             var modRole = user.GetValueOrDefault("moduleAccessRole")?.ToString() ?? ob?.GetValueOrDefault("moduleAccessRole")?.ToString() ?? "";

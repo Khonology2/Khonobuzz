@@ -120,7 +120,7 @@ namespace MyApi.Controllers
             var d = new Dictionary<string, object>();
             foreach (var p in el.EnumerateObject())
             {
-                d[p.Name] = JsonElementToObject(p.Value);
+                d[p.Name] = JsonElementToObject(p.Value) ?? "";
             }
             return d;
         }

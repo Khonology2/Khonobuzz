@@ -45,8 +45,8 @@ namespace MyApi.Controllers
             try
             {
                 var user = await _authService.RegisterAsync(
-                    request.Email,
-                    request.Name,
+                    email,
+                    (request.Name ?? "").Trim(),
                     request.FirstName,
                     request.LastName,
                     request.Department,
@@ -149,7 +149,7 @@ namespace MyApi.Controllers
             var roles = ParseModuleAccessRoleToRoles(modRole);
             if (isSpecialSession) roles = new List<string> { "admin" };
 
-            var fullName = (userPayload["name"] ?? "").ToString();
+            var fullName = (userPayload["name"] ?? "").ToString() ?? "";
             var plainToken = _tokenService.GenerateTokenFromDict(userId, normalizedEmail, fullName, roles: roles);
             var encryptedToken = _tokenService.EncryptToken(plainToken);
 
@@ -227,7 +227,7 @@ namespace MyApi.Controllers
                 {
                     try
                     {
-                        await _pdhFirestore.SetOnboardingAsync(userId, new Dictionary<string, object> { ["email"] = user.GetValueOrDefault("email"), ["token"] = encryptedToken, ["fullName"] = fullName, ["token_updated_at"] = DateTime.UtcNow, ["updated_at"] = DateTime.UtcNow });
+                        await _pdhFirestore.SetOnboardingAsync(userId, new Dictionary<string, object> { ["email"] = user.GetValueOrDefault("email") ?? "", ["token"] = encryptedToken, ["fullName"] = fullName, ["token_updated_at"] = DateTime.UtcNow, ["updated_at"] = DateTime.UtcNow });
                     }
                     catch { }
                 }

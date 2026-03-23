@@ -72,7 +72,7 @@ namespace MyApi.Services
                 if (kv.Value == null) continue;
                 if (kv.Value is DateTime dt)
                     out_[kv.Key] = Timestamp.FromDateTime(dt.ToUniversalTime());
-                else if (kv.Value is FieldValue)
+                else if (kv.Value.GetType().FullName?.Contains("FieldValue") == true)
                     out_[kv.Key] = kv.Value;
                 else if (kv.Value is Dictionary<string, object> nested)
                     out_[kv.Key] = ToFirestoreDict(nested);
