@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/user_provider.dart';
 import '../screens/landing_screen.dart';
 import '../services/sound_system.dart';
 import 'version_control_widget.dart'; // Added import for VersionControlWidget
