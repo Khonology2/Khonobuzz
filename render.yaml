@@ -1,0 +1,25 @@
+# Render Blueprint - KhonoBuzz Static Site
+# This deploys the pre-built Flutter web app from build/web.
+# The GitHub Action (.github/workflows/flutter-build.yml) builds and commits
+# build/web on every push to khono-v2 - Render just serves those files.
+#
+# IMPORTANT: Do NOT run "flutter build web" on Render - it times out and fails.
+# Ensure the GitHub Action has run at least once to populate build/web.
+
+services:
+  - type: web
+    name: khonobuzz
+    runtime: static
+    branch: khono-v2
+
+    # No Flutter build - use pre-built assets from GitHub Actions
+    buildCommand: "echo 'Deploying pre-built Flutter web assets from build/web'"
+
+    # Flutter web output directory (populated by .github/workflows/flutter-build.yml)
+    staticPublishPath: ./build/web
+
+    # SPA routing: serve index.html for all routes (Flutter web is a single-page app)
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
