@@ -5,6 +5,7 @@ import 'dart:convert'; // Import for JSON encoding/decoding
 import 'dart:async'; // Import for TimeoutException
 import '../utils/pdh_firebase.dart' show syncUserToPDH, syncUserToSkillsHeatmap;
 import '../config/api_config.dart';
+import '../services/modules_ping_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
@@ -155,6 +156,10 @@ class AuthProvider extends ChangeNotifier {
       '[AuthProvider] _loadAuthState - userProfilePublicId: $_userProfilePublicId',
     );
 
+    if (_isAuthenticated) {
+      ModulesPingService.start();
+    }
+
     notifyListeners();
   }
 
@@ -291,6 +296,8 @@ class AuthProvider extends ChangeNotifier {
         }
 
         notifyListeners();
+
+        ModulesPingService.start();
 
         // Run these in parallel to speed up login
         await Future.wait([
@@ -506,6 +513,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void _schedulePostLoginWarmup() {
+    ModulesPingService.start();
     Future<void>(() async {
       try {
         await Future.wait([
@@ -640,6 +648,8 @@ class AuthProvider extends ChangeNotifier {
 
           notifyListeners();
 
+          ModulesPingService.start();
+
           await Future.wait([
             if (_userModuleAccess == null) fetchCurrentUserModuleAccess(),
             fetchUserToken(),
@@ -660,6 +670,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    ModulesPingService.stop();
     final prefs = await SharedPreferences.getInstance();
     _isAuthenticated = false;
     _userEmail = null;
