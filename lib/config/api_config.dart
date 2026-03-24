@@ -31,7 +31,7 @@ class ApiConfig {
       if (queryParams['backend'] == 'prod') {
         const hostedBackend = String.fromEnvironment(
           _backendUrlEnv,
-          defaultValue: 'https://khono-buzz-central-hub-web.onrender.com',
+          defaultValue: 'https://khonobuzz-central-hub.onrender.com',
         );
         if (kDebugMode) {
           print(
@@ -53,16 +53,19 @@ class ApiConfig {
         return localBackend;
       }
 
-      // Hosted web builds (onrender): use same origin when frontend & backend
-      // are deployed together at khono-buzz-central-hub-web.onrender.com
+      // Frontend is at khono-buzz-central-hub-web (Static Site);
+      // Backend is at khonobuzz-central-hub (Web Service) - separate Render services
       if (host.contains('onrender.com') || host.contains('khonobuzz-web')) {
-        final sameOriginBackend = Uri.base.origin;
+        const hostedBackend = String.fromEnvironment(
+          _backendUrlEnv,
+          defaultValue: 'https://khonobuzz-central-hub.onrender.com',
+        );
         if (kDebugMode) {
           print(
-            '[ApiConfig] Web: detected hosted environment, using backend: $sameOriginBackend',
+            '[ApiConfig] Web: detected hosted frontend, using backend: $hostedBackend',
           );
         }
-        return sameOriginBackend;
+        return hostedBackend;
       }
 
       // Default for local web development is the local backend
@@ -81,7 +84,7 @@ class ApiConfig {
     if (!kDebugMode) {
       final backendUrl = String.fromEnvironment(
         _backendUrlEnv,
-        defaultValue: 'https://khono-buzz-central-hub-web.onrender.com',
+        defaultValue: 'https://khonobuzz-central-hub.onrender.com',
       );
       return backendUrl;
     }
@@ -118,7 +121,7 @@ class ApiConfig {
     }
   }
 
-  // CORS origin for reference (not used in frontend, but documented)
+  // CORS origin for reference (frontend URL for backend CORS config)
   static String get corsOrigin {
     return String.fromEnvironment(
       _corsOriginEnv,
