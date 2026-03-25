@@ -374,6 +374,26 @@ class _SideMenuState extends State<SideMenu> {
                     ],
                   ),
                 ),
+                // Welcome text under the top asset/logo
+                if (_isExpanded)
+                  const Padding(
+                    padding: EdgeInsets.only(
+                      left: 16.0,
+                      right: 16.0,
+                      top: 3.0, // closer to the logo
+                      bottom: 12.0, // breathing room below the text
+                    ),
+                    child: Text(
+                      'Welcome to KhonoBuzz',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 14.0,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
