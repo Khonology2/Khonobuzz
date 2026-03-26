@@ -254,7 +254,8 @@ class _MainScreenState extends State<MainScreen> {
                     if (_isStaffOrAdmin())
                       Positioned(
                         right: 16,
-                        bottom: 16,
+                        // Avoid overlap with UserManagementScreen add-user FAB.
+                        bottom: _selectedIndex == 0 ? 88 : 16,
                         child: SafeArea(
                           child: Consumer<ThemeModeProvider>(
                             builder: (context, themeMode, _) {
