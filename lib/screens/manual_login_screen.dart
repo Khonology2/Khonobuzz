@@ -422,7 +422,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                         Theme.of(context).brightness == Brightness.dark
                             ? 'assets/images/discs.png'
                             : 'assets/images/red_disc.png',
-                        height: 80,
+                        height:
+                            Theme.of(context).brightness == Brightness.dark
+                            ? 80
+                            : 96,
                       ),
                     ],
                   ),

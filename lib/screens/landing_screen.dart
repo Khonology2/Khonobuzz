@@ -161,7 +161,7 @@ class _LandingScreenState extends State<LandingScreen> {
                     isLight
                         ? 'assets/images/red_disc.png'
                         : 'assets/images/discs.png',
-                    height: 80,
+                    height: isLight ? 96 : 80,
                   ),
                 ],
               ),

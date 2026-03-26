@@ -344,7 +344,7 @@ class LobbyScreenState extends State<LobbyScreen> {
                         isDark
                             ? 'assets/images/discs.png'
                             : 'assets/images/red_disc.png',
-                        height: 80,
+                        height: isDark ? 80 : 96,
                       ),
 
                     ],

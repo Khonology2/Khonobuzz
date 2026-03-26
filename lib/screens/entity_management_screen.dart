@@ -678,6 +678,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   Widget _buildEntityPanel(ManagedUser user) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color panelBg = isDark ? entityDarkWidgetBg : Colors.white;
+    final Color dividerColor = appTextColor(context).withValues(
+      alpha: isDark ? 0.22 : 0.30,
+    );
     String? selectedEntity = (user.entity == null || user.entity!.isEmpty)
         ? _notAssignedValue
         : user.entity;
@@ -718,7 +721,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
           DropdownButtonHideUnderline(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12.0),

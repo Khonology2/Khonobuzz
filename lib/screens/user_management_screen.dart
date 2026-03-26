@@ -1364,6 +1364,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Widget _buildDropdownContent(ManagedUser user) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color panelBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+    final Color dividerColor = appTextColor(context).withValues(
+      alpha: isDark ? 0.22 : 0.30,
+    );
 
     String selectedRole = user.role;
     String selectedStatusLocal = user.status;
@@ -1765,7 +1768,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
           Align(
             alignment: Alignment.centerLeft,
             child: RichText(
@@ -1785,7 +1790,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
 
           Align(
             alignment: Alignment.centerRight,

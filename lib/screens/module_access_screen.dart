@@ -2220,6 +2220,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   Widget _buildModuleAccessPanel(ManagedUser user) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color widgetBg = isDark ? moduleAccessDarkWidgetBg : Colors.white;
+    final Color dividerColor = appTextColor(context).withValues(
+      alpha: isDark ? 0.22 : 0.30,
+    );
     List<String> selectedModuleAccessList = [];
     if (user.moduleAccess != null && user.moduleAccess!.isNotEmpty) {
       selectedModuleAccessList = user.moduleAccess!
@@ -2594,7 +2597,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2720,7 +2725,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2847,7 +2854,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2973,7 +2982,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [

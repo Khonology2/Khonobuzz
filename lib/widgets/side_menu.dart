@@ -6,6 +6,8 @@ import '../screens/landing_screen.dart';
 import '../services/sound_system.dart';
 import 'version_control_widget.dart'; // Added import for VersionControlWidget
 
+const Color _sideMenuDarkWidgetColor = Color(0xFF3D3F40);
+
 class MenuItemWidget extends StatefulWidget {
   final String unselectedIconPath;
   final String selectedIconPath;
@@ -335,7 +337,7 @@ class _SideMenuState extends State<SideMenu> {
     // No auto-collapse; fixed widths handle layout consistently
     final bool isLight = Theme.of(context).brightness == Brightness.light;
     final Color sidebarBg =
-        isLight ? Colors.white : const Color(0xFF1F2840);
+        isLight ? Colors.white : _sideMenuDarkWidgetColor;
     final Color welcomeColor = isLight ? Colors.black : Colors.white;
 
     return Container(
@@ -492,47 +494,61 @@ class _SideMenuState extends State<SideMenu> {
                     SoundSystem.playButtonClick();
                     final shouldLogout = await showDialog<bool>(
                       context: context,
-                      builder: (dialogContext) => AlertDialog(
-                        backgroundColor: const Color(0xFF2C3E50),
-                        title: const Text(
-                          'Confirm logout',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        content: const Text(
-                          'Are you sure you want to logout?',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(dialogContext).pop(false);
-                            },
-                            child: const Text(
-                              'Cancel',
-                              style: TextStyle(color: Colors.white70),
+                      builder: (dialogContext) {
+                        final bool dialogIsLight =
+                            Theme.of(dialogContext).brightness ==
+                            Brightness.light;
+                        final Color dialogTextColor = dialogIsLight
+                            ? Colors.black
+                            : Colors.white;
+                        return AlertDialog(
+                          backgroundColor: dialogIsLight
+                              ? Colors.white
+                              : _sideMenuDarkWidgetColor,
+                          title: Text(
+                            'Confirm logout',
+                            style: TextStyle(
+                              color: dialogTextColor,
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.of(dialogContext).pop(true);
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFC10D00),
-                            ),
-                            child: const Text(
-                              'Yes',
-                              style: TextStyle(fontFamily: 'Poppins'),
+                          content: Text(
+                            'Are you sure you want to logout?',
+                            style: TextStyle(
+                              color: dialogTextColor,
+                              fontFamily: 'Poppins',
                             ),
                           ),
-                        ],
-                      ),
+                          actions: [
+                            OutlinedButton(
+                              onPressed: () {
+                                Navigator.of(dialogContext).pop(false);
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: dialogTextColor,
+                                side: BorderSide(
+                                  color: dialogTextColor.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(dialogContext).pop(true);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFC10D00),
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text(
+                                'Yes',
+                                style: TextStyle(fontFamily: 'Poppins'),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     );
 
                     if (shouldLogout != true || !context.mounted) {
