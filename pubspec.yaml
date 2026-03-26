@@ -79,7 +79,9 @@ flutter:
     - assets/videos/spinning_discs.gif      
     - assets/images/logo.png
     - assets/images/discs.png
+    - assets/images/red_disc.png
     - assets/images/nathi_bg.png
+    - assets/images/light_mode_bg.png
     - assets/images/khono.png
     - assets/images/rokects.png
     - assets/images/animated_rocket.mp4

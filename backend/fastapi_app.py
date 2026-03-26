@@ -79,6 +79,15 @@ def append_agent_debug_log(hypothesis_id: str, location: str, message: str, data
 LOGIN_CACHE_TTL_SECONDS = int(os.environ.get('LOGIN_CACHE_TTL_SECONDS', '600'))
 USER_CACHE: Dict[str, Dict[str, Any]] = {}
 
+# Cache for /api/version to avoid re-reading version.json on every request.
+# This is useful when the Flutter app (or multiple dev hot-reloads) call the endpoint repeatedly.
+VERSION_JSON_CACHE_TTL_SECONDS = int(os.environ.get('VERSION_JSON_CACHE_TTL_SECONDS', '60'))
+_VERSION_JSON_CACHE: Dict[str, Any] = {
+    "expires_at": 0.0,
+    "mtime": None,
+    "data": None,
+}
+
 def derive_module_access_from_role(module_access: Optional[str], module_access_role: Optional[str]) -> Optional[str]:
     if module_access and module_access.strip():
         return module_access
@@ -403,12 +412,19 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 async def log_requests(request, call_next):
     """Log all incoming requests"""
     start_time = datetime.utcnow()
-    info_log(f"→ {request.method} {request.url.path} from {request.client.host if request.client else 'unknown'}")
-    if DEBUG_MODE and request.query_params:
+    should_log = request.url.path != "/api/version"
+    if should_log:
+        info_log(
+            f"→ {request.method} {request.url.path} from {request.client.host if request.client else 'unknown'}"
+        )
+    if DEBUG_MODE and should_log and request.query_params:
         debug_log(f"  Query params: {dict(request.query_params)}")
     response = await call_next(request)
     process_time = (datetime.utcnow() - start_time).total_seconds()
-    info_log(f"← {request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)")
+    if should_log:
+        info_log(
+            f"← {request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)"
+        )
     return response
 @app.get("/")
 async def root():
@@ -481,8 +497,27 @@ async def get_version(request: Request):
             resp = JSONResponse(status_code=404, content={"error": "version.json not found"})
             resp.headers.update(_cors_headers_for_request(request))
             return resp
+
+        now = time.time()
+        mtime = path.stat().st_mtime
+        # Serve cached version.json if still valid.
+        if (
+            _VERSION_JSON_CACHE.get("data") is not None
+            and _VERSION_JSON_CACHE.get("mtime") == mtime
+            and now < float(_VERSION_JSON_CACHE.get("expires_at", 0.0))
+        ):
+            response = JSONResponse(content=_VERSION_JSON_CACHE["data"])
+            response.headers["X-Version-Cache"] = "HIT"
+            response.headers.update(_cors_headers_for_request(request))
+            return response
+
         raw = path.read_text(encoding="utf-8")
         data = json.loads(raw)
+
+        # Update cache after successful parse.
+        _VERSION_JSON_CACHE["data"] = data
+        _VERSION_JSON_CACHE["mtime"] = mtime
+        _VERSION_JSON_CACHE["expires_at"] = now + VERSION_JSON_CACHE_TTL_SECONDS
         # region agent log
         append_agent_debug_log(
             "H5",
@@ -496,6 +531,7 @@ async def get_version(request: Request):
         )
         # endregion
         response = JSONResponse(content=data)
+        response.headers["X-Version-Cache"] = "MISS"
         response.headers.update(_cors_headers_for_request(request))
         return response
     except Exception as e:

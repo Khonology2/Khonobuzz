@@ -7,8 +7,11 @@ import '../providers/auth_provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'dart:async';
 import '../services/sound_system.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
 import '../widgets/animations/loading_button.dart';
-import '../widgets/version_control_widget.dart';
 import 'lobby_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -21,6 +24,8 @@ class OnboardingScreen extends StatefulWidget {
 
 class OnboardingScreenState extends State<OnboardingScreen>
     with TickerProviderStateMixin {
+  static const Color onboardingDarkWidgetBg = Color(0xFF3D3F40);
+
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -96,12 +101,16 @@ class OnboardingScreenState extends State<OnboardingScreen>
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark ? onboardingDarkWidgetBg : Colors.white;
+    final Color hintColor = isDark ? Colors.white70 : Colors.black54;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/nathi_bg.png'),
+            image: AssetImage(appBackgroundAsset(context)),
             fit: BoxFit.cover,
           ),
         ),
@@ -117,11 +126,11 @@ class OnboardingScreenState extends State<OnboardingScreen>
                     children: [
                       Image.asset('assets/images/khono.png', height: 100),
                       const SizedBox(height: 48),
-                      const Text(
+                      Text(
                         'Create Your Account',
                         style: TextStyle(
                           fontFamily: 'Poppins',
-                          color: Colors.white,
+                          color: appTextColor(context),
                           fontSize: 20,
                         ),
                       ),
@@ -176,11 +185,11 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.center,
                                             children: [
-                                              const Text(
+                                              Text(
                                                 'Department',
                                                 textAlign: TextAlign.center,
                                                 style: TextStyle(
-                                                  color: Colors.white,
+                                                  color: appTextColor(context),
                                                   fontSize: 16,
                                                   fontFamily: 'Poppins',
                                                 ),
@@ -189,15 +198,14 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                               DropdownButtonFormField<String>(
                                                 initialValue:
                                                     _selectedDepartment,
-                                                dropdownColor: Colors.grey[800],
-                                                style: const TextStyle(
-                                                  color: Colors.white,
+                                                dropdownColor: widgetBg,
+                                                style: TextStyle(
+                                                  color: appTextColor(context),
                                                   fontFamily: 'Poppins',
                                                 ),
                                                 decoration: InputDecoration(
                                                   filled: true,
-                                                  fillColor: Colors.grey[800]!
-                                                      .withValues(alpha: 0.5),
+                                                  fillColor: widgetBg,
                                                   border: OutlineInputBorder(
                                                     borderRadius:
                                                         BorderRadius.circular(
@@ -214,7 +222,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                                 hint: Text(
                                                   'Select Department',
                                                   style: TextStyle(
-                                                    color: Colors.grey[600],
+                                                    color: hintColor,
                                                     fontFamily: 'Poppins',
                                                   ),
                                                 ),
@@ -225,7 +233,17 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                                     String
                                                   >(
                                                     value: department,
-                                                    child: Text(department),
+                                                    child: Text(
+                                                      department,
+                                                      style: TextStyle(
+                                                        color:
+                                                            appTextColor(context),
+                                                        fontFamily:
+                                                            'Poppins',
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                    ),
                                                   );
                                                 }).toList(),
                                                 onChanged: (String? newValue) {
@@ -289,11 +307,11 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.center,
                                             children: [
-                                              const Text(
+                                              Text(
                                                 'Department',
                                                 textAlign: TextAlign.center,
                                                 style: TextStyle(
-                                                  color: Colors.white,
+                                                  color: appTextColor(context),
                                                   fontSize: 16,
                                                   fontFamily: 'Poppins',
                                                 ),
@@ -302,15 +320,14 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                               DropdownButtonFormField<String>(
                                                 initialValue:
                                                     _selectedDepartment,
-                                                dropdownColor: Colors.grey[800],
-                                                style: const TextStyle(
-                                                  color: Colors.white,
+                                                dropdownColor: widgetBg,
+                                                style: TextStyle(
+                                                  color: appTextColor(context),
                                                   fontFamily: 'Poppins',
                                                 ),
                                                 decoration: InputDecoration(
                                                   filled: true,
-                                                  fillColor: Colors.grey[800]!
-                                                      .withValues(alpha: 0.5),
+                                                  fillColor: widgetBg,
                                                   border: OutlineInputBorder(
                                                     borderRadius:
                                                         BorderRadius.circular(
@@ -327,7 +344,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                                 hint: Text(
                                                   'Select Department',
                                                   style: TextStyle(
-                                                    color: Colors.grey[600],
+                                                    color: hintColor,
                                                     fontFamily: 'Poppins',
                                                   ),
                                                 ),
@@ -338,7 +355,17 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                                     String
                                                   >(
                                                     value: department,
-                                                    child: Text(department),
+                                                    child: Text(
+                                                      department,
+                                                      style: TextStyle(
+                                                        color:
+                                                            appTextColor(context),
+                                                        fontFamily:
+                                                            'Poppins',
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                    ),
                                                   );
                                                 }).toList(),
                                                 onChanged: (String? newValue) {
@@ -380,11 +407,11 @@ class OnboardingScreenState extends State<OnboardingScreen>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  const Text(
+                                  Text(
                                     'Designation',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      color: Colors.white,
+                                      color: appTextColor(context),
                                       fontSize: 16,
                                       fontFamily: 'Poppins',
                                     ),
@@ -392,16 +419,14 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                   const SizedBox(height: 8),
                                   DropdownButtonFormField<String>(
                                     initialValue: _selectedDesignation,
-                                    dropdownColor: Colors.grey[800],
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    dropdownColor: widgetBg,
+                                    style: TextStyle(
+                                      color: appTextColor(context),
                                       fontFamily: 'Poppins',
                                     ),
                                     decoration: InputDecoration(
                                       filled: true,
-                                      fillColor: Colors.grey[800]!.withValues(
-                                        alpha: 0.5,
-                                      ),
+                                      fillColor: widgetBg,
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(
                                           25.0,
@@ -417,7 +442,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                     hint: Text(
                                       'Select Designation',
                                       style: TextStyle(
-                                        color: Colors.grey[600],
+                                        color: hintColor,
                                         fontFamily: 'Poppins',
                                       ),
                                     ),
@@ -426,7 +451,14 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                     ) {
                                       return DropdownMenuItem<String>(
                                         value: designation,
-                                        child: Text(designation),
+                                        child: Text(
+                                          designation,
+                                          style: TextStyle(
+                                            color: appTextColor(context),
+                                            fontFamily: 'Poppins',
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
                                       );
                                     }).toList(),
                                     onChanged: (String? newValue) {
@@ -509,6 +541,11 @@ class OnboardingScreenState extends State<OnboardingScreen>
                               context: currentContext,
                               barrierColor: Colors.black54,
                               builder: (BuildContext context) {
+                                final bool isDark = Theme.of(context).brightness == Brightness.dark;
+                                final Color dialogBg = isDark
+                                    ? const Color(0xFF2C3E50).withValues(alpha: 0.85)
+                                    : Colors.white.withValues(alpha: 0.95);
+
                                 return Dialog(
                                   backgroundColor: Colors.transparent,
                                   child: BackdropFilter(
@@ -518,9 +555,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                     ),
                                     child: Container(
                                       decoration: BoxDecoration(
-                                        color: const Color(
-                                          0xFF2C3E50,
-                                        ).withValues(alpha: 0.85),
+                                        color: dialogBg,
                                         borderRadius: BorderRadius.circular(16),
                                       ),
                                       child: Padding(
@@ -528,10 +563,10 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                         child: Column(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            const Text(
+                                            Text(
                                               'Please use your correct work email',
                                               style: TextStyle(
-                                                color: Colors.white,
+                                                color: appTextColor(context),
                                                 fontFamily: 'Poppins',
                                                 fontSize: 18,
                                                 fontWeight: FontWeight.bold,
@@ -539,10 +574,10 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                               textAlign: TextAlign.center,
                                             ),
                                             const SizedBox(height: 16),
-                                            const Text(
+                                            Text(
                                               'Only Khonology work emails (@khonology.com) are allowed.',
                                               style: TextStyle(
-                                                color: Colors.white70,
+                                                color: appTextColor(context).withValues(alpha: 0.7),
                                                 fontFamily: 'Poppins',
                                                 fontSize: 14,
                                               ),
@@ -568,10 +603,10 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                                       BorderRadius.circular(8),
                                                 ),
                                               ),
-                                              child: const Text(
+                                              child: Text(
                                                 'OK',
                                                 style: TextStyle(
-                                                  color: Colors.white,
+                                                  color: appTextColor(context),
                                                   fontFamily: 'Poppins',
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -666,7 +701,9 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                 ? _blinkAnimation.value * _discsOpacity
                                 : _discsOpacity,
                             child: Image.asset(
-                              'assets/images/discs.png',
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? 'assets/images/discs.png'
+                                  : 'assets/images/red_disc.png',
                               height: 80,
                             ),
                           );
@@ -678,12 +715,27 @@ class OnboardingScreenState extends State<OnboardingScreen>
               ),
             ),
             Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Align(
-                alignment: Alignment.center,
-                child: const VersionControlWidget(),
+              right: 16,
+              bottom: 16,
+              child: SafeArea(
+                child: Consumer<ThemeModeProvider>(
+                  builder: (context, themeMode, _) {
+                    return FloatingActionButton.small(
+                      heroTag: 'onboarding_theme_toggle_fab',
+                      onPressed: () {
+                        SoundSystem.playButtonClick();
+                        themeMode.toggle();
+                      },
+                      backgroundColor: AppThemes.light.primaryColor,
+                      child: Icon(
+                        themeMode.isLight
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        color: appTextColor(context),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -698,14 +750,18 @@ class OnboardingScreenState extends State<OnboardingScreen>
     String? hintText,
     required TextEditingController controller,
   }) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark ? onboardingDarkWidgetBg : Colors.white;
+    final Color hintColor = isDark ? Colors.white70 : Colors.black54;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           label,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: appTextColor(context),
             fontSize: 16,
             fontFamily: 'Poppins',
           ),
@@ -713,12 +769,15 @@ class OnboardingScreenState extends State<OnboardingScreen>
         const SizedBox(height: 8),
         TextField(
           controller: controller,
-          style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+          style: TextStyle(
+            color: appTextColor(context),
+            fontFamily: 'Poppins',
+          ),
           decoration: InputDecoration(
             hintText: hintText ?? hint ?? _getHintText(label),
-            hintStyle: TextStyle(color: Colors.grey[600]),
+            hintStyle: TextStyle(color: hintColor),
             filled: true,
-            fillColor: Colors.grey[800]!.withValues(alpha: 0.5),
+            fillColor: widgetBg,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(25.0),
               borderSide: BorderSide.none,
@@ -762,8 +821,8 @@ class OnboardingScreenState extends State<OnboardingScreen>
                   children: [
                     Text(
                       '$fieldName Required',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -773,8 +832,8 @@ class OnboardingScreenState extends State<OnboardingScreen>
                     const SizedBox(height: 16),
                     Text(
                       message,
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                         fontSize: 14,
                       ),
@@ -796,10 +855,10 @@ class OnboardingScreenState extends State<OnboardingScreen>
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         'OK',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.bold,
                         ),
@@ -1057,9 +1116,9 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Text(
               widget.text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Poppins',
-                color: Colors.white,
+                color: appTextColor(context),
                 fontWeight: FontWeight.bold,
               ),
             ),

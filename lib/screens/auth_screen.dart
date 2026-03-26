@@ -11,7 +11,10 @@ import 'manual_login_screen.dart';
 import '../main.dart';
 import 'onboarding_screen.dart';
 import '../widgets/prefetch_overlay_dialog.dart';
-import '../widgets/version_control_widget.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -151,9 +154,9 @@ class AuthScreenState extends State<AuthScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/nathi_bg.png'),
+            image: AssetImage(appBackgroundAsset(context)),
             fit: BoxFit.cover,
           ),
         ),
@@ -171,11 +174,11 @@ class AuthScreenState extends State<AuthScreen> {
                       const SizedBox(height: 48),
 
                       const SizedBox(height: 32),
-                      const Text(
+                      Text(
                         'Select Login Preference',
                         style: TextStyle(
                           fontFamily: 'Poppins',
-                          color: Colors.white,
+                          color: appTextColor(context),
                           fontSize: 20,
                         ),
                       ),
@@ -304,7 +307,9 @@ class AuthScreenState extends State<AuthScreen> {
                         opacity: _discsOpacity,
                         duration: const Duration(milliseconds: 1000),
                         child: Image.asset(
-                          'assets/images/discs.png',
+                          Theme.of(context).brightness == Brightness.dark
+                              ? 'assets/images/discs.png'
+                              : 'assets/images/red_disc.png',
                           height: 80,
                         ),
                       ),
@@ -314,12 +319,27 @@ class AuthScreenState extends State<AuthScreen> {
               ),
             ),
             Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Align(
-                alignment: Alignment.center,
-                child: const VersionControlWidget(),
+              right: 16,
+              bottom: 16,
+              child: SafeArea(
+                child: Consumer<ThemeModeProvider>(
+                  builder: (context, themeMode, _) {
+                    return FloatingActionButton.small(
+                      heroTag: 'auth_theme_toggle_fab',
+                      onPressed: () {
+                        SoundSystem.playButtonClick();
+                        themeMode.toggle();
+                      },
+                      backgroundColor: AppThemes.light.primaryColor,
+                      child: Icon(
+                        themeMode.isLight
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        color: appTextColor(context),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -513,9 +533,9 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Text(
               widget.text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Poppins',
-                color: Colors.white,
+                color: appTextColor(context),
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -628,9 +648,9 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Text(
               widget.text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Poppins',
-                color: Colors.white,
+                color: appTextColor(context),
                 fontWeight: FontWeight.bold,
               ),
             ),

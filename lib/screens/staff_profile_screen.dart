@@ -9,6 +9,11 @@ import '../widgets/floating_circles_particle_animation.dart';
 import '../widgets/profile_image_upload.dart';
 import 'dart:convert';
 import '../config/api_config.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
+import '../services/sound_system.dart';
 
 class StaffProfileScreen extends StatefulWidget {
   const StaffProfileScreen({super.key});
@@ -18,6 +23,8 @@ class StaffProfileScreen extends StatefulWidget {
 }
 
 class _StaffProfileScreenState extends State<StaffProfileScreen> {
+  static const Color profileDarkWidgetBg = Color(0xFF3D3F40);
+
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _surnameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -320,9 +327,9 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/nathi_bg.png'),
+            image: AssetImage(appBackgroundAsset(context)),
             fit: BoxFit.cover,
           ),
         ),
@@ -338,7 +345,9 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                 width: 400,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.3),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? profileDarkWidgetBg
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: const Color(0xFFC10D00).withValues(alpha: 0.3),
@@ -370,10 +379,10 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Staff Profile',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: appTextColor(context),
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                               fontFamily: 'Poppins',
@@ -381,8 +390,8 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                           ),
                           Text(
                             authProvider.userEmail ?? 'staff@example.com',
-                            style: const TextStyle(
-                              color: Colors.white70,
+                            style: TextStyle(
+                              color: appTextColor(context),
                               fontSize: 16,
                               fontFamily: 'Poppins',
                             ),
@@ -405,7 +414,9 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                 width: 400,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.3),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? profileDarkWidgetBg
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: const Color(0xFFC10D00).withValues(alpha: 0.3),
@@ -512,6 +523,30 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                 ),
               ),
             ),
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: SafeArea(
+                child: Consumer<ThemeModeProvider>(
+                  builder: (context, themeMode, _) {
+                    return FloatingActionButton.small(
+                      heroTag: 'staff_profile_theme_toggle_fab',
+                      onPressed: () {
+                        SoundSystem.playButtonClick();
+                        themeMode.toggle();
+                      },
+                      backgroundColor: AppThemes.light.primaryColor,
+                      child: Icon(
+                        themeMode.isLight
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        color: appTextColor(context),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -519,13 +554,16 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
   }
 
   Widget _buildReadOnlyLabelValue(String label, String value) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark ? profileDarkWidgetBg : Colors.white;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: appTextColor(context),
             fontSize: 14,
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w500,
@@ -536,14 +574,14 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: widgetBg,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+            border: Border.all(color: appTextColor(context).withValues(alpha: 0.3)),
           ),
           child: Text(
             value,
-            style: const TextStyle(
-              color: Colors.white70,
+            style: TextStyle(
+              color: appTextColor(context),
               fontSize: 14,
               fontFamily: 'Poppins',
             ),
@@ -561,13 +599,16 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
     String? errorText,
     bool readOnly = false,
   }) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark ? profileDarkWidgetBg : Colors.white;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: appTextColor(context),
             fontSize: 14,
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w500,
@@ -576,28 +617,26 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: readOnly
-                ? Colors.white.withValues(alpha: 0.05)
-                : Colors.white.withValues(alpha: 0.1),
+            color: widgetBg,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: errorText != null
                   ? Colors.redAccent
-                  : Colors.white.withValues(alpha: 0.3),
+                  : appTextColor(context).withValues(alpha: 0.3),
             ),
           ),
           child: TextField(
             controller: controller,
             readOnly: readOnly,
             style: TextStyle(
-              color: readOnly ? Colors.white70 : Colors.white,
+              color: readOnly ? appTextColor(context) : appTextColor(context),
               fontSize: 16,
               fontFamily: 'Poppins',
             ),
             decoration: InputDecoration(
               border: InputBorder.none,
               errorText: errorText,
-              errorStyle: const TextStyle(
+              errorStyle: TextStyle(
                 color: Colors.redAccent,
                 fontSize: 12,
                 height: 0.8,
@@ -620,13 +659,16 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
     List<String> items,
     void Function(String?) onChanged,
   ) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark ? profileDarkWidgetBg : Colors.white;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: appTextColor(context),
             fontSize: 14,
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w500,
@@ -635,17 +677,17 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: widgetBg,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+            border: Border.all(color: appTextColor(context).withValues(alpha: 0.3)),
           ),
           child: DropdownButtonFormField<String>(
             value: initialValue,
-            dropdownColor: Colors.grey[800],
-            style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+            dropdownColor: widgetBg,
+            style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
             decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.grey[800]!.withValues(alpha: 0.5),
+              fillColor: widgetBg,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(25.0),
                 borderSide: BorderSide.none,
@@ -657,10 +699,23 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
             ),
             hint: Text(
               'Select $label',
-              style: TextStyle(color: Colors.grey[600], fontFamily: 'Poppins'),
+              style: TextStyle(
+                color: appTextColor(context).withValues(alpha: 0.65),
+                fontFamily: 'Poppins',
+              ),
             ),
             items: items.map((String item) {
-              return DropdownMenuItem<String>(value: item, child: Text(item));
+              return DropdownMenuItem<String>(
+                value: item,
+                child: Text(
+                  item,
+                  style: TextStyle(
+                    color: appTextColor(context),
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              );
             }).toList(),
             onChanged: onChanged,
             validator: (value) {

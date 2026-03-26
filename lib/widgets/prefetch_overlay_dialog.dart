@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
+import '../theme/app_text_colors.dart';
 
 /// Loading overlay shown after successful login for all users (admin and staff).
 /// Displays progress messages, then "Enjoy your session, {name}!" and navigates to main app.
@@ -38,12 +39,12 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
   static const Duration _messageOutDuration = Duration(milliseconds: 420);
   static const Duration _messageInDuration = Duration(milliseconds: 400);
 
-  static const TextStyle _messageStyle = TextStyle(
-    color: Colors.white,
-    fontSize: 18,
-    fontWeight: FontWeight.w600,
-    fontFamily: 'Poppins',
-  );
+  TextStyle get _messageStyle => TextStyle(
+        color: appTextColor(context),
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        fontFamily: 'Poppins',
+      );
 
   /// Derives display name from email, e.g. nkosinathi.radebe@khonology.com → "Nkosinathi Radebe".
   static String _displayNameFromEmail(String? email) {
@@ -276,6 +277,18 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color panelBg = isDark ? const Color(0xFF3D3F40) : Colors.white;
+    final Color overlayBg = isDark
+        ? Colors.black54
+        : Colors.black.withValues(alpha: 0.12);
+    final Color shadowColor = isDark
+        ? Colors.black.withValues(alpha: 0.3)
+        : Colors.black.withValues(alpha: 0.12);
+    final Color loaderBlueColor = isDark
+        ? const Color.fromARGB(255, 253, 254, 255)
+        : Colors.black.withValues(alpha: 0.6);
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: EdgeInsets.zero,
@@ -284,7 +297,7 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
         child: Container(
           width: double.infinity,
           height: double.infinity,
-          color: Colors.black54,
+          color: overlayBg,
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),
@@ -292,16 +305,16 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
                 padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
                 margin: const EdgeInsets.symmetric(horizontal: 24),
                 decoration: BoxDecoration(
-                color: const Color(0xFF2C3E50).withValues(alpha: 0.95),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
+                  color: panelBg,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: shadowColor,
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -333,6 +346,7 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
                             size: const Size(50, 50),
                             painter: _LoaderPainter(
                               _loaderController.value * 2 * math.pi,
+                              blueColor: loaderBlueColor,
                             ),
                           );
                         },
@@ -350,9 +364,10 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
 }
 
 class _LoaderPainter extends CustomPainter {
-  _LoaderPainter(this.angle);
+  _LoaderPainter(this.angle, {required this.blueColor});
 
   final double angle;
+  final Color blueColor;
 
   static const double _size = 50;
   static const double _strokeWidth = 8;
@@ -370,7 +385,7 @@ class _LoaderPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     final bluePaint = Paint()
-      ..color = const Color.fromARGB(255, 253, 254, 255)
+      ..color = blueColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = _strokeWidth
       ..strokeCap = StrokeCap.round;

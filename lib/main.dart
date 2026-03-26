@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'config/api_config.dart';
 import 'screens/entity_management_screen.dart';
 import 'screens/user_management_screen.dart';
@@ -8,7 +9,9 @@ import 'screens/module_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/onboarding_alert_screen.dart';
 import 'providers/auth_provider.dart';
+import 'providers/theme_mode_provider.dart';
 import 'providers/user_provider.dart';
+import 'theme/app_themes.dart';
 import 'services/sound_system.dart';
 import 'services/version_service.dart';
 import 'screens/admin_profile_screen.dart';
@@ -26,11 +29,20 @@ void main() async {
   debugPrint('Firebase initialized successfully!'); // Debug print
   // So version widget can fetch latest from backend and stop being stuck on build-time version
   VersionService.versionBaseUrl = ApiConfig.baseUrl;
-  runApp(const MyApp());
+
+  final prefs = await SharedPreferences.getInstance();
+  final storedTheme = prefs.getString(ThemeModeProvider.prefsKey);
+  final ThemeMode initialThemeMode = storedTheme == 'light'
+      ? ThemeMode.light
+      : ThemeMode.dark;
+
+  runApp(MyApp(initialThemeMode: initialThemeMode));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, this.initialThemeMode = ThemeMode.dark});
+
+  final ThemeMode initialThemeMode;
 
   @override
   Widget build(BuildContext context) {
@@ -38,26 +50,17 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => UserProvider()),
-      ],
-      child: MaterialApp(
-        title: 'Khonology',
-        theme: ThemeData(
-          fontFamily: 'Poppins', // Set Poppins as the default font
-          primaryColor: const Color(0xFFC10D00), // Use the specified red color
-          colorScheme: ColorScheme.fromSwatch().copyWith(
-            secondary: const Color(0xFFC10D00),
-          ), // Use the specified red color for accent
-          scaffoldBackgroundColor: const Color(0xFF1A1A1A),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF1A1A1A),
-            foregroundColor: Colors.white,
-          ),
-          textTheme: const TextTheme(
-            bodyLarge: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
-            bodyMedium: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
-            titleLarge: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
-          ),
+        ChangeNotifierProvider(
+          create: (_) => ThemeModeProvider(initialMode: initialThemeMode),
         ),
+      ],
+      child: Consumer<ThemeModeProvider>(
+        builder: (context, themeModeProvider, _) {
+          return MaterialApp(
+        title: 'Khonology',
+        theme: AppThemes.light,
+        darkTheme: AppThemes.dark,
+        themeMode: themeModeProvider.themeMode,
         home: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
             // Always use Modules screen (index 3) for authenticated users on login
@@ -73,6 +76,8 @@ class MyApp extends StatelessWidget {
           },
         ),
         debugShowCheckedModeBanner: false,
+          );
+        },
       ),
     );
   }
@@ -104,6 +109,11 @@ class _MainScreenState extends State<MainScreen> {
     final authProvider = context.read<AuthProvider>();
     final role = authProvider.userRole?.toLowerCase() ?? '';
     return role == 'admin';
+  }
+
+  bool _isStaffOrAdmin() {
+    final role = context.read<AuthProvider>().userRole?.toLowerCase() ?? '';
+    return role == 'admin' || role == 'staff';
   }
 
   // Check if screen index is Admin-only
@@ -209,6 +219,7 @@ class _MainScreenState extends State<MainScreen> {
         (pendingUsers.isNotEmpty || activeUsersWithoutAssignments.isNotEmpty);
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: PreferredSize(
         preferredSize: Size.zero,
         child: AppBar(
@@ -224,14 +235,47 @@ class _MainScreenState extends State<MainScreen> {
                 onItemSelected: _onItemTapped,
               ),
               Expanded(
-                child: IndexedStack(
-                  index: _selectedIndex,
-                  children: const [
-                    UserManagementScreen(),
-                    EntityManagementScreen(),
-                    ModuleAccessScreen(),
-                    ModuleScreen(),
-                    _ProfileScreenPlaceholder(),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  fit: StackFit.expand,
+                  children: [
+                    Positioned.fill(
+                      child: IndexedStack(
+                        index: _selectedIndex,
+                        children: const [
+                          UserManagementScreen(),
+                          EntityManagementScreen(),
+                          ModuleAccessScreen(),
+                          ModuleScreen(),
+                          _ProfileScreenPlaceholder(),
+                        ],
+                      ),
+                    ),
+                    if (_isStaffOrAdmin())
+                      Positioned(
+                        right: 16,
+                        bottom: 16,
+                        child: SafeArea(
+                          child: Consumer<ThemeModeProvider>(
+                            builder: (context, themeMode, _) {
+                              return FloatingActionButton.small(
+                                heroTag: 'khono_theme_toggle_fab',
+                                onPressed: () {
+                                  SoundSystem.playButtonClick();
+                                  themeMode.toggle();
+                                },
+                                backgroundColor: const Color(0xFFC10D00),
+                                child: Icon(
+                                  themeMode.isLight
+                                      ? Icons.dark_mode_rounded
+                                      : Icons.light_mode_rounded,
+                                  color: Colors.white,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),

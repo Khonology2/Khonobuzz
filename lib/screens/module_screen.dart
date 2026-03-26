@@ -10,10 +10,13 @@ import '../config/api_config.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import '../services/sound_system.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
 import '../widgets/floating_circles_particle_animation.dart';
 
-const Color primaryDark = Color(0xFF1F2937);
 const Color primaryAccent = Color(0xFFC10D00);
+const Color moduleCardDarkSurface = Color(0xFF3D3F40);
 
 class ModuleScreen extends StatefulWidget {
   const ModuleScreen({super.key});
@@ -134,16 +137,23 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<ThemeModeProvider>();
+
     return Scaffold(
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset('assets/images/nathi_bg.png', fit: BoxFit.cover),
+            child: Image.asset(
+              appBackgroundAsset(context),
+              fit: BoxFit.cover,
+            ),
           ),
           Positioned.fill(
             child: ScrollbarTheme(
               data: ScrollbarThemeData(
-                thumbColor: WidgetStatePropertyAll<Color>(Colors.white),
+                thumbColor: WidgetStatePropertyAll<Color>(
+                  appTextColor(context),
+                ),
               ),
               child: Scrollbar(
                 controller: _scrollController,
@@ -216,11 +226,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                 !showRecruitment &&
                                 !showSOWBuilder &&
                                 !showDeliverables) {
-                              return const Center(
+                              return Center(
                                 child: Text(
                                   'No module access assigned. Please contact your administrator.',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: appTextColor(context),
                                     fontSize: 18.0,
                                     fontFamily: 'Poppins',
                                   ),
@@ -456,6 +466,14 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
   @override
   Widget build(BuildContext context) {
     final String? description = _getModuleDescription(widget.moduleKey);
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color cardBg = isDark ? moduleCardDarkSurface : Colors.white;
+    final Color titleColor = appTextColor(context);
+    final Color secondaryTextColor =
+        isDark ? appTextColor(context).withValues(alpha: 0.85) : Colors.black87;
+    final Color borderColor = _isHovered
+        ? (isDark ? Colors.white54 : Colors.black45)
+        : (isDark ? Colors.white24 : Colors.black26);
     return LayoutBuilder(
       builder: (context, constraints) {
         final bool hasBoundedHeight =
@@ -498,19 +516,17 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                         width: widget.cardWidth,
                         padding: const EdgeInsets.all(28.8),
                         decoration: BoxDecoration(
-                          color: primaryDark.withValues(
-                            alpha: _isHovered ? 0.7 : 0.5,
-                          ),
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(16.0),
                           border: Border.all(
-                            color: _isHovered ? Colors.white38 : Colors.white24,
+                            color: borderColor,
                             width: _isHovered ? 1.5 : 1.0,
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: _isHovered
-                                  ? Colors.black.withValues(alpha: 0.7)
-                                  : Colors.black54,
+                                  ? Colors.black.withValues(alpha: 0.35)
+                                  : Colors.black.withValues(alpha: 0.22),
                               blurRadius: _isHovered ? 35 : 25,
                               offset: Offset(0, _isHovered ? 15 : 10),
                               spreadRadius: _isHovered ? 2 : 0,
@@ -531,10 +547,16 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                   children: [
                                     Align(
                                       alignment: Alignment.center,
-                                      child: Image.asset(
-                                        'assets/images/khonology_white_logo.png',
-                                        height: 40,
-                                        fit: BoxFit.contain,
+                                      child: ColorFiltered(
+                                        colorFilter: ColorFilter.mode(
+                                          titleColor,
+                                          BlendMode.srcIn,
+                                        ),
+                                        child: Image.asset(
+                                          'assets/images/khonology_white_logo.png',
+                                          height: 40,
+                                          fit: BoxFit.contain,
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(height: 16.0),
@@ -555,7 +577,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                                   ? 19.8
                                                   : 16.2,
                                               fontWeight: FontWeight.w900,
-                                              color: Colors.white,
+                                              color: titleColor,
                                               height: 1.3,
                                             ),
                                           ),
@@ -584,8 +606,8 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
                                           fontSize: 12.6,
-                                          fontWeight: FontWeight.w400,
-                                          color: Colors.white70,
+                                          fontWeight: FontWeight.w500,
+                                          color: secondaryTextColor,
                                           fontStyle: FontStyle.italic,
                                         ),
                                       ),
@@ -596,11 +618,12 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                       Text(
                                         description,
                                         textAlign: TextAlign.center,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 13.5,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.white70,
+                                          fontWeight: FontWeight.w600,
+                                          color: secondaryTextColor,
                                           fontFamily: 'Poppins',
+                                          height: 1.35,
                                         ),
                                       ),
                                       const SizedBox(height: 18.0),
@@ -655,7 +678,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                             },
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: primaryAccent,
-                                        foregroundColor: Colors.white,
+                                        foregroundColor: appTextColor(context),
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 36.0,
                                           vertical: 14.4,

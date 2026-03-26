@@ -12,6 +12,10 @@ import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/sound_system.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
 
 class EntityManagementScreen extends StatefulWidget {
   const EntityManagementScreen({super.key});
@@ -25,6 +29,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<String> _entityOptions = ['Khonology Internal'];
   static const String _notAssignedValue = 'Not Assigned';
+  static const Color entityDarkWidgetBg = Color(0xFF3D3F40);
 
   String? expandedUserId;
   String? _updatingUserId;
@@ -95,7 +100,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         SnackBar(
           content: Text(
             userProvider.errorMessage ?? 'Failed to refresh users.',
-            style: const TextStyle(fontFamily: 'Poppins'),
+            style: TextStyle(fontFamily: 'Poppins'),
           ),
           backgroundColor: Colors.red.shade600,
         ),
@@ -189,10 +194,10 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         if (mounted) {
           SoundSystem.playError();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
                 'Entity updated, but failed to sync with PDH.',
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                style: TextStyle(fontFamily: 'Poppins', color: appTextColor(context)),
               ),
               backgroundColor: Colors.orange,
             ),
@@ -219,9 +224,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           SnackBar(
             content: Text(
               'Entity updated for ${user.name}.',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Poppins',
-                color: Colors.white,
+                color: appTextColor(context),
               ),
             ),
             backgroundColor: const Color(0xFFC10D00),
@@ -235,7 +240,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           SnackBar(
             content: Text(
               'Failed to update entity. Please try again.',
-              style: const TextStyle(fontFamily: 'Poppins'),
+              style: TextStyle(fontFamily: 'Poppins'),
             ),
             backgroundColor: Colors.red.shade600,
           ),
@@ -254,12 +259,15 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset('assets/images/nathi_bg.png', fit: BoxFit.cover),
+            child: Image.asset(
+              appBackgroundAsset(context),
+              fit: BoxFit.cover,
+            ),
           ),
           Positioned.fill(
             child: ScrollbarTheme(
               data: ScrollbarThemeData(
-                thumbColor: WidgetStatePropertyAll<Color>(Colors.white),
+                thumbColor: WidgetStatePropertyAll<Color>(appTextColor(context)),
               ),
               child: Scrollbar(
                 controller: _scrollController,
@@ -284,6 +292,30 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
               ),
             ),
           ),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: SafeArea(
+              child: Consumer<ThemeModeProvider>(
+                builder: (context, themeMode, _) {
+                  return FloatingActionButton.small(
+                    heroTag: 'entity_management_theme_toggle_fab',
+                    onPressed: () {
+                      SoundSystem.playButtonClick();
+                      themeMode.toggle();
+                    },
+                    backgroundColor: AppThemes.light.primaryColor,
+                    child: Icon(
+                      themeMode.isLight
+                          ? Icons.dark_mode_rounded
+                          : Icons.light_mode_rounded,
+                      color: appTextColor(context),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -302,6 +334,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                 style: TextStyle(
                   fontSize: 28.0,
                   fontWeight: FontWeight.bold,
+                  color: appTextColor(context),
                   fontFamily: 'Poppins',
                 ),
               ),
@@ -318,7 +351,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                         color: Color(0xFFC10D00),
                       ),
                     )
-                  : const Icon(Icons.refresh, color: Colors.white),
+                  : Icon(Icons.refresh, color: appTextColor(context)),
             ),
           ],
         ),
@@ -326,7 +359,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         Text(
           'Assign entities to keep user records up to date.',
           style: TextStyle(
-            color: Colors.white70,
+            color: appTextColor(context),
             fontSize: 14.0,
             fontFamily: 'Poppins',
           ),
@@ -336,17 +369,19 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   }
 
   Widget _buildSearch() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color filledBg = isDark ? entityDarkWidgetBg : Colors.white;
     return TextField(
       controller: _searchController,
       decoration: InputDecoration(
         hintText: 'Search users',
-        hintStyle: const TextStyle(
-          color: Colors.white54,
+        hintStyle: TextStyle(
+          color: appTextColor(context),
           fontFamily: 'Poppins',
         ),
-        prefixIcon: const Icon(Icons.search, color: Colors.white54),
+        prefixIcon: Icon(Icons.search, color: appTextColor(context)),
         suffixIcon: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white54),
+          icon: Icon(Icons.close, color: appTextColor(context)),
           onPressed: () {
             SoundSystem.playButtonClick();
             setState(() {
@@ -356,14 +391,14 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           },
         ),
         filled: true,
-        fillColor: const Color(0x801F2840),
+        fillColor: filledBg,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(25.0),
           borderSide: BorderSide.none,
         ),
         contentPadding: const EdgeInsets.symmetric(vertical: 12.0),
       ),
-      style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+      style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
     );
   }
 
@@ -394,7 +429,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
             Text(
               'Fetching user records...',
               style: TextStyle(
-                color: Colors.white,
+                color: appTextColor(context),
                 fontSize: 16.0,
                 fontFamily: 'Poppins',
               ),
@@ -417,8 +452,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                 userProvider.errorMessage ??
                     'Failed to load users. The server may be waking up.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: appTextColor(context),
                   fontSize: 14.0,
                   fontFamily: 'Poppins',
                 ),
@@ -429,7 +464,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                   SoundSystem.playButtonClick();
                   userProvider.fetchUsers(forceRefresh: true);
                 },
-                icon: const Icon(Icons.refresh),
+                icon: Icon(Icons.refresh),
                 label: const Text('Retry', style: TextStyle(fontFamily: 'Poppins')),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFFC10D00),
@@ -442,10 +477,10 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     }
 
     if (_filteredUsers.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No users found.',
-          style: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+          style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
         ),
       );
     }
@@ -467,6 +502,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   }
 
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark ? entityDarkWidgetBg : Colors.white;
     return InkWell(
       onTap: () {
         SoundSystem.playButtonClick();
@@ -476,7 +513,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0x801F2840),
+          color: widgetBg,
           borderRadius: BorderRadius.circular(16.0),
         ),
         padding: const EdgeInsets.all(16.0),
@@ -504,7 +541,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                           children: [
                             Text(
                               user.name,
-                              style: const TextStyle(
+                              style: TextStyle(
+                                color: appTextColor(context),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16.0,
                                 fontFamily: 'Poppins',
@@ -514,8 +552,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                             ),
                             Text(
                               user.email,
-                              style: const TextStyle(
-                                color: Colors.white60,
+                              style: TextStyle(
+                                color: appTextColor(context),
                                 fontSize: 12.0,
                                 fontFamily: 'Poppins',
                               ),
@@ -540,7 +578,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                       children: [
                         Text(
                           user.designation,
-                          style: const TextStyle(
+                          style: TextStyle(
+                            color: appTextColor(context),
                             fontWeight: FontWeight.w500,
                             fontSize: 14.0,
                             fontFamily: 'Poppins',
@@ -551,8 +590,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                         const SizedBox(height: 4.0),
                         Text(
                           user.department,
-                          style: const TextStyle(
-                            color: Colors.white60,
+                          style: TextStyle(
+                            color: appTextColor(context),
                             fontSize: 12.0,
                             fontFamily: 'Poppins',
                           ),
@@ -574,9 +613,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                       const SizedBox(width: 8.0),
                       Transform.rotate(
                         angle: isExpanded ? 3.14 : 0,
-                        child: const Icon(
+                        child: Icon(
                           Icons.keyboard_arrow_down,
-                          color: Colors.white54,
+                          color: appTextColor(context),
                         ),
                       ),
                     ],
@@ -591,6 +630,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   }
 
   Widget _buildEntityChip(String? entity) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color chipBg = isDark ? entityDarkWidgetBg : Colors.white;
     final displayText = (entity == null || entity.isEmpty)
         ? _notAssignedValue
         : entity;
@@ -598,16 +639,20 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
       decoration: BoxDecoration(
-        color: const Color(0x33FFFFFF),
+        color: chipBg,
         borderRadius: BorderRadius.circular(20.0),
+        border: Border.all(
+          color: appTextColor(context).withValues(alpha: 0.18),
+          width: 1,
+        ),
       ),
       child: Text(
         displayText,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12.0,
           fontWeight: FontWeight.bold,
           fontFamily: 'Poppins',
-          color: Colors.white,
+          color: appTextColor(context),
         ),
       ),
     );
@@ -618,19 +663,21 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     if (url != null && url.trim().isNotEmpty) {
       return CircleAvatar(
         radius: 20,
-        backgroundColor: Colors.white24,
+        backgroundColor: appTextColor(context).withValues(alpha: 0.24),
         backgroundImage: NetworkImage(url.trim()),
         onBackgroundImageError: (_, __) {},
       );
     }
-    return const CircleAvatar(
+    return CircleAvatar(
       radius: 20,
-      backgroundColor: Colors.white24,
-      child: Icon(Icons.person, size: 24, color: Colors.white54),
+      backgroundColor: appTextColor(context).withValues(alpha: 0.24),
+      child: Icon(Icons.person, size: 24, color: appTextColor(context)),
     );
   }
 
   Widget _buildEntityPanel(ManagedUser user) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color panelBg = isDark ? entityDarkWidgetBg : Colors.white;
     String? selectedEntity = (user.entity == null || user.entity!.isEmpty)
         ? _notAssignedValue
         : user.entity;
@@ -638,8 +685,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
 
     return Container(
       padding: const EdgeInsets.all(16.0),
-      decoration: const BoxDecoration(
-        color: Color(0x801A1A1A),
+      decoration: BoxDecoration(
+        color: panelBg,
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(16.0),
           bottomRight: Radius.circular(16.0),
@@ -654,19 +701,19 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
               Text(
                 'Entity Assignment',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: appTextColor(context),
                   fontSize: 16.0,
                   fontWeight: FontWeight.w600,
                   fontFamily: 'Poppins',
                 ),
               ),
               if (isUpdating)
-                const SizedBox(
+                SizedBox(
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    valueColor: AlwaysStoppedAnimation<Color>(appTextColor(context)),
                   ),
                 ),
             ],
@@ -676,16 +723,16 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12.0),
               decoration: BoxDecoration(
-                color: const Color(0xFF2C3E50),
+                color: panelBg,
                 borderRadius: BorderRadius.circular(8.0),
               ),
               child: DropdownButton<String?>(
                 value: selectedEntity,
                 isExpanded: true,
-                dropdownColor: const Color(0xFF2C3E50),
-                icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
-                style: const TextStyle(
-                  color: Colors.white,
+                dropdownColor: panelBg,
+                icon: Icon(Icons.arrow_drop_down, color: appTextColor(context)),
+                style: TextStyle(
+                  color: appTextColor(context),
                   fontFamily: 'Poppins',
                 ),
                 onChanged: isUpdating
@@ -702,12 +749,26 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                 items: <DropdownMenuItem<String?>>[
                   DropdownMenuItem<String?>(
                     value: _notAssignedValue,
-                    child: Text(_notAssignedValue),
+                    child: Text(
+                      _notAssignedValue,
+                      style: TextStyle(
+                        color: appTextColor(context),
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ),
                   ..._entityOptions.map(
                     (option) => DropdownMenuItem<String?>(
                       value: option,
-                      child: Text(option),
+                      child: Text(
+                        option,
+                        style: TextStyle(
+                          color: appTextColor(context),
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   ),
                 ],

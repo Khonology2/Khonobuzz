@@ -47,5 +47,7 @@ if __name__ == "__main__":
         port=port,
         reload=debug,
         log_level="info",
-        access_log=True,
+        # Your FastAPI middleware already logs requests. Disable Uvicorn's access log
+        # to avoid double-spam (especially for /api/version).
+        access_log=False,
     )

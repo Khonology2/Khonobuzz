@@ -41,16 +41,18 @@ class _MenuItemWidgetState extends State<MenuItemWidget> {
       ? const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0)
       : const EdgeInsets.all(12.0);
 
-  // Text style
-  TextStyle get textStyle => const TextStyle(
-    fontFamily: 'Poppins', // Added Poppins font
-    color: Colors.white,
-    fontSize: 16.0,
-    fontWeight: FontWeight.w500,
-  );
-
   @override
   Widget build(BuildContext context) {
+    final bool isLight = Theme.of(context).brightness == Brightness.light;
+    final TextStyle itemTextStyle = TextStyle(
+      fontFamily: 'Poppins',
+      color: widget.isSelected
+          ? Colors.white
+          : (isLight ? Colors.black : Colors.white),
+      fontSize: 16.0,
+      fontWeight: FontWeight.w500,
+    );
+
     // Determine which icon to show based on selection state
     final String currentIconPath = widget.isSelected
         ? widget.selectedIconPath
@@ -128,7 +130,7 @@ class _MenuItemWidgetState extends State<MenuItemWidget> {
                       Flexible(
                         child: Text(
                           widget.title,
-                          style: textStyle,
+                          style: itemTextStyle,
                           softWrap: true,
                           maxLines: 2,
                           overflow: TextOverflow.visible,
@@ -202,18 +204,21 @@ class _LogoutMenuItemState extends State<_LogoutMenuItem> {
     }
   }
 
-  // Responsive text style
-  TextStyle get textStyle {
+  @override
+  Widget build(BuildContext context) {
+    final bool isLight = Theme.of(context).brightness == Brightness.light;
+    final Color normalText = isLight ? Colors.black : Colors.white;
+    final Color hoverText = const Color(0xFFC10D00);
+    final Color normalIcon = isLight ? Colors.black : Colors.white;
+    final Color hoverIcon = const Color(0xFFC10D00);
+
     double fontSize = isMobile ? 14.0 : (isTablet ? 15.0 : 16.0);
-    return TextStyle(
-      color: _isHovering ? const Color(0xFFC10D00) : Colors.white,
+    final TextStyle logoutTextStyle = TextStyle(
+      color: _isHovering ? hoverText : normalText,
       fontSize: fontSize,
       fontWeight: FontWeight.w500,
     );
-  }
 
-  @override
-  Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovering = true),
@@ -266,9 +271,7 @@ class _LogoutMenuItemState extends State<_LogoutMenuItem> {
                           duration: const Duration(milliseconds: 200),
                           child: Icon(
                             Icons.logout,
-                            color: _isHovering
-                                ? const Color(0xFFC10D00)
-                                : Colors.white, // Red on hover, white normally
+                            color: _isHovering ? hoverIcon : normalIcon,
                             size: iconIconSize,
                           ),
                         ),
@@ -279,7 +282,7 @@ class _LogoutMenuItemState extends State<_LogoutMenuItem> {
                       Flexible(
                         child: AnimatedDefaultTextStyle(
                           duration: const Duration(milliseconds: 200),
-                          style: textStyle,
+                          style: logoutTextStyle,
                           child: const Text(
                             'Logout',
                             softWrap: true,
@@ -330,15 +333,19 @@ class _SideMenuState extends State<SideMenu> {
   @override
   Widget build(BuildContext context) {
     // No auto-collapse; fixed widths handle layout consistently
+    final bool isLight = Theme.of(context).brightness == Brightness.light;
+    final Color sidebarBg =
+        isLight ? Colors.white : const Color(0xFF1F2840);
+    final Color welcomeColor = isLight ? Colors.black : Colors.white;
 
     return Container(
       width: sidebarWidth,
-      color: const Color(0xFF1F2840),
+      color: sidebarBg,
       child: Column(
         children: [
           // Header with toggle button
           Container(
-            decoration: const BoxDecoration(color: Color(0xFF1F2840)),
+            decoration: BoxDecoration(color: sidebarBg),
             child: Column(
               children: [
                 // Toggle button row - Fixed overflow issue
@@ -376,8 +383,8 @@ class _SideMenuState extends State<SideMenu> {
                 ),
                 // Welcome text under the top asset/logo
                 if (_isExpanded)
-                  const Padding(
-                    padding: EdgeInsets.only(
+                  Padding(
+                    padding: const EdgeInsets.only(
                       left: 16.0,
                       right: 16.0,
                       top: 3.0, // closer to the logo
@@ -390,7 +397,7 @@ class _SideMenuState extends State<SideMenu> {
                         fontFamily: 'Poppins',
                         fontSize: 14.0,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: welcomeColor,
                       ),
                     ),
                   ),
@@ -470,8 +477,11 @@ class _SideMenuState extends State<SideMenu> {
                       vertical: 8.0,
                     ),
                     child: Center(
-                      child: const VersionControlWidget(
+                      child: VersionControlWidget(
                         fontSize: 10.0, // Smaller font for sidebar
+                        textColor:
+                            isLight ? Colors.black54 : Colors.white70,
+                        hoverColor: isLight ? Colors.black : Colors.white,
                       ),
                     ),
                   ),

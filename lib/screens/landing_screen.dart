@@ -4,9 +4,12 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_mode_provider.dart';
 import '../services/sound_system.dart';
 import 'auth_screen.dart';
-import '../widgets/version_control_widget.dart';
+import '../theme/app_backgrounds.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -99,12 +102,16 @@ class _LandingScreenState extends State<LandingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final welcomeColor = isLight ? Colors.black : Colors.white;
+    final subtitleColor = isLight ? Colors.black54 : Colors.white70;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/nathi_bg.png'),
+            image: AssetImage(appBackgroundAsset(context)),
             fit: BoxFit.cover,
           ),
         ),
@@ -116,22 +123,22 @@ class _LandingScreenState extends State<LandingScreen> {
                 children: [
                   Image.asset('assets/images/khono.png', height: 150),
                   const SizedBox(height: 50),
-                  const Text(
+                  Text(
                     'Welcome to KhonoBuzz',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: welcomeColor,
                       fontFamily: 'Poppins',
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
+                  Text(
                     '',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 18,
-                      color: Colors.white70,
+                      color: subtitleColor,
                       fontFamily: 'Poppins',
                     ),
                   ),
@@ -149,16 +156,38 @@ class _LandingScreenState extends State<LandingScreen> {
                       );
                     },
                   ),
+                  const SizedBox(height: 48),
+                  Image.asset(
+                    isLight
+                        ? 'assets/images/red_disc.png'
+                        : 'assets/images/discs.png',
+                    height: 80,
+                  ),
                 ],
               ),
             ),
             Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Align(
-                alignment: Alignment.center,
-                child: const VersionControlWidget(),
+              right: 16,
+              bottom: 16,
+              child: SafeArea(
+                child: Consumer<ThemeModeProvider>(
+                  builder: (context, themeMode, _) {
+                    return FloatingActionButton.small(
+                      heroTag: 'landing_theme_toggle_fab',
+                      onPressed: () {
+                        SoundSystem.playButtonClick();
+                        themeMode.toggle();
+                      },
+                      backgroundColor: AppThemes.light.primaryColor,
+                      child: Icon(
+                        themeMode.isLight
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        color: Colors.white,
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -188,9 +217,9 @@ class _LandingScreenState extends State<LandingScreen> {
         padding: const EdgeInsets.symmetric(vertical: 16.0),
         child: Text(
           text,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Poppins',
-            color: Colors.white,
+            color: appTextColor(context),
             fontWeight: FontWeight.bold,
           ),
         ),

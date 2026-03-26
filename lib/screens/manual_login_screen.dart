@@ -8,7 +8,10 @@ import 'package:provider/provider.dart';
 import '../services/sound_system.dart';
 import '../widgets/animations/loading_button.dart';
 import '../widgets/prefetch_overlay_dialog.dart';
-import '../widgets/version_control_widget.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
 import 'package:audioplayers/audioplayers.dart';
 
 class ManualLoginScreen extends StatefulWidget {
@@ -20,6 +23,8 @@ class ManualLoginScreen extends StatefulWidget {
 
 class ManualLoginScreenState extends State<ManualLoginScreen>
     with TickerProviderStateMixin {
+  static const Color manualLoginDarkWidgetBg = Color(0xFF3D3F40);
+
   final TextEditingController _emailController = TextEditingController();
   bool _isLoading = false;
   late AudioPlayer _audioPlayer;
@@ -71,13 +76,18 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
       context: context,
       barrierColor: Colors.black54,
       builder: (BuildContext context) {
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
+        final Color dialogBg = isDark
+            ? const Color(0xFF2C3E50).withValues(alpha: 0.85)
+            : Colors.white.withValues(alpha: 0.95);
+
         return Dialog(
           backgroundColor: Colors.transparent,
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF2C3E50).withValues(alpha: 0.85),
+                color: dialogBg,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Padding(
@@ -87,8 +97,8 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                   children: [
                     Text(
                       fieldName,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -98,8 +108,8 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                     const SizedBox(height: 16),
                     Text(
                       message,
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: appTextColor(context).withValues(alpha: 0.7),
                         fontFamily: 'Poppins',
                         fontSize: 14,
                       ),
@@ -121,10 +131,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         'OK',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.bold,
                         ),
@@ -150,12 +160,18 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg =
+        isDark ? manualLoginDarkWidgetBg : Colors.white;
+    final Color hintColor =
+        isDark ? Colors.white70 : Colors.black54;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/nathi_bg.png'),
+            image: AssetImage(appBackgroundAsset(context)),
             fit: BoxFit.cover,
           ),
         ),
@@ -179,11 +195,11 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                             child: child,
                           );
                         },
-                        child: const Text(
+                        child: Text(
                           'Manual Login',
                           style: TextStyle(
                             fontFamily: 'Poppins',
-                            color: Colors.white,
+                            color: appTextColor(context),
                             fontSize: 20,
                           ),
                         ),
@@ -192,27 +208,26 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          const Text(
+                          Text(
                             'Email Address',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white, fontSize: 16),
+                            style:
+                                TextStyle(color: appTextColor(context), fontSize: 16),
                           ),
                           const SizedBox(height: 8),
                           SizedBox(
                             width: 590,
                             child: TextField(
                               controller: _emailController,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: appTextColor(context),
                                 fontFamily: 'Poppins',
                               ),
                               decoration: InputDecoration(
                                 hintText: 'example@khonology.com',
-                                hintStyle: TextStyle(color: Colors.grey[600]),
+                                hintStyle: TextStyle(color: hintColor),
                                 filled: true,
-                                fillColor: Colors.grey[800]!.withValues(
-                                  alpha: 0.5,
-                                ),
+                                fillColor: widgetBg,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(25.0),
                                   borderSide: BorderSide.none,
@@ -291,10 +306,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                         child: Column(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            const Text(
+                                            Text(
                                               'Please use your correct work email',
                                               style: TextStyle(
-                                                color: Colors.white,
+                                                color: appTextColor(context),
                                                 fontFamily: 'Poppins',
                                                 fontSize: 18,
                                                 fontWeight: FontWeight.bold,
@@ -302,10 +317,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                               textAlign: TextAlign.center,
                                             ),
                                             const SizedBox(height: 16),
-                                            const Text(
+                                            Text(
                                               'Only Khonology work emails (@khonology.com) are allowed.',
                                               style: TextStyle(
-                                                color: Colors.white70,
+                                                color: appTextColor(context).withValues(alpha: 0.7),
                                                 fontFamily: 'Poppins',
                                                 fontSize: 14,
                                               ),
@@ -331,10 +346,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                                       BorderRadius.circular(8),
                                                 ),
                                               ),
-                                              child: const Text(
+                                              child: Text(
                                                 'OK',
                                                 style: TextStyle(
-                                                  color: Colors.white,
+                                                  color: appTextColor(context),
                                                   fontFamily: 'Poppins',
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -403,20 +418,39 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                         },
                       ),
                       const SizedBox(height: 48),
-
-
+                      Image.asset(
+                        Theme.of(context).brightness == Brightness.dark
+                            ? 'assets/images/discs.png'
+                            : 'assets/images/red_disc.png',
+                        height: 80,
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
             Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Align(
-                alignment: Alignment.center,
-                child: const VersionControlWidget(),
+              right: 16,
+              bottom: 16,
+              child: SafeArea(
+                child: Consumer<ThemeModeProvider>(
+                  builder: (context, themeMode, _) {
+                    return FloatingActionButton.small(
+                      heroTag: 'manual_login_theme_toggle_fab',
+                      onPressed: () {
+                        SoundSystem.playButtonClick();
+                        themeMode.toggle();
+                      },
+                      backgroundColor: AppThemes.light.primaryColor,
+                      child: Icon(
+                        themeMode.isLight
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        color: appTextColor(context),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -500,13 +534,19 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
         context: currentContext,
         barrierColor: Colors.black54,
         builder: (BuildContext dialogContext) {
+          final bool isDark =
+              Theme.of(dialogContext).brightness == Brightness.dark;
+          final Color dialogBg = isDark
+              ? const Color(0xFF2C3E50).withValues(alpha: 0.85)
+              : Colors.white.withValues(alpha: 0.95);
+
           return Dialog(
             backgroundColor: Colors.transparent,
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2C3E50).withValues(alpha: 0.85),
+                  color: dialogBg,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 padding: const EdgeInsets.all(24.0),
@@ -517,10 +557,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
+                    Text(
                       'Select User Email',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: appTextColor(dialogContext),
                         fontFamily: 'Poppins',
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -537,8 +577,8 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           return ListTile(
                             title: Text(
                               email,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: appTextColor(context),
                                 fontFamily: 'Poppins',
                                 fontSize: 14,
                               ),
@@ -570,10 +610,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         'CANCEL',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: appTextColor(dialogContext),
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.bold,
                         ),
@@ -717,9 +757,9 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Text(
               widget.text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Poppins',
-                color: Colors.white,
+                color: appTextColor(context),
                 fontWeight: FontWeight.bold,
               ),
             ),
