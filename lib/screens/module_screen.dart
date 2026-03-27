@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -17,6 +18,8 @@ import '../widgets/floating_circles_particle_animation.dart';
 
 const Color primaryAccent = Color(0xFFC10D00);
 const Color moduleCardDarkSurface = Color(0xFF3D3F40);
+const Duration _moduleTokenFetchTimeout = Duration(milliseconds: 1800);
+final Map<String, String> _moduleLaunchTokenCache = <String, String>{};
 
 class ModuleScreen extends StatefulWidget {
   const ModuleScreen({super.key});
@@ -862,8 +865,14 @@ Future<void> _launchUrlFromContext(
     }
 
     String token = existingToken;
+    final email = authProvider.userEmail;
+    final String cacheKey = '$moduleKey:${email ?? ''}';
+    final cachedToken = _moduleLaunchTokenCache[cacheKey];
+    if (cachedToken != null && cachedToken.isNotEmpty) {
+      token = cachedToken;
+    }
+
     if (moduleKey == 'recruitment') {
-      final email = authProvider.userEmail;
       if (email != null && email.isNotEmpty) {
         try {
           final tokenUri = Uri.parse(
@@ -877,13 +886,14 @@ Future<void> _launchUrlFromContext(
                   'Accept': 'application/json',
                 },
               )
-              .timeout(const Duration(seconds: 10));
+              .timeout(_moduleTokenFetchTimeout);
           if (response.statusCode == 200) {
             final body = json.decode(response.body);
             if (body is Map<String, dynamic>) {
               final arwToken = body['token'] as String?;
               if (arwToken != null && arwToken.isNotEmpty) {
                 token = arwToken;
+                _moduleLaunchTokenCache[cacheKey] = arwToken;
                 debugPrint(
                   '[ModuleLaunch] Using ARW token for recruitment app',
                 );
@@ -897,7 +907,6 @@ Future<void> _launchUrlFromContext(
         }
       }
     } else if (moduleKey == 'skills_heatmap') {
-      final email = authProvider.userEmail;
       if (email != null && email.isNotEmpty) {
         // Get the user's selected skills heatmap role
         String? selectedRole;
@@ -934,6 +943,13 @@ Future<void> _launchUrlFromContext(
         }
 
         try {
+          final String skillsCacheKey =
+              '$moduleKey:$email:${selectedRole ?? 'Executive'}';
+          final cachedSkillsToken = _moduleLaunchTokenCache[skillsCacheKey];
+          if (cachedSkillsToken != null && cachedSkillsToken.isNotEmpty) {
+            token = cachedSkillsToken;
+          }
+
           final tokenUri = Uri.parse(
             ApiConfig.authTokenEndpoint(
               email,
@@ -949,13 +965,14 @@ Future<void> _launchUrlFromContext(
                   'Accept': 'application/json',
                 },
               )
-              .timeout(const Duration(seconds: 10));
+              .timeout(_moduleTokenFetchTimeout);
           if (response.statusCode == 200) {
             final body = json.decode(response.body);
             if (body is Map<String, dynamic>) {
               final skillsHeatmapToken = body['token'] as String?;
               if (skillsHeatmapToken != null && skillsHeatmapToken.isNotEmpty) {
                 token = skillsHeatmapToken;
+                _moduleLaunchTokenCache[skillsCacheKey] = skillsHeatmapToken;
                 debugPrint(
                   '[ModuleLaunch] Using skills heatmap token with role: $selectedRole',
                 );
@@ -965,6 +982,11 @@ Future<void> _launchUrlFromContext(
         } catch (e) {
           debugPrint(
             '[ModuleLaunch] Skills heatmap token fetch failed, using default token: $e',
+          );
+          // Keep launch path fast on next click.
+          _moduleLaunchTokenCache.putIfAbsent(
+            '$moduleKey:$email:${selectedRole ?? 'Executive'}',
+            () => existingToken,
           );
         }
       }
@@ -984,7 +1006,7 @@ Future<void> _launchUrlFromContext(
     );
     if (!context.mounted) return;
     if (launched) {
-      await _saveLastAccessedTime(moduleKey);
+      unawaited(_saveLastAccessedTime(moduleKey));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
