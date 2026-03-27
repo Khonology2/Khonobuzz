@@ -16,14 +16,35 @@ class ThemeModeProvider extends ChangeNotifier {
 
   bool get isLight => _themeMode == ThemeMode.light;
 
-  Future<void> toggle() async {
-    _themeMode =
-        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+  Future<void> setThemeMode(ThemeMode mode, {bool persist = true}) async {
+    if (_themeMode == mode) return;
+    _themeMode = mode;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      prefsKey,
-      _themeMode == ThemeMode.light ? 'light' : 'dark',
+    if (persist) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        prefsKey,
+        _themeMode == ThemeMode.light ? 'light' : 'dark',
+      );
+    }
+  }
+
+  Future<void> applyThemePreference(
+    String? preference, {
+    bool persist = true,
+  }) async {
+    if (preference == null || preference.isEmpty) return;
+    final normalized = preference.toLowerCase();
+    if (normalized == 'light') {
+      await setThemeMode(ThemeMode.light, persist: persist);
+    } else if (normalized == 'dark') {
+      await setThemeMode(ThemeMode.dark, persist: persist);
+    }
+  }
+
+  Future<void> toggle() async {
+    await setThemeMode(
+      _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light,
     );
   }
 }

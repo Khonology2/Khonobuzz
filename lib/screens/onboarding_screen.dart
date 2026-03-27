@@ -12,6 +12,7 @@ import '../providers/theme_mode_provider.dart';
 import '../theme/app_text_colors.dart';
 import '../theme/app_themes.dart';
 import '../widgets/animations/loading_button.dart';
+import '../widgets/version_control_widget.dart';
 import 'lobby_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -102,6 +103,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool isLight = !isDark;
     final Color widgetBg = isDark ? onboardingDarkWidgetBg : Colors.white;
     final Color hintColor = isDark ? Colors.white70 : Colors.black54;
 
@@ -543,8 +545,11 @@ class OnboardingScreenState extends State<OnboardingScreen>
                               builder: (BuildContext context) {
                                 final bool isDark = Theme.of(context).brightness == Brightness.dark;
                                 final Color dialogBg = isDark
-                                    ? const Color(0xFF2C3E50).withValues(alpha: 0.85)
-                                    : Colors.white.withValues(alpha: 0.95);
+                                    ? const Color(0xFF3D3F40)
+                                    : Colors.white;
+                                final Color dialogTextColor = isDark
+                                    ? Colors.white
+                                    : Colors.black;
 
                                 return Dialog(
                                   backgroundColor: Colors.transparent,
@@ -566,7 +571,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                             Text(
                                               'Please use your correct work email',
                                               style: TextStyle(
-                                                color: appTextColor(context),
+                                                color: dialogTextColor,
                                                 fontFamily: 'Poppins',
                                                 fontSize: 18,
                                                 fontWeight: FontWeight.bold,
@@ -577,7 +582,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                             Text(
                                               'Only Khonology work emails (@khonology.com) are allowed.',
                                               style: TextStyle(
-                                                color: appTextColor(context).withValues(alpha: 0.7),
+                                                color: dialogTextColor,
                                                 fontFamily: 'Poppins',
                                                 fontSize: 14,
                                               ),
@@ -606,7 +611,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                               child: Text(
                                                 'OK',
                                                 style: TextStyle(
-                                                  color: appTextColor(context),
+                                                  color: dialogTextColor,
                                                   fontFamily: 'Poppins',
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -656,6 +661,12 @@ class OnboardingScreenState extends State<OnboardingScreen>
                           if (!mounted) return;
 
                           if (success) {
+                            if (!context.mounted) return;
+                            await context
+                                .read<ThemeModeProvider>()
+                                .applyThemePreference(
+                                  authProvider.userThemePreference,
+                                );
                             if (authProvider.userAlreadyOnboarded) {
                               await _playErrorSound();
                               _showValidationError(
@@ -706,8 +717,8 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                   : 'assets/images/red_disc.png',
                               height:
                                   Theme.of(context).brightness == Brightness.dark
-                                  ? 80
-                                  : 96,
+                                  ? 72
+                                  : 110,
                             ),
                           );
                         },
@@ -718,12 +729,25 @@ class OnboardingScreenState extends State<OnboardingScreen>
               ),
             ),
             Positioned(
+              left: 0,
+              right: 0,
+              bottom: 76,
+              child: Center(
+                child: VersionControlWidget(
+                  textColor: isLight ? Colors.black54 : Colors.white70,
+                  hoverColor: isLight ? Colors.black : Colors.white,
+                ),
+              ),
+            ),
+            Positioned(
               right: 16,
               bottom: 16,
               child: SafeArea(
                 child: Consumer<ThemeModeProvider>(
                   builder: (context, themeMode, _) {
-                    return FloatingActionButton.small(
+                    return FloatingActionButton(
+                      mini: true,
+                      shape: const CircleBorder(),
                       heroTag: 'onboarding_theme_toggle_fab',
                       onPressed: () {
                         SoundSystem.playButtonClick();
@@ -808,13 +832,18 @@ class OnboardingScreenState extends State<OnboardingScreen>
       context: context,
       barrierColor: Colors.black54,
       builder: (BuildContext context) {
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
+        final Color dialogBg = isDark
+            ? const Color(0xFF3D3F40)
+            : Colors.white;
+        final Color dialogTextColor = isDark ? Colors.white : Colors.black;
         return Dialog(
           backgroundColor: Colors.transparent,
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF2C3E50).withValues(alpha: 0.85),
+                color: dialogBg,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Padding(
@@ -825,7 +854,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                     Text(
                       '$fieldName Required',
                       style: TextStyle(
-                        color: appTextColor(context),
+                        color: dialogTextColor,
                         fontFamily: 'Poppins',
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -836,7 +865,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                     Text(
                       message,
                       style: TextStyle(
-                        color: appTextColor(context),
+                        color: dialogTextColor,
                         fontFamily: 'Poppins',
                         fontSize: 14,
                       ),
@@ -861,7 +890,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
                       child: Text(
                         'OK',
                         style: TextStyle(
-                          color: appTextColor(context),
+                          color: dialogTextColor,
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.bold,
                         ),

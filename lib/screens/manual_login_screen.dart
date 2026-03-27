@@ -12,6 +12,7 @@ import '../theme/app_backgrounds.dart';
 import '../providers/theme_mode_provider.dart';
 import '../theme/app_text_colors.dart';
 import '../theme/app_themes.dart';
+import '../widgets/version_control_widget.dart';
 import 'package:audioplayers/audioplayers.dart';
 
 class ManualLoginScreen extends StatefulWidget {
@@ -78,8 +79,9 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
       builder: (BuildContext context) {
         final bool isDark = Theme.of(context).brightness == Brightness.dark;
         final Color dialogBg = isDark
-            ? const Color(0xFF2C3E50).withValues(alpha: 0.85)
-            : Colors.white.withValues(alpha: 0.95);
+            ? const Color(0xFF3D3F40)
+            : Colors.white;
+        final Color dialogTextColor = isDark ? Colors.white : Colors.black;
 
         return Dialog(
           backgroundColor: Colors.transparent,
@@ -98,7 +100,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                     Text(
                       fieldName,
                       style: TextStyle(
-                        color: appTextColor(context),
+                        color: dialogTextColor,
                         fontFamily: 'Poppins',
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -109,7 +111,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                     Text(
                       message,
                       style: TextStyle(
-                        color: appTextColor(context).withValues(alpha: 0.7),
+                        color: dialogTextColor,
                         fontFamily: 'Poppins',
                         fontSize: 14,
                       ),
@@ -134,7 +136,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                       child: Text(
                         'OK',
                         style: TextStyle(
-                          color: appTextColor(context),
+                          color: dialogTextColor,
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.bold,
                         ),
@@ -161,6 +163,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool isLight = !isDark;
     final Color widgetBg =
         isDark ? manualLoginDarkWidgetBg : Colors.white;
     final Color hintColor =
@@ -287,6 +290,15 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                               context: currentContext,
                               barrierColor: Colors.black54,
                               builder: (BuildContext context) {
+                                final bool isDark =
+                                    Theme.of(context).brightness ==
+                                    Brightness.dark;
+                                final Color dialogBg = isDark
+                                    ? const Color(0xFF3D3F40)
+                                    : Colors.white;
+                                final Color dialogTextColor = isDark
+                                    ? Colors.white
+                                    : Colors.black;
                                 return Dialog(
                                   backgroundColor: Colors.transparent,
                                   child: BackdropFilter(
@@ -296,9 +308,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                     ),
                                     child: Container(
                                       decoration: BoxDecoration(
-                                        color: const Color(
-                                          0xFF2C3E50,
-                                        ).withValues(alpha: 0.85),
+                                        color: dialogBg,
                                         borderRadius: BorderRadius.circular(16),
                                       ),
                                       child: Padding(
@@ -309,7 +319,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                             Text(
                                               'Please use your correct work email',
                                               style: TextStyle(
-                                                color: appTextColor(context),
+                                                color: dialogTextColor,
                                                 fontFamily: 'Poppins',
                                                 fontSize: 18,
                                                 fontWeight: FontWeight.bold,
@@ -320,7 +330,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                             Text(
                                               'Only Khonology work emails (@khonology.com) are allowed.',
                                               style: TextStyle(
-                                                color: appTextColor(context).withValues(alpha: 0.7),
+                                                color: dialogTextColor,
                                                 fontFamily: 'Poppins',
                                                 fontSize: 14,
                                               ),
@@ -349,7 +359,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                               child: Text(
                                                 'OK',
                                                 style: TextStyle(
-                                                  color: appTextColor(context),
+                                                  color: dialogTextColor,
                                                   fontFamily: 'Poppins',
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -372,6 +382,8 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           }
 
                           final authProvider = context.read<AuthProvider>();
+                          final themeModeProvider =
+                              context.read<ThemeModeProvider>();
                           final navigator = Navigator.of(context);
                           try {
                             final success = await authProvider.manualLogin(
@@ -379,6 +391,9 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                             );
                             if (!mounted) return;
                             if (success) {
+                              await themeModeProvider.applyThemePreference(
+                                authProvider.userThemePreference,
+                              );
                               await _prefetchUsersAndNavigate(
                                 // ignore: use_build_context_synchronously
                                 context,
@@ -424,11 +439,22 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                             : 'assets/images/red_disc.png',
                         height:
                             Theme.of(context).brightness == Brightness.dark
-                            ? 80
-                            : 96,
+                            ? 72
+                            : 110,
                       ),
                     ],
                   ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 76,
+              child: Center(
+                child: VersionControlWidget(
+                  textColor: isLight ? Colors.black54 : Colors.white70,
+                  hoverColor: isLight ? Colors.black : Colors.white,
                 ),
               ),
             ),
@@ -438,7 +464,9 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
               child: SafeArea(
                 child: Consumer<ThemeModeProvider>(
                   builder: (context, themeMode, _) {
-                    return FloatingActionButton.small(
+                    return FloatingActionButton(
+                      mini: true,
+                      shape: const CircleBorder(),
                       heroTag: 'manual_login_theme_toggle_fab',
                       onPressed: () {
                         SoundSystem.playButtonClick();
@@ -518,6 +546,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
     final navigator = Navigator.of(context);
     final currentContext = context;
     final authProvider = context.read<AuthProvider>();
+    final themeModeProvider = context.read<ThemeModeProvider>();
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final emails = await userProvider.fetchAllUserEmails();
@@ -639,6 +668,9 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
 
         if (!mounted) return;
         if (success) {
+          await themeModeProvider.applyThemePreference(
+            authProvider.userThemePreference,
+          );
           await _prefetchUsersAndNavigate(
             // ignore: use_build_context_synchronously
             context,

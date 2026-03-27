@@ -257,6 +257,11 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         });
       }
 
+      final themePref = (userMap['themePreference'] as String?)?.toLowerCase();
+      if (themePref == 'light' || themePref == 'dark') {
+        await context.read<ThemeModeProvider>().applyThemePreference(themePref);
+      }
+
       // Sync AuthProvider profile image: only set if this user has one, otherwise clear (no previous user's pic)
       if (mounted) {
         await authProvider.updateUserProfileImage(
@@ -297,6 +302,9 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         'managedBy': _managerController.text.trim(),
         'profileImageUrl': saveProfileUrl,
         'profileImagePublicId': saveProfileId,
+        'themePreference': context.read<ThemeModeProvider>().isLight
+            ? 'light'
+            : 'dark',
       };
 
       final response = await http.put(
@@ -317,6 +325,29 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
       }
     } catch (e) {
       debugPrint('Error saving profile: $e');
+    }
+  }
+
+  Future<void> _saveThemePreference(bool isLightMode) async {
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final response = await http.put(
+        Uri.parse(
+          '${ApiConfig.baseUrl}/api/admin/users/${authProvider.userEmail}/profile',
+        ),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${authProvider.userToken}',
+        },
+        body: json.encode({
+          'themePreference': isLightMode ? 'light' : 'dark',
+        }),
+      );
+      if (response.statusCode != 200) {
+        debugPrint('Failed to save theme preference: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error saving theme preference: $e');
     }
   }
 
@@ -518,6 +549,35 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                         ),
                       ],
                     ),
+                    Consumer<ThemeModeProvider>(
+                      builder: (context, themeMode, _) {
+                        return SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            'Theme Preference (Light/Dark)',
+                            style: TextStyle(
+                              color: appTextColor(context),
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            themeMode.isLight ? 'Light mode' : 'Dark mode',
+                            style: TextStyle(
+                              color: appTextColor(context).withValues(alpha: 0.75),
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                          value: themeMode.isLight,
+                          onChanged: (value) async {
+                            await themeMode.setThemeMode(
+                              value ? ThemeMode.light : ThemeMode.dark,
+                            );
+                            await _saveThemePreference(value);
+                          },
+                        );
+                      },
+                    ),
                     const SizedBox(height: 8),
                   ],
                 ),
@@ -529,7 +589,9 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
               child: SafeArea(
                 child: Consumer<ThemeModeProvider>(
                   builder: (context, themeMode, _) {
-                    return FloatingActionButton.small(
+                    return FloatingActionButton(
+                      mini: true,
+                      shape: const CircleBorder(),
                       heroTag: 'staff_profile_theme_toggle_fab',
                       onPressed: () {
                         SoundSystem.playButtonClick();

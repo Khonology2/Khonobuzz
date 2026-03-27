@@ -101,6 +101,79 @@ def derive_module_access_from_role(module_access: Optional[str], module_access_r
             if 'Personal Development Hub' not in module_names:
                 module_names.append('Personal Development Hub')
     return ','.join(module_names) if module_names else None
+
+
+def _coerce_datetime(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        candidate = value.to_datetime()  # Firestore DatetimeWithNanoseconds
+        if isinstance(candidate, datetime):
+            return candidate
+    except Exception:
+        pass
+    try:
+        candidate = value.toDate()  # JS-style timestamp in mixed payloads
+        if isinstance(candidate, datetime):
+            return candidate
+    except Exception:
+        pass
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        normalized = raw.replace('Z', '+00:00') if raw.endswith('Z') else raw
+        try:
+            return datetime.fromisoformat(normalized)
+        except Exception:
+            return None
+    if isinstance(value, (int, float)):
+        try:
+            ts = float(value)
+            # Accept both seconds and milliseconds epochs.
+            if ts > 1e12:
+                ts = ts / 1000.0
+            return datetime.utcfromtimestamp(ts)
+        except Exception:
+            return None
+    return None
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _get_best_onboarding_record(user_id: str):
+    """Pick deterministic onboarding record for a user.
+    Prefers canonical document id == user_id; otherwise best legacy record by recency.
+    """
+    canonical_ref = db.collection('onboarding').document(user_id)
+    canonical_doc = canonical_ref.get()
+    if canonical_doc.exists:
+        return canonical_ref, (canonical_doc.to_dict() or {})
+
+    docs = list(
+        db.collection('onboarding').where('user_id', '==', user_id).stream()
+    )
+    if not docs:
+        return canonical_ref, {}
+
+    def _score(doc):
+        data = doc.to_dict() or {}
+        return (
+            _coerce_datetime(data.get('updated_at'))
+            or _coerce_datetime(data.get('lastSignInAt'))
+            or _coerce_datetime(data.get('created_at'))
+            or datetime.min
+        )
+
+    best_doc = max(docs, key=_score)
+    return best_doc.reference, (best_doc.to_dict() or {})
 def load_firebase_credentials(env_var_name: str, default_path: str):
     """
     Load Firebase credentials from environment variable (JSON string or base64 encoded JSON) or file path.
@@ -708,6 +781,43 @@ async def pdh_update_user(uid: str, data: dict):
         print(f"[ERROR] During PDH update: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+
+@app.patch("/api/onboarding/update-user/{uid}")
+async def onboarding_update_user(uid: str, data: dict):
+    try:
+        onboarding_fields = data.get('onboardingFields') or {}
+        if not isinstance(onboarding_fields, dict) or not onboarding_fields:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "onboardingFields is required"},
+            )
+
+        onboarding_query = (
+            db.collection('onboarding').where('user_id', '==', uid).limit(1).stream()
+        )
+        onboarding_doc = None
+        for doc in onboarding_query:
+            onboarding_doc = doc
+            break
+
+        payload = dict(onboarding_fields)
+        payload['user_id'] = uid
+        payload['updated_at'] = datetime.utcnow()
+
+        if onboarding_doc is not None:
+            onboarding_doc.reference.set(payload, merge=True)
+        else:
+            payload['created_at'] = datetime.utcnow()
+            db.collection('onboarding').add(payload)
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "Onboarding update successful"},
+        )
+    except Exception as e:
+        print(f"[ERROR] During onboarding update: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 @app.get("/")
 async def home():
     info_log("Health check endpoint accessed")
@@ -732,16 +842,7 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
         user_info = user_doc.to_dict() or {}
         user_id = user_doc.id
 
-        onboarding_query = (
-            db.collection('onboarding')
-            .where('user_id', '==', user_id)
-            .limit(1)
-            .stream()
-        )
-        onboarding_info = {}
-        for onboarding_doc in onboarding_query:
-            onboarding_info = onboarding_doc.to_dict() or {}
-            break
+        _, onboarding_info = _get_best_onboarding_record(user_id)
 
         # Only use onboarding for profile/name if it belongs to this user (avoid returning another user's data)
         onboarding_email = (onboarding_info.get('email') or '').strip().lower()
@@ -777,6 +878,22 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
             'managedBy': safe_onboarding.get('managedBy') or user_info.get('manager') or onboarding_info.get('manager') or '',
             'profileImageUrl': safe_onboarding.get('profileImageUrl') or '',
             'profileImagePublicId': safe_onboarding.get('profileImagePublicId') or '',
+            'themePreference': (
+                safe_onboarding.get('themePreference')
+                or user_info.get('themePreference')
+                or 'dark'
+            ),
+            'lastSignInAt': (
+                (
+                    _coerce_datetime(
+                        user_info.get('lastSignInAt') or onboarding_info.get('lastSignInAt')
+                    )
+                ).isoformat() + 'Z'
+            ) if _coerce_datetime(user_info.get('lastSignInAt') or onboarding_info.get('lastSignInAt')) else None,
+            'loginCount': _safe_int(
+                onboarding_info.get('loginCount', user_info.get('loginCount', 0)),
+                0,
+            ),
         }
 
         return JSONResponse(
@@ -816,25 +933,45 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
                 content={"error": "User not found"}
             )
 
-        # Extract update fields
-        first_name = data.get('firstName') or data.get('name') or ''
-        last_name = data.get('surname') or data.get('lastName') or ''
-        preferred_name = data.get('preferredName') or ''
-        department = data.get('department') or ''
-        designation = data.get('designation') or ''
-        phone_number = data.get('phoneNumber') or ''
-        managed_by = data.get('managedBy') or data.get('manager') or ''
-        profile_image_url = data.get('profileImageUrl') or ''
-        profile_image_public_id = data.get('profileImagePublicId') or ''
-        full_name = (f"{first_name} {last_name}".strip() or preferred_name or '').strip()
+        # Extract update fields (partial updates supported)
+        first_name = (data.get('firstName') if 'firstName' in data else data.get('name'))
+        last_name = (
+            data.get('surname')
+            if 'surname' in data
+            else (data.get('lastName') if 'lastName' in data else None)
+        )
+        preferred_name = data.get('preferredName') if 'preferredName' in data else None
+        department = data.get('department') if 'department' in data else None
+        designation = data.get('designation') if 'designation' in data else None
+        phone_number = data.get('phoneNumber') if 'phoneNumber' in data else None
+        managed_by = (
+            data.get('managedBy')
+            if 'managedBy' in data
+            else (data.get('manager') if 'manager' in data else None)
+        )
+        profile_image_url = data.get('profileImageUrl') if 'profileImageUrl' in data else None
+        profile_image_public_id = (
+            data.get('profileImagePublicId') if 'profileImagePublicId' in data else None
+        )
+        theme_preference = (data.get('themePreference') or '').strip().lower()
+        if theme_preference not in ('light', 'dark'):
+            theme_preference = ''
+        full_name = ''
+        if first_name is not None or last_name is not None:
+            full_name = f"{(first_name or '').strip()} {(last_name or '').strip()}".strip()
+        elif preferred_name:
+            full_name = str(preferred_name).strip()
 
         # 2. Update 'users' collection
-        user_update = {
-            'department': department,
-            'designation': designation,
-            'manager': managed_by,
-            'updated_at': datetime.utcnow(),
-        }
+        user_update = {'updated_at': datetime.utcnow()}
+        if department is not None:
+            user_update['department'] = department
+        if designation is not None:
+            user_update['designation'] = designation
+        if managed_by is not None:
+            user_update['manager'] = managed_by
+        if theme_preference:
+            user_update['themePreference'] = theme_preference
         if full_name:
             user_update['name'] = full_name
             
@@ -853,21 +990,30 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
             onboarding_doc_ref = ondoc.reference
             break
 
-        onboarding_update = {
-            'firstName': first_name,
-            'lastName': last_name,
-            'surname': last_name if last_name else data.get('surname', ''),
-            'preferredName': preferred_name,
-            'fullName': full_name,
-            'department': department,
-            'designation': designation,
-            'phoneNumber': phone_number,
-            'managedBy': managed_by,
-            'profileImageUrl': profile_image_url,
-            'profileImagePublicId': profile_image_public_id,
-            'updated_at': datetime.utcnow(),
-            'email': normalized_email,
-        }
+        onboarding_update = {'updated_at': datetime.utcnow(), 'email': normalized_email}
+        if first_name is not None:
+            onboarding_update['firstName'] = first_name
+        if last_name is not None:
+            onboarding_update['lastName'] = last_name
+            onboarding_update['surname'] = last_name
+        if preferred_name is not None:
+            onboarding_update['preferredName'] = preferred_name
+        if full_name:
+            onboarding_update['fullName'] = full_name
+        if department is not None:
+            onboarding_update['department'] = department
+        if designation is not None:
+            onboarding_update['designation'] = designation
+        if phone_number is not None:
+            onboarding_update['phoneNumber'] = phone_number
+        if managed_by is not None:
+            onboarding_update['managedBy'] = managed_by
+        if profile_image_url is not None:
+            onboarding_update['profileImageUrl'] = profile_image_url
+        if profile_image_public_id is not None:
+            onboarding_update['profileImagePublicId'] = profile_image_public_id
+        if theme_preference:
+            onboarding_update['themePreference'] = theme_preference
 
         if onboarding_doc_ref:
             onboarding_doc_ref.update(onboarding_update)
@@ -1014,19 +1160,18 @@ async def list_users():
         users_with_sort_keys = []
         for user_doc in users_query:
             user_info = user_doc.to_dict() or {}
-            onboarding_query = db.collection('onboarding').where('user_id', '==', user_doc.id).limit(1).stream()
-            onboarding_info = {}
-            for onboarding_doc in onboarding_query:
-                onboarding_info = onboarding_doc.to_dict() or {}
-                break
+            _, onboarding_info = _get_best_onboarding_record(user_doc.id)
             first_name = onboarding_info.get('firstName') or onboarding_info.get('name') or ''
             last_name = onboarding_info.get('lastName') or onboarding_info.get('surname') or ''
-            created_at_val = user_info.get('created_at')
-            created_at_dt = created_at_val if isinstance(created_at_val, datetime) else None
-            updated_at_val = user_info.get('updated_at')
-            updated_at_dt = updated_at_val if isinstance(updated_at_val, datetime) else None
-            last_sign_in_val = user_info.get('lastSignInAt')
-            last_sign_in_dt = last_sign_in_val if isinstance(last_sign_in_val, datetime) else None
+            created_at_dt = _coerce_datetime(user_info.get('created_at'))
+            updated_at_dt = _coerce_datetime(user_info.get('updated_at'))
+            last_sign_in_dt = _coerce_datetime(
+                user_info.get('lastSignInAt') or onboarding_info.get('lastSignInAt')
+            )
+            login_count_val = onboarding_info.get('loginCount')
+            if login_count_val is None:
+                login_count_val = user_info.get('loginCount')
+            login_count = _safe_int(login_count_val, 0)
             try:
                 doc_create = getattr(user_doc, 'create_time', None)
                 doc_update = getattr(user_doc, 'update_time', None)
@@ -1070,6 +1215,7 @@ async def list_users():
                 'createdAt': created_at_str,
                 'updatedAt': updated_at_str,
                 'lastSignInAt': last_sign_in_str,
+                'loginCount': login_count,
             }
             sort_key = updated_at_dt or created_at_dt
             users_with_sort_keys.append((sort_key, user_payload))
@@ -1202,19 +1348,21 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
                         print(f"[ERROR] Failed to regenerate token: {token_error}")
         updated_doc = user_ref.get()
         updated_data = updated_doc.to_dict() or {}
-        onboarding_info = {}
-        onboarding_query2 = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
-        for ondoc in onboarding_query2:
-            onboarding_info = ondoc.to_dict() or {}
-            break
+        _, onboarding_info = _get_best_onboarding_record(user_id)
         first_name = onboarding_info.get('firstName') or onboarding_info.get('name') or ''
         last_name = onboarding_info.get('lastName') or onboarding_info.get('surname') or ''
-        created_at_val = updated_data.get('created_at')
-        created_at_dt = created_at_val if isinstance(created_at_val, datetime) else None
-        updated_at_val = updated_data.get('updated_at')
-        updated_at_dt = updated_at_val if isinstance(updated_at_val, datetime) else None
+        created_at_dt = _coerce_datetime(updated_data.get('created_at'))
+        updated_at_dt = _coerce_datetime(updated_data.get('updated_at'))
+        last_sign_in_dt = _coerce_datetime(
+            updated_data.get('lastSignInAt') or onboarding_info.get('lastSignInAt')
+        )
+        login_count_val = onboarding_info.get('loginCount')
+        if login_count_val is None:
+            login_count_val = updated_data.get('loginCount')
+        login_count = _safe_int(login_count_val, 0)
         created_at_str = created_at_dt.isoformat() + 'Z' if created_at_dt else None
         updated_at_str = updated_at_dt.isoformat() + 'Z' if updated_at_dt else None
+        last_sign_in_str = last_sign_in_dt.isoformat() + 'Z' if last_sign_in_dt else None
         user_payload = {
             'id': user_id,
             'email': updated_data.get('email', ''),
@@ -1231,6 +1379,8 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
             'moduleAccessRole': updated_data.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', ''),
             'createdAt': created_at_str,
             'updatedAt': updated_at_str,
+            'lastSignInAt': last_sign_in_str,
+            'loginCount': login_count,
         }
         return JSONResponse(status_code=status.HTTP_200_OK, content={'message': 'User updated successfully', 'user': user_payload})
     except Exception as e:
@@ -1575,14 +1725,15 @@ async def login_user(user_login: UserLogin, request: Request):
                 }
             )
         onboarding_data = {}
+        onboarding_ref = None
         module_access_role = ""
         onboarding_lookup_start = time.time()
         try:
-            onboarding_query = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
-            for onboarding_doc in onboarding_query:
-                onboarding_data = onboarding_doc.to_dict() or {}
-                module_access_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
-                break
+            onboarding_ref, onboarding_data = _get_best_onboarding_record(user_id)
+            module_access_role = (
+                onboarding_data.get('moduleAccessRole', '')
+                or user_data.get('moduleAccessRole', '')
+            )
         except Exception as onboarding_query_error:
             error_log(f"Failed to query onboarding collection: {onboarding_query_error}")
         onboarding_lookup_end = time.time()
@@ -1595,6 +1746,7 @@ async def login_user(user_login: UserLogin, request: Request):
         if is_special_session:
             roles = ['admin']
         last_sign_in_at = datetime.utcnow()
+        login_count = 0
         first_name = safe_onboarding_for_response.get('firstName') or safe_onboarding_for_response.get('name') or user_data.get('firstName') or ''
         last_name = safe_onboarding_for_response.get('lastName') or safe_onboarding_for_response.get('surname') or user_data.get('lastName') or ''
         full_name = f"{first_name} {last_name}".strip()
@@ -1614,55 +1766,38 @@ async def login_user(user_login: UserLogin, request: Request):
         token_gen_end = time.time()
         if not is_special_session:
             try:
+                current_user_login_count = user_data.get('loginCount', 0)
+                try:
+                    current_user_login_count = int(current_user_login_count)
+                except Exception:
+                    current_user_login_count = 0
                 db.collection('users').document(user_id).update({
                     'lastSignInAt': last_sign_in_at,
+                    'loginCount': current_user_login_count + 1,
+                    'updated_at': datetime.utcnow(),
                 })
                 user_data['lastSignInAt'] = last_sign_in_at
+                user_data['loginCount'] = current_user_login_count + 1
             except Exception as sign_in_error:
-                error_log(f"Failed to update lastSignInAt for {normalized_email}: {sign_in_error}")
+                error_log(f"Failed to update login tracking for {normalized_email}: {sign_in_error}")
         if encrypted_token:
-            if onboarding_data:
-                try:
-                    onboarding_doc_ref = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
-                    doc_found = False
-                    for doc in onboarding_doc_ref:
-                        update_data = {
-                            'token': encrypted_token,
-                            'token_updated_at': datetime.utcnow(),
-                            'fullName': full_name,
-                            'email': user_data['email'],
-                        }
-                        if not is_special_session:
-                            update_data['updated_at'] = datetime.utcnow()
-                        doc.reference.update(update_data)
-                        doc_found = True
-                        break
-                    if not doc_found:
-                        onboarding_data['token'] = encrypted_token
-                        onboarding_data['token_updated_at'] = datetime.utcnow()
-                        onboarding_data['email'] = user_data['email']
-                        onboarding_data['fullName'] = full_name
-                        if not is_special_session:
-                            onboarding_data['created_at'] = datetime.utcnow()
-                            onboarding_data['updated_at'] = datetime.utcnow()
-                        db.collection('onboarding').add(onboarding_data)
-                except Exception:
-                    pass
-            else:
-                try:
-                    onboarding_data = {
-                        'user_id': user_id,
-                        'email': user_data['email'],
-                        'token': encrypted_token,
-                        'fullName': full_name,
-                        'token_updated_at': datetime.utcnow(),
-                    }
-                    if not is_special_session:
-                        onboarding_data['created_at'] = datetime.utcnow()
-                        onboarding_data['updated_at'] = datetime.utcnow()
-                    db.collection('onboarding').add(onboarding_data)
-                except Exception:
-                    pass
+            try:
+                if onboarding_ref is None:
+                    onboarding_ref = db.collection('onboarding').document(user_id)
+                update_data = {
+                    'user_id': user_id,
+                    'token': encrypted_token,
+                    'token_updated_at': datetime.utcnow(),
+                    'fullName': full_name,
+                    'email': user_data['email'],
+                }
+                if not is_special_session:
+                    update_data['updated_at'] = datetime.utcnow()
+                    if not onboarding_data:
+                        update_data['created_at'] = datetime.utcnow()
+                onboarding_ref.set(update_data, merge=True)
+            except Exception:
+                pass
             if pdh_db:
                 try:
                     pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
@@ -1677,11 +1812,58 @@ async def login_user(user_login: UserLogin, request: Request):
                     pdh_onboarding_ref.set(pdh_data, merge=True)
                 except Exception:
                     pass
+        if not is_special_session:
+            try:
+                if onboarding_ref is None:
+                    onboarding_ref, onboarding_info = _get_best_onboarding_record(user_id)
+                else:
+                    onboarding_info = onboarding_data or {}
+                existing_login_count = _safe_int(
+                    onboarding_info.get('loginCount', user_data.get('loginCount', 0)),
+                    0,
+                )
+                login_count = existing_login_count + 1
+                tracking_payload = {
+                    'user_id': user_id,
+                    'email': user_data.get('email', ''),
+                    'lastSignInAt': last_sign_in_at,
+                    'loginCount': login_count,
+                    'updated_at': datetime.utcnow(),
+                }
+                if onboarding_ref is not None:
+                    onboarding_ref.set(tracking_payload, merge=True)
+                else:
+                    tracking_payload['created_at'] = datetime.utcnow()
+                    db.collection('onboarding').document(user_id).set(
+                        tracking_payload,
+                        merge=True,
+                    )
+                if pdh_db:
+                    pdh_db.collection('onboarding').document(user_id).set(
+                        {
+                            'email': user_data.get('email', ''),
+                            'lastSignInAt': last_sign_in_at,
+                            'loginCount': login_count,
+                            'updated_at': datetime.utcnow(),
+                        },
+                        merge=True,
+                    )
+            except Exception as onboarding_signin_error:
+                error_log(
+                    f"Failed to update onboarding login tracking for {normalized_email}: {onboarding_signin_error}"
+                )
+        else:
+            login_count = 0
         module_access_raw = user_data.get('moduleAccess') or onboarding_data.get('moduleAccess', '')
         final_module_access = derive_module_access_from_role(module_access_raw, module_access_role)
         response_name = full_name or user_data.get('name', '')
         response_profile_url = safe_onboarding_for_response.get('profileImageUrl', '')
         response_profile_public_id = safe_onboarding_for_response.get('profileImagePublicId', '')
+        response_theme_preference = (
+            safe_onboarding_for_response.get('themePreference')
+            or user_data.get('themePreference')
+            or 'dark'
+        )
         response_content = {
             "message": "Login successful",
             "user": {
@@ -1694,6 +1876,9 @@ async def login_user(user_login: UserLogin, request: Request):
                 "moduleAccessRole": module_access_role,
                 "profileImageUrl": response_profile_url,
                 "profileImagePublicId": response_profile_public_id,
+                "themePreference": response_theme_preference,
+                "lastSignInAt": last_sign_in_at.isoformat() + 'Z',
+                "loginCount": login_count,
             }
         }
         if encrypted_token:

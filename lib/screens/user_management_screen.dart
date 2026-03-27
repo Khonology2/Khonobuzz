@@ -18,9 +18,7 @@ import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/sound_system.dart';
 import '../theme/app_backgrounds.dart';
-import '../providers/theme_mode_provider.dart';
 import '../theme/app_text_colors.dart';
-import '../theme/app_themes.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -31,6 +29,7 @@ class UserManagementScreen extends StatefulWidget {
 
 const String _kAddNewDepartment = '__add_new_department__';
 const String _kAddNewDesignation = '__add_new_designation__';
+const String _kAllFilterOption = '__all_filter_option__';
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
   static const Color userMgmtDarkWidgetBg = Color(0xFF3D3F40);
@@ -40,6 +39,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   String _searchQuery = '';
 
   String? expandedUserId;
+  String? _hoveredUserId;
   bool _isSelectionMode = false;
   final Set<String> _selectedUserIds = <String>{};
 
@@ -53,12 +53,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   List<String> _designations = [];
 
   Set<String> get _availableStatuses {
-    final userProvider = Provider.of<UserProvider>(context);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
     return userProvider.users.map((user) => user.status).toSet();
   }
 
   List<String> get _availableDepartments {
-    final userProvider = Provider.of<UserProvider>(context);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
     final users = userProvider.users;
     final deptOrder = _departments.where((d) => d.isNotEmpty).toList();
     if (users.isEmpty) return List<String>.from(deptOrder);
@@ -72,7 +72,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   List<String> get _availableDesignations {
-    final userProvider = Provider.of<UserProvider>(context);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
     final users = userProvider.users;
     final desigOrder = _designations.where((d) => d.isNotEmpty).toList();
     if (users.isEmpty) return List<String>.from(desigOrder);
@@ -586,18 +586,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final Color widgetBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
 
     return Scaffold(
-      floatingActionButton: _isSelectionMode
-          ? null
-          : FloatingActionButton(
-              heroTag: 'user_management_add_fab',
-              onPressed: () {
-                SoundSystem.playButtonClick();
-                _showAddUserDialog(context);
-              },
-              backgroundColor: const Color(0xFFC10D00),
-              shape: const CircleBorder(),
-              child: Icon(Icons.add, color: appTextColor(context)),
-            ),
       bottomNavigationBar: _isSelectionMode && _selectedUserIds.isNotEmpty
           ? Container(
               padding: const EdgeInsets.all(16.0),
@@ -747,23 +735,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             right: 16,
             bottom: 16,
             child: SafeArea(
-              child: Consumer<ThemeModeProvider>(
-                builder: (context, themeMode, _) {
-                  return FloatingActionButton.small(
-                    heroTag: 'user_management_theme_toggle_fab',
-                    onPressed: () {
-                      SoundSystem.playButtonClick();
-                      themeMode.toggle();
-                    },
-                    backgroundColor: AppThemes.light.primaryColor,
-                    child: Icon(
-                      themeMode.isLight
-                          ? Icons.dark_mode_rounded
-                          : Icons.light_mode_rounded,
-                      color: appTextColor(context),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!_isSelectionMode)
+                    FloatingActionButton(
+                      heroTag: 'user_management_add_fab',
+                      onPressed: () {
+                        SoundSystem.playButtonClick();
+                        _showAddUserDialog(context);
+                      },
+                      backgroundColor: const Color(0xFFC10D00),
+                      shape: const CircleBorder(),
+                      child: Icon(Icons.add, color: appTextColor(context)),
                     ),
-                  );
-                },
+                ],
               ),
             ),
           ),
@@ -881,124 +867,56 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             ),
             const SizedBox(width: 8.0),
             Expanded(
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedDepartment,
-                  hint: Text(
-                    'FILTER DEPARTMENT',
-                    style: TextStyle(
-                      color: appTextColor(context),
-                      fontFamily: 'Poppins',
-                      fontSize: 12.0,
-                    ),
-                  ),
-                  dropdownColor: widgetBg,
-                  style: TextStyle(
-                    color: appTextColor(context),
-                    fontFamily: 'Poppins',
-                  ),
-                  isExpanded: true,
-                  icon: Icon(
-                    Icons.arrow_drop_down,
-                    color: appTextColor(context),
-                  ),
-                  onChanged: (String? newValue) async {
-                    SoundSystem.playButtonClick();
-                    if (newValue == _kAddNewDepartment) {
-                      await _showAddDepartmentDialog();
-                      return;
-                    }
-                    setState(() {
-                      _selectedDepartment = newValue;
-                    });
-                  },
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('All Departments'),
-                    ),
-                    const DropdownMenuItem<String>(
-                      value: _kAddNewDepartment,
-                      child: Text('➕ Add new department...'),
-                    ),
-                    ..._availableDepartments.map<DropdownMenuItem<String>>((
-                      String value,
-                    ) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(
-                          value,
-                          style: TextStyle(
-                            color: appTextColor(context),
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
+              child: _buildSearchableFilterField(
+                placeholder: 'FILTER DEPARTMENT',
+                valueText: _selectedDepartment ?? 'All Departments',
+                widgetBg: widgetBg,
+                onTap: () async {
+                  SoundSystem.playButtonClick();
+                  final selected = await _showSearchableFilterDialog(
+                    title: 'Department',
+                    allLabel: 'All Departments',
+                    options: _availableDepartments,
+                    addValue: _kAddNewDepartment,
+                    addLabel: 'Add new department...',
+                  );
+                  if (selected == null) return;
+                  if (selected == _kAddNewDepartment) {
+                    await _showAddDepartmentDialog();
+                    return;
+                  }
+                  setState(() {
+                    _selectedDepartment =
+                        selected == _kAllFilterOption ? null : selected;
+                  });
+                },
               ),
             ),
             const SizedBox(width: 8.0),
             Expanded(
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedDesignation,
-                  hint: Text(
-                    'FILTER DESIGNATION',
-                    style: TextStyle(
-                      color: appTextColor(context),
-                      fontFamily: 'Poppins',
-                      fontSize: 12.0,
-                    ),
-                  ),
-                  dropdownColor: widgetBg,
-                  style: TextStyle(
-                    color: appTextColor(context),
-                    fontFamily: 'Poppins',
-                  ),
-                  isExpanded: true,
-                  icon: Icon(
-                    Icons.arrow_drop_down,
-                    color: appTextColor(context),
-                  ),
-                  onChanged: (String? newValue) async {
-                    SoundSystem.playButtonClick();
-                    if (newValue == _kAddNewDesignation) {
-                      await _showAddDesignationDialog();
-                      return;
-                    }
-                    setState(() {
-                      _selectedDesignation = newValue;
-                    });
-                  },
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('All Designations'),
-                    ),
-                    const DropdownMenuItem<String>(
-                      value: _kAddNewDesignation,
-                      child: Text('➕ Add new designation...'),
-                    ),
-                    ..._availableDesignations.map<DropdownMenuItem<String>>((
-                      String value,
-                    ) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(
-                          value,
-                          style: TextStyle(
-                            color: appTextColor(context),
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
+              child: _buildSearchableFilterField(
+                placeholder: 'FILTER DESIGNATION',
+                valueText: _selectedDesignation ?? 'All Designations',
+                widgetBg: widgetBg,
+                onTap: () async {
+                  SoundSystem.playButtonClick();
+                  final selected = await _showSearchableFilterDialog(
+                    title: 'Designation',
+                    allLabel: 'All Designations',
+                    options: _availableDesignations,
+                    addValue: _kAddNewDesignation,
+                    addLabel: 'Add new designation...',
+                  );
+                  if (selected == null) return;
+                  if (selected == _kAddNewDesignation) {
+                    await _showAddDesignationDialog();
+                    return;
+                  }
+                  setState(() {
+                    _selectedDesignation =
+                        selected == _kAllFilterOption ? null : selected;
+                  });
+                },
               ),
             ),
           ],
@@ -1035,6 +953,172 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildSearchableFilterField({
+    required String placeholder,
+    required String valueText,
+    required Color widgetBg,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: widgetBg,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: appTextColor(context).withValues(alpha: 0.25),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                valueText.isEmpty ? placeholder : valueText,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: appTextColor(context),
+                  fontFamily: 'Poppins',
+                  fontSize: 12.0,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_drop_down, color: appTextColor(context)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _showSearchableFilterDialog({
+    required String title,
+    required String allLabel,
+    required List<String> options,
+    String? addValue,
+    String? addLabel,
+  }) async {
+    final searchController = TextEditingController();
+    String query = '';
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
+        final widgetBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filtered = options
+                .where(
+                  (option) =>
+                      option.toLowerCase().contains(query.trim().toLowerCase()),
+                )
+                .toList();
+            final rows = <Map<String, String>>[
+              {'value': _kAllFilterOption, 'label': allLabel},
+              if (addValue != null && addLabel != null)
+                {'value': addValue, 'label': '➕ $addLabel'},
+              ...filtered.map((value) => {'value': value, 'label': value}),
+            ];
+            final visibleItems = rows.length < 10 ? rows.length : 10;
+            return AlertDialog(
+              backgroundColor: widgetBg,
+              title: Text(
+                title,
+                style: TextStyle(
+                  color: appTextColor(dialogContext),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: searchController,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          query = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search $title',
+                        hintStyle: TextStyle(
+                          color: appTextColor(dialogContext).withValues(alpha: 0.7),
+                          fontFamily: 'Poppins',
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: appTextColor(dialogContext),
+                        ),
+                        filled: true,
+                        fillColor: widgetBg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                      style: TextStyle(
+                        color: appTextColor(dialogContext),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (rows.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'No results found',
+                          style: TextStyle(
+                            color: appTextColor(dialogContext),
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: (visibleItems * 48).toDouble(),
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: rows.length,
+                          itemBuilder: (context, index) {
+                            final row = rows[index];
+                            return ListTile(
+                              dense: true,
+                              title: Text(
+                                row['label'] ?? '',
+                                style: TextStyle(
+                                  color: appTextColor(dialogContext),
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              onTap: () => Navigator.of(dialogContext).pop(
+                                row['value'],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    searchController.dispose();
+    return selected;
   }
 
   Widget _buildUserList() {
@@ -1143,47 +1227,78 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final isSelected = _selectedUserIds.contains(user.id);
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color normalWidgetBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+    final bool isHovered = _hoveredUserId == user.id;
 
-    return GestureDetector(
-      onLongPress: () {
-        SoundSystem.playButtonClick();
-        if (!_isSelectionMode) {
-          setState(() {
-            _isSelectionMode = true;
-            _selectedUserIds.add(user.id);
-            expandedUserId = null;
-          });
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hoveredUserId = user.id),
+      onExit: (_) {
+        if (_hoveredUserId == user.id) {
+          setState(() => _hoveredUserId = null);
         }
       },
-      onTap: () {
-        SoundSystem.playButtonClick();
-        if (_isSelectionMode) {
-          setState(() {
-            if (isSelected) {
-              _selectedUserIds.remove(user.id);
-              if (_selectedUserIds.isEmpty) {
-                _isSelectionMode = false;
-              }
-            } else {
-              _selectedUserIds.add(user.id);
+      child: AnimatedScale(
+        scale: isHovered ? 1.01 : 1.0,
+        duration: const Duration(milliseconds: 170),
+        curve: Curves.easeOut,
+        child: GestureDetector(
+          onLongPress: () {
+            SoundSystem.playButtonClick();
+            if (!_isSelectionMode) {
+              setState(() {
+                _isSelectionMode = true;
+                _selectedUserIds.add(user.id);
+                expandedUserId = null;
+              });
             }
-          });
-        } else {
-          setState(() {
-            expandedUserId = isExpanded ? null : user.id;
-          });
-        }
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0x80C10D00) : normalWidgetBg,
-          borderRadius: BorderRadius.circular(16.0),
-          border: isSelected
-              ? Border.all(color: const Color(0xFFC10D00), width: 2.0)
-              : null,
-        ),
-        padding: const EdgeInsets.all(16.0),
-        child: LayoutBuilder(
+          },
+          onTap: () {
+            SoundSystem.playButtonClick();
+            if (_isSelectionMode) {
+              setState(() {
+                if (isSelected) {
+                  _selectedUserIds.remove(user.id);
+                  if (_selectedUserIds.isEmpty) {
+                    _isSelectionMode = false;
+                  }
+                } else {
+                  _selectedUserIds.add(user.id);
+                }
+              });
+            } else {
+              setState(() {
+                expandedUserId = isExpanded ? null : user.id;
+              });
+            }
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 170),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0x80C10D00) : normalWidgetBg,
+              borderRadius: BorderRadius.circular(16.0),
+              border: isSelected
+                  ? Border.all(color: const Color(0xFFC10D00), width: 2.0)
+                  : Border.all(
+                      color: isHovered
+                          ? const Color(0xFFC10D00).withValues(alpha: 0.70)
+                          : appTextColor(context).withValues(alpha: 0.12),
+                      width: isHovered ? 1.6 : 1.0,
+                    ),
+              boxShadow: isHovered
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFC10D00).withValues(
+                          alpha: isDark ? 0.28 : 0.18,
+                        ),
+                        blurRadius: 16,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : null,
+            ),
+            padding: const EdgeInsets.all(16.0),
+            child: LayoutBuilder(
           builder: (context, constraints) {
             final availableWidth = constraints.maxWidth;
             final checkboxWidth = _isSelectionMode ? 48.0 : 0.0;
@@ -1320,6 +1435,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ],
             );
           },
+            ),
+          ),
         ),
       ),
     );
@@ -1786,6 +1903,26 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     style: TextStyle(color: appTextColor(context)),
                   ),
                   TextSpan(text: _formatLastSignIn(user.lastSignInAt)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8.0),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  color: appTextColor(context),
+                  fontFamily: 'Poppins',
+                  fontSize: 14.0,
+                ),
+                children: [
+                  TextSpan(
+                    text: 'Login count: ',
+                    style: TextStyle(color: appTextColor(context)),
+                  ),
+                  TextSpan(text: '${user.loginCount}'),
                 ],
               ),
             ),

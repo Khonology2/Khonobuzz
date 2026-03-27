@@ -55,6 +55,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   String? expandedUserId;
   String? _updatingUserId;
+  String? _hoveredUserId;
   Timer? _debounceTimer;
   String _searchQuery = '';
 
@@ -63,25 +64,31 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   String _sortOption = 'name';
 
+  DateTime _lastSignInSortKey(ManagedUser user) {
+    return user.lastSignInAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
   List<ManagedUser> get _sortedFilteredUsers {
     final list = List<ManagedUser>.from(_filteredUsers);
-    switch (_sortOption) {
-      case 'department':
-        list.sort((a, b) => a.department.compareTo(b.department));
-        break;
-      case 'modules_desc':
-        list.sort((a, b) {
+    // Primary sort: latest sign-in first, so admins always see newest logins on top.
+    // Secondary sort: keep the selected sort option among users with same sign-in recency.
+    list.sort((a, b) {
+      final signInCompare = _lastSignInSortKey(b).compareTo(_lastSignInSortKey(a));
+      if (signInCompare != 0) return signInCompare;
+
+      switch (_sortOption) {
+        case 'department':
+          return a.department.compareTo(b.department);
+        case 'modules_desc':
           final aCount = _moduleCount(a);
           final bCount = _moduleCount(b);
           if (bCount != aCount) return bCount.compareTo(aCount);
           return a.name.compareTo(b.name);
-        });
-        break;
-      case 'name':
-      default:
-        list.sort((a, b) => a.name.compareTo(b.name));
-        break;
-    }
+        case 'name':
+        default:
+          return a.name.compareTo(b.name);
+      }
+    });
     return list;
   }
 
@@ -1623,7 +1630,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             child: SafeArea(
               child: Consumer<ThemeModeProvider>(
                 builder: (context, themeMode, _) {
-                  return FloatingActionButton.small(
+                  return FloatingActionButton(
+                    mini: true,
+                    shape: const CircleBorder(),
                     heroTag: 'module_access_theme_toggle_fab',
                     onPressed: () {
                       SoundSystem.playButtonClick();
@@ -1932,7 +1941,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFFC10D00).withValues(alpha: 0.3)
+              ? const Color(0xFFC10D00)
               : normalChipBg,
           borderRadius: BorderRadius.circular(20.0),
           border: isSelected
@@ -1942,7 +1951,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? appTextColor(context) : appTextColor(context),
+            color: isSelected ? Colors.white : appTextColor(context),
             fontSize: 12.0,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             fontFamily: 'Poppins',
@@ -1975,61 +1984,85 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         isDark ? moduleAccessDarkWidgetBg : Colors.white;
     final moduleAccessDots = _buildModuleAccessDots(user.moduleAccess);
     final isSelected = _selectedUserIds.contains(user.id);
-    return GestureDetector(
-      onLongPress: () {
-        SoundSystem.playButtonClick();
-        if (!_isSelectionMode) {
-          setState(() {
-            _isSelectionMode = true;
-            _selectedUserIds.add(user.id);
-            expandedUserId = null;
-          });
+    final bool isHovered = _hoveredUserId == user.id;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hoveredUserId = user.id),
+      onExit: (_) {
+        if (_hoveredUserId == user.id) {
+          setState(() => _hoveredUserId = null);
         }
       },
-      onTap: () {
-        SoundSystem.playButtonClick();
-        if (_isSelectionMode) {
-          setState(() {
-            if (isSelected) {
-              _selectedUserIds.remove(user.id);
-              if (_selectedUserIds.isEmpty) {
-                _isSelectionMode = false;
-              }
-            } else {
-              _selectedUserIds.add(user.id);
+      child: AnimatedScale(
+        scale: isHovered ? 1.01 : 1.0,
+        duration: const Duration(milliseconds: 170),
+        curve: Curves.easeOut,
+        child: GestureDetector(
+          onLongPress: () {
+            SoundSystem.playButtonClick();
+            if (!_isSelectionMode) {
+              setState(() {
+                _isSelectionMode = true;
+                _selectedUserIds.add(user.id);
+                expandedUserId = null;
+              });
             }
-          });
-        } else {
-          setState(() {
-            if (!isExpanded) {
-              expandedUserId = user.id;
-              _refreshRecruitmentRoleCache(user);
-              _refreshSOWBuilderRoleCache(user);
-              _refreshDeliverablesRoleCache(user);
-              _refreshSkillsHeatmapRoleCache(user);
+          },
+          onTap: () {
+            SoundSystem.playButtonClick();
+            if (_isSelectionMode) {
+              setState(() {
+                if (isSelected) {
+                  _selectedUserIds.remove(user.id);
+                  if (_selectedUserIds.isEmpty) {
+                    _isSelectionMode = false;
+                  }
+                } else {
+                  _selectedUserIds.add(user.id);
+                }
+              });
             } else {
-              expandedUserId = null;
+              setState(() {
+                if (!isExpanded) {
+                  expandedUserId = user.id;
+                  _refreshRecruitmentRoleCache(user);
+                  _refreshSOWBuilderRoleCache(user);
+                  _refreshDeliverablesRoleCache(user);
+                  _refreshSkillsHeatmapRoleCache(user);
+                } else {
+                  expandedUserId = null;
+                }
+              });
             }
-          });
-        }
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0x80C10D00) : normalWidgetBg,
-          borderRadius: BorderRadius.circular(16.0),
-          border: isSelected
-              ? Border.all(color: const Color(0xFFC10D00), width: 2.0)
-              : null,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 170),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0x80C10D00) : normalWidgetBg,
+              borderRadius: BorderRadius.circular(16.0),
+              border: isSelected
+                  ? Border.all(color: const Color(0xFFC10D00), width: 2.0)
+                  : Border.all(
+                      color: isHovered
+                          ? const Color(0xFFC10D00).withValues(alpha: 0.70)
+                          : appTextColor(context).withValues(alpha: 0.12),
+                      width: isHovered ? 1.6 : 1.0,
+                    ),
+              boxShadow: [
+                BoxShadow(
+                  color: isHovered
+                      ? const Color(0xFFC10D00).withValues(
+                          alpha: isDark ? 0.28 : 0.18,
+                        )
+                      : Colors.black.withValues(alpha: 0.08),
+                  blurRadius: isHovered ? 18 : 12,
+                  spreadRadius: isHovered ? 1 : 0,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-          ],
-        ),
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2151,6 +2184,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ],
             ),
           ],
+            ),
+          ),
         ),
       ),
     );
@@ -3139,7 +3174,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                 backgroundColor: const Color(0xFFC10D00),
                 foregroundColor: appTextColor(context),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0),
+                  borderRadius: BorderRadius.circular(24),
                 ),
               ),
               child: _updatingUserId == user.id

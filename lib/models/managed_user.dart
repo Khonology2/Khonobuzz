@@ -17,6 +17,7 @@ class ManagedUser {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? lastSignInAt;
+  final int loginCount;
 
   String get name => '$firstName $lastName'.trim();
 
@@ -79,6 +80,7 @@ class ManagedUser {
     this.createdAt,
     this.updatedAt,
     this.lastSignInAt,
+    this.loginCount = 0,
   });
 
   /// Copy with optional overrides so the updated user can be sorted to the top.
@@ -89,6 +91,7 @@ class ManagedUser {
     String? moduleRole,
     String? moduleAccessRole,
     DateTime? lastSignInAt,
+    int? loginCount,
   }) {
     return ManagedUser(
       id: id,
@@ -109,7 +112,28 @@ class ManagedUser {
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastSignInAt: lastSignInAt ?? this.lastSignInAt,
+      loginCount: loginCount ?? this.loginCount,
     );
+  }
+
+  static DateTime? _parseDateTimeValue(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value);
+    }
+    try {
+      final dynamic candidate = (value as dynamic).toDate();
+      if (candidate is DateTime) return candidate;
+    } catch (_) {}
+    return null;
+  }
+
+  static int _parseLoginCount(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
   }
 
   factory ManagedUser.fromFirestore(
@@ -172,6 +196,12 @@ class ManagedUser {
         : (userData['moduleAccessRole'] as String?)?.isNotEmpty == true
             ? userData['moduleAccessRole'] as String
             : null;
+    final lastSignInAtValue =
+        _parseDateTimeValue(userData['lastSignInAt']) ??
+        _parseDateTimeValue(onboardingData['lastSignInAt']);
+    final loginCountValue = _parseLoginCount(
+      onboardingData['loginCount'] ?? userData['loginCount'],
+    );
 
     // Derive moduleAccess from moduleAccessRole if moduleAccess is empty
     final finalModuleAccess = _deriveModuleAccessFromRole(moduleAccessValue, moduleAccessRoleValue);
@@ -196,6 +226,8 @@ class ManagedUser {
       moduleAccessRole: moduleAccessRoleValue,
       phoneNumber: onboardingData['phone'] ?? userData['phone'],
       profilePictureUrl: onboardingData['profilePictureUrl'] ?? userData['profilePictureUrl'],
+      lastSignInAt: lastSignInAtValue,
+      loginCount: loginCountValue,
     );
   }
 
@@ -245,6 +277,7 @@ class ManagedUser {
       lastSignInAt: lastSignInAtRaw is String && lastSignInAtRaw.isNotEmpty
           ? DateTime.tryParse(lastSignInAtRaw)
           : null,
+      loginCount: _parseLoginCount(data['loginCount']),
     );
   }
 }

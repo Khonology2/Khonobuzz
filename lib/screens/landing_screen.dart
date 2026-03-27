@@ -10,6 +10,7 @@ import 'auth_screen.dart';
 import '../theme/app_backgrounds.dart';
 import '../theme/app_text_colors.dart';
 import '../theme/app_themes.dart';
+import '../widgets/version_control_widget.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -57,6 +58,12 @@ class _LandingScreenState extends State<LandingScreen> {
           if (!mounted) {
             _isCheckingRedirect = false;
             return;
+          }
+
+          if (success) {
+            await context.read<ThemeModeProvider>().applyThemePreference(
+              authProvider.userThemePreference,
+            );
           }
 
           if (!success) {
@@ -161,9 +168,20 @@ class _LandingScreenState extends State<LandingScreen> {
                     isLight
                         ? 'assets/images/red_disc.png'
                         : 'assets/images/discs.png',
-                    height: isLight ? 96 : 80,
+                    height: isLight ? 110 : 72,
                   ),
                 ],
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 76,
+              child: Center(
+                child: VersionControlWidget(
+                  textColor: isLight ? Colors.black54 : Colors.white70,
+                  hoverColor: isLight ? Colors.black : Colors.white,
+                ),
               ),
             ),
             Positioned(
@@ -172,7 +190,9 @@ class _LandingScreenState extends State<LandingScreen> {
               child: SafeArea(
                 child: Consumer<ThemeModeProvider>(
                   builder: (context, themeMode, _) {
-                    return FloatingActionButton.small(
+                    return FloatingActionButton(
+                      mini: true,
+                      shape: const CircleBorder(),
                       heroTag: 'landing_theme_toggle_fab',
                       onPressed: () {
                         SoundSystem.playButtonClick();

@@ -33,6 +33,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
 
   String? expandedUserId;
   String? _updatingUserId;
+  String? _hoveredUserId;
   Timer? _debounceTimer;
   String _searchQuery = '';
 
@@ -298,7 +299,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
             child: SafeArea(
               child: Consumer<ThemeModeProvider>(
                 builder: (context, themeMode, _) {
-                  return FloatingActionButton.small(
+                  return FloatingActionButton(
+                    mini: true,
+                    shape: const CircleBorder(),
                     heroTag: 'entity_management_theme_toggle_fab',
                     onPressed: () {
                       SoundSystem.playButtonClick();
@@ -504,20 +507,53 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color widgetBg = isDark ? entityDarkWidgetBg : Colors.white;
-    return InkWell(
-      onTap: () {
-        SoundSystem.playButtonClick();
-        setState(() {
-          expandedUserId = isExpanded ? null : user.id;
-        });
+    final bool isHovered = _hoveredUserId == user.id;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hoveredUserId = user.id),
+      onExit: (_) {
+        if (_hoveredUserId == user.id) {
+          setState(() => _hoveredUserId = null);
+        }
       },
-      child: Container(
-        decoration: BoxDecoration(
-          color: widgetBg,
+      child: AnimatedScale(
+        scale: isHovered ? 1.01 : 1.0,
+        duration: const Duration(milliseconds: 170),
+        curve: Curves.easeOut,
+        child: InkWell(
+          onTap: () {
+            SoundSystem.playButtonClick();
+            setState(() {
+              expandedUserId = isExpanded ? null : user.id;
+            });
+          },
           borderRadius: BorderRadius.circular(16.0),
-        ),
-        padding: const EdgeInsets.all(16.0),
-        child: LayoutBuilder(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 170),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: widgetBg,
+              borderRadius: BorderRadius.circular(16.0),
+              border: Border.all(
+                color: isHovered
+                    ? const Color(0xFFC10D00).withValues(alpha: 0.70)
+                    : appTextColor(context).withValues(alpha: 0.12),
+                width: isHovered ? 1.6 : 1.0,
+              ),
+              boxShadow: isHovered
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFC10D00).withValues(
+                          alpha: isDark ? 0.28 : 0.18,
+                        ),
+                        blurRadius: 16,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : null,
+            ),
+            padding: const EdgeInsets.all(16.0),
+            child: LayoutBuilder(
           builder: (context, constraints) {
             final availableWidth = constraints.maxWidth;
             final spacingWidth = 8.0 * 2;
@@ -624,6 +660,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
               ],
             );
           },
+            ),
+          ),
         ),
       ),
     );

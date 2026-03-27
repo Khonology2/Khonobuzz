@@ -46,16 +46,69 @@ class UserProvider extends ChangeNotifier {
     _setUsersAndSort(users);
   }
 
+  DateTime _lastSignInSortKey(ManagedUser user) {
+    return user.lastSignInAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  DateTime _updatedSortKey(ManagedUser user) {
+    return user.updatedAt ?? user.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  int _compareUsersForDisplay(ManagedUser a, ManagedUser b) {
+    // Most recently signed-in users should always float to top for admin screens.
+    final signInCompare = _lastSignInSortKey(b).compareTo(_lastSignInSortKey(a));
+    if (signInCompare != 0) return signInCompare;
+    return _updatedSortKey(b).compareTo(_updatedSortKey(a));
+  }
+
   void _setUsersAndSort(List<ManagedUser> users) {
-    users.sort((a, b) {
-      final aKey =
-          a.updatedAt ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bKey =
-          b.updatedAt ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return bKey.compareTo(aKey);
-    });
+    users.sort(_compareUsersForDisplay);
     _users = users;
     _lastFetchTime = DateTime.now();
+  }
+
+  DateTime? _parseDateTimeDynamic(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value);
+    }
+    if (value is num) {
+      final ts = value.toDouble();
+      if (ts <= 0) return null;
+      // Accept both millis and seconds.
+      final millis = ts > 1e12 ? ts.toInt() : (ts * 1000).toInt();
+      return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
+    }
+    try {
+      final candidate = (value as dynamic).toDate();
+      if (candidate is DateTime) return candidate;
+    } catch (_) {}
+    return null;
+  }
+
+  Map<String, dynamic> _selectBestOnboardingData(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    if (docs.isEmpty) return {};
+
+    QueryDocumentSnapshot<Map<String, dynamic>>? bestDoc;
+    DateTime bestScore = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+
+    for (final doc in docs) {
+      final data = Map<String, dynamic>.from(doc.data());
+      final score =
+          _parseDateTimeDynamic(data['updated_at']) ??
+          _parseDateTimeDynamic(data['lastSignInAt']) ??
+          _parseDateTimeDynamic(data['created_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      if (bestDoc == null || score.isAfter(bestScore)) {
+        bestDoc = doc;
+        bestScore = score;
+      }
+    }
+
+    return bestDoc == null ? {} : Map<String, dynamic>.from(bestDoc.data());
   }
 
   /// Fetch users directly from Firestore - fast, no backend cold start
@@ -78,12 +131,8 @@ class UserProvider extends ChangeNotifier {
         final onboardingSnapshot = await firestore
             .collection('onboarding')
             .where('user_id', isEqualTo: userDoc.id)
-            .limit(1)
             .get();
-        if (onboardingSnapshot.docs.isNotEmpty) {
-          onboardingData =
-              Map<String, dynamic>.from(onboardingSnapshot.docs.first.data());
-        }
+        onboardingData = _selectBestOnboardingData(onboardingSnapshot.docs);
 
         try {
           final managed = ManagedUser.fromFirestore(
@@ -239,18 +288,7 @@ class UserProvider extends ChangeNotifier {
     if (index != -1) {
       final bumped = updatedUser.copyWith(updatedAt: DateTime.now());
       _users[index] = bumped;
-      // Re-sort by updatedAt/createdAt descending so most recently edited is at top
-      _users.sort((a, b) {
-        final aKey =
-            a.updatedAt ??
-            a.createdAt ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        final bKey =
-            b.updatedAt ??
-            b.createdAt ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        return bKey.compareTo(aKey);
-      });
+      _users.sort(_compareUsersForDisplay);
       notifyListeners();
     }
   }

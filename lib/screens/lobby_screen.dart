@@ -344,7 +344,7 @@ class LobbyScreenState extends State<LobbyScreen> {
                         isDark
                             ? 'assets/images/discs.png'
                             : 'assets/images/red_disc.png',
-                        height: isDark ? 80 : 96,
+                        height: isDark ? 72 : 110,
                       ),
 
                     ],
@@ -359,7 +359,9 @@ class LobbyScreenState extends State<LobbyScreen> {
             child: SafeArea(
               child: Consumer<ThemeModeProvider>(
                 builder: (context, themeMode, _) {
-                  return FloatingActionButton.small(
+                  return FloatingActionButton(
+                    mini: true,
+                    shape: const CircleBorder(),
                     heroTag: 'lobby_theme_toggle_fab',
                     onPressed: () {
                       SoundSystem.playButtonClick();

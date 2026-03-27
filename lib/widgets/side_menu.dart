@@ -367,14 +367,16 @@ class _SideMenuState extends State<SideMenu> {
                           },
                           child: Center(
                             child: Image.asset(
-                              _isExpanded
-                                  ? 'assets/images/khono.png'
-                                  : 'assets/images/discs.png',
+                              // In light mode with collapsed sidebar, use landing asset.
+                              // Otherwise keep existing behavior.
+                              (isLight && !_isExpanded)
+                                  ? 'assets/images/red_disc.png'
+                                  : (_isExpanded
+                                        ? 'assets/images/khono.png'
+                                        : 'assets/images/discs.png'),
                               height: _isExpanded ? 40 : 32,
                               width: _isExpanded ? null : 32,
-                              fit: _isExpanded
-                                  ? BoxFit.contain
-                                  : BoxFit.contain,
+                              fit: BoxFit.contain,
                             ),
                           ),
                         ),
@@ -480,7 +482,7 @@ class _SideMenuState extends State<SideMenu> {
                     ),
                     child: Center(
                       child: VersionControlWidget(
-                        fontSize: 10.0, // Smaller font for sidebar
+                        fontSize: 12.0,
                         textColor:
                             isLight ? Colors.black54 : Colors.white70,
                         hoverColor: isLight ? Colors.black : Colors.white,

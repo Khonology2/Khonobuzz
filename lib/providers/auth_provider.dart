@@ -20,6 +20,7 @@ class AuthProvider extends ChangeNotifier {
   String? _userToken; // Store current user's encrypted token
   String? _userProfileImageUrl; // Store current user's profile image URL
   String? _userProfilePublicId; // Store current user's profile image public ID
+  String? _userThemePreference; // Preferred app theme: light | dark
   bool _isSpecialSession = false; // Track special session state
   Map<String, dynamic>? _cachedProfileData; // Cache for prefetched profile data
 
@@ -38,6 +39,7 @@ class AuthProvider extends ChangeNotifier {
       _userProfileImageUrl; // Getter for profile image URL
   String? get userProfilePublicId =>
       _userProfilePublicId; // Getter for profile image public ID
+  String? get userThemePreference => _userThemePreference;
   bool get isSpecialSession => _isSpecialSession; // Getter for special session
   Map<String, dynamic>? get cachedProfileData =>
       _cachedProfileData; // Getter for cached profile data
@@ -127,6 +129,7 @@ class AuthProvider extends ChangeNotifier {
     _userToken = prefs.getString('userToken');
     _userProfileImageUrl = prefs.getString('userProfileImageUrl');
     _userProfilePublicId = prefs.getString('userProfilePublicId');
+    _userThemePreference = prefs.getString('userThemePreference');
     _isSpecialSession = prefs.getBool('_spSess') ?? false;
 
     // Only keep profile image if it clearly belongs to the stored user (prevents showing another user's pic)
@@ -276,6 +279,8 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = true;
         _userEmail = email;
         _userRole = userPayload['role'] ?? role ?? 'Staff';
+        _userThemePreference =
+            (userPayload['themePreference'] as String?)?.trim().toLowerCase();
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
         _userAlreadyOnboarded = false;
@@ -287,6 +292,8 @@ class AuthProvider extends ChangeNotifier {
           prefs.setString('userRole', _userRole!),
           prefs.setInt('initialScreenIndex', 9),
           prefs.setInt('currentScreenIndex', 9),
+          if (_userThemePreference != null && _userThemePreference!.isNotEmpty)
+            prefs.setString('userThemePreference', _userThemePreference!),
           if (tokenFromResponse != null)
             prefs.setString('userToken', tokenFromResponse),
         ]);
@@ -345,6 +352,7 @@ class AuthProvider extends ChangeNotifier {
     _cachedProfileData = null;
     _userProfileImageUrl = null;
     _userProfilePublicId = null;
+    _userThemePreference = null;
     final prefsForClear = await SharedPreferences.getInstance();
     await Future.wait([
       prefsForClear.remove('userProfileImageUrl'),
@@ -394,6 +402,8 @@ class AuthProvider extends ChangeNotifier {
         _userRole = isSpecialAccess
             ? 'Admin'
             : (userPayload['role'] ?? 'Staff');
+        _userThemePreference =
+            (userPayload['themePreference'] as String?)?.trim().toLowerCase();
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
 
@@ -448,6 +458,10 @@ class AuthProvider extends ChangeNotifier {
             prefs.remove('userProfilePublicId'),
           if (_userModuleAccess != null)
             prefs.setString('userModuleAccess', _userModuleAccess!),
+          if (_userThemePreference != null && _userThemePreference!.isNotEmpty)
+            prefs.setString('userThemePreference', _userThemePreference!)
+          else
+            prefs.remove('userThemePreference'),
         ];
 
         // Get token from response if available
@@ -612,6 +626,8 @@ class AuthProvider extends ChangeNotifier {
           _isAuthenticated = true;
           _userEmail = foundUser['email'] ?? email;
           _userRole = foundUser['role'] ?? 'Staff';
+          _userThemePreference =
+              (foundUser['themePreference'] as String?)?.trim().toLowerCase();
           _initialScreenIndex = 9;
           _currentScreenIndex = 9;
 
@@ -643,6 +659,13 @@ class AuthProvider extends ChangeNotifier {
             prefsWrites.add(prefs.setString('userProfilePublicId', _userProfilePublicId!));
           } else {
             prefsWrites.add(prefs.remove('userProfilePublicId'));
+          }
+          if (_userThemePreference != null && _userThemePreference!.isNotEmpty) {
+            prefsWrites.add(
+              prefs.setString('userThemePreference', _userThemePreference!),
+            );
+          } else {
+            prefsWrites.add(prefs.remove('userThemePreference'));
           }
           await Future.wait(prefsWrites);
 
@@ -681,6 +704,7 @@ class AuthProvider extends ChangeNotifier {
     _userToken = null;
     _userProfileImageUrl = null;
     _userProfilePublicId = null;
+    _userThemePreference = null;
     _isSpecialSession = false;
     _cachedProfileData = null;
     await Future.wait([
@@ -693,6 +717,7 @@ class AuthProvider extends ChangeNotifier {
       prefs.remove('userToken'),
       prefs.remove('userProfileImageUrl'),
       prefs.remove('userProfilePublicId'),
+      prefs.remove('userThemePreference'),
       prefs.remove('_spSess'),
     ]);
     notifyListeners();

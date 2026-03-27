@@ -15,6 +15,7 @@ import '../theme/app_backgrounds.dart';
 import '../providers/theme_mode_provider.dart';
 import '../theme/app_text_colors.dart';
 import '../theme/app_themes.dart';
+import '../widgets/version_control_widget.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -72,6 +73,9 @@ class AuthScreenState extends State<AuthScreen> {
           }
 
           if (success) {
+            await context.read<ThemeModeProvider>().applyThemePreference(
+              authProvider.userThemePreference,
+            );
             if (!mounted) {
               _isCheckingRedirect = false;
               return;
@@ -151,6 +155,8 @@ class AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isLight = Theme.of(context).brightness == Brightness.light;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
@@ -312,12 +318,23 @@ class AuthScreenState extends State<AuthScreen> {
                               : 'assets/images/red_disc.png',
                           height:
                               Theme.of(context).brightness == Brightness.dark
-                              ? 80
-                              : 96,
+                              ? 72
+                              : 110,
                         ),
                       ),
                     ],
                   ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 76,
+              child: Center(
+                child: VersionControlWidget(
+                  textColor: isLight ? Colors.black54 : Colors.white70,
+                  hoverColor: isLight ? Colors.black : Colors.white,
                 ),
               ),
             ),
@@ -327,7 +344,9 @@ class AuthScreenState extends State<AuthScreen> {
               child: SafeArea(
                 child: Consumer<ThemeModeProvider>(
                   builder: (context, themeMode, _) {
-                    return FloatingActionButton.small(
+                    return FloatingActionButton(
+                      mini: true,
+                      shape: const CircleBorder(),
                       heroTag: 'auth_theme_toggle_fab',
                       onPressed: () {
                         SoundSystem.playButtonClick();

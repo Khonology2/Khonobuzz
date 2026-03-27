@@ -253,6 +253,12 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
         });
       }
 
+      final themePref = (userMap['themePreference'] as String?)?.toLowerCase();
+      if (themePref == 'light' || themePref == 'dark') {
+        if (!mounted) return;
+        await context.read<ThemeModeProvider>().applyThemePreference(themePref);
+      }
+
       // Sync AuthProvider profile image: only set if this user has one, otherwise clear (no previous user's pic)
       if (mounted) {
         await authProvider.updateUserProfileImage(
@@ -314,6 +320,9 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
         'managedBy': _managerController.text.trim(),
         'profileImageUrl': _saveProfileUrl,
         'profileImagePublicId': _saveProfileId,
+        'themePreference': context.read<ThemeModeProvider>().isLight
+            ? 'light'
+            : 'dark',
       };
 
       debugPrint('=== SAVING PROFILE TO DATABASE ===');
@@ -340,6 +349,29 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
       }
     } catch (e) {
       debugPrint('Error saving profile: $e');
+    }
+  }
+
+  Future<void> _saveThemePreference(bool isLightMode) async {
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final response = await http.put(
+        Uri.parse(
+          '${ApiConfig.baseUrl}/api/admin/users/${authProvider.userEmail}/profile',
+        ),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${authProvider.userToken}',
+        },
+        body: json.encode({
+          'themePreference': isLightMode ? 'light' : 'dark',
+        }),
+      );
+      if (response.statusCode != 200) {
+        debugPrint('Failed to save theme preference: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error saving theme preference: $e');
     }
   }
 
@@ -718,6 +750,36 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 16),
+                    Consumer<ThemeModeProvider>(
+                      builder: (context, themeMode, _) {
+                        return SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            'Theme Preference (Light/Dark)',
+                            style: TextStyle(
+                              color: appTextColor(context),
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            themeMode.isLight ? 'Light mode' : 'Dark mode',
+                            style: TextStyle(
+                              color: appTextColor(context).withValues(alpha: 0.75),
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                          value: themeMode.isLight,
+                          onChanged: (value) async {
+                            await themeMode.setThemeMode(
+                              value ? ThemeMode.light : ThemeMode.dark,
+                            );
+                            await _saveThemePreference(value);
+                          },
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -728,7 +790,9 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
               child: SafeArea(
                 child: Consumer<ThemeModeProvider>(
                   builder: (context, themeMode, _) {
-                    return FloatingActionButton.small(
+                    return FloatingActionButton(
+                      mini: true,
+                      shape: const CircleBorder(),
                       heroTag: 'admin_profile_theme_toggle_fab',
                       onPressed: () {
                         SoundSystem.playButtonClick();

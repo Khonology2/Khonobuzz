@@ -211,6 +211,11 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   }
 
   Widget _buildVersionChild() {
+    final bool isLightMode = Theme.of(context).brightness == Brightness.light;
+    final Color effectiveVersionColor = isLightMode
+        ? Colors.black
+        : (_colorAnimation.value ?? widget.textColor);
+
     return MouseRegion(
       onEnter: (_) => _onHover(true),
       onExit: (_) => _onHover(false),
@@ -241,8 +246,8 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
                 _currentVersion,
                 style: TextStyle(
                   fontSize: widget.fontSize,
-                  color: _colorAnimation.value,
-                  fontWeight: FontWeight.w400,
+                  color: effectiveVersionColor,
+                  fontWeight: FontWeight.w500,
                   fontFamily: 'Poppins',
                   letterSpacing: 0.5,
                 ),
@@ -256,6 +261,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
 
   @override
   Widget build(BuildContext context) {
+    final bool isLightMode = Theme.of(context).brightness == Brightness.light;
     if (!_showAttentionCatcher) {
       return _buildVersionChild();
     }
@@ -271,7 +277,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
                 "See what's new — hover here.",
                 style: TextStyle(
                   fontSize: 11,
-                  color: widget.textColor,
+                  color: isLightMode ? Colors.black : widget.textColor,
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w500,
                 ),

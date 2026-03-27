@@ -239,24 +239,6 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Consumer<ThemeModeProvider>(
-                            builder: (context, themeMode, _) {
-                              return IconButton(
-                                tooltip: 'Toggle theme',
-                                onPressed: () {
-                                  SoundSystem.playButtonClick();
-                                  themeMode.toggle();
-                                },
-                                icon: Icon(
-                                  themeMode.isLight
-                                      ? Icons.dark_mode_rounded
-                                      : Icons.light_mode_rounded,
-                                  color: appTextColor(context)
-                                      .withValues(alpha: 0.85),
-                                ),
-                              );
-                            },
-                          ),
                           IconButton(
                             onPressed: () {
                               SoundSystem.playButtonClick();
