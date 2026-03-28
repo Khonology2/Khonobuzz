@@ -1,0 +1,57 @@
+# Runs Flutter checks on every push, then triggers a Render deploy via deploy hook.
+# Add repository secret RENDER_DEPLOY_HOOK with your full hook URL from Render Dashboard
+# (Service → Settings → Deploy Hook → Create hook).
+
+name: deploy-check
+
+on:
+  push:
+    branches:
+      - khono-v2
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    name: Flutter checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+  deploy-render:
+    name: Trigger Render deploy
+    needs: checks
+    if: >
+      github.ref == 'refs/heads/khono-v2' &&
+      !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST deploy hook
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "${RENDER_DEPLOY_HOOK}" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
+          echo "Render deploy hook invoked successfully."
