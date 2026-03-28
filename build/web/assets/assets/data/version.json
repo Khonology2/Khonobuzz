@@ -1,6 +1,6 @@
 {
-  "version": "2026.03.DA3",
-  "last_feature_commit": "Feature -   (module_access): add role-based authentication for skills heatmap.",
-  "feature_date": "2026-03-23",
-  "commit_count_since_feature": 3
+  "version": "2026.03.DE2",
+  "last_feature_commit": "Feature - Implemented onboarding user updates, improved user data handling, and added light/dark mode across all screens.",
+  "feature_date": "2026-03-27",
+  "commit_count_since_feature": 2
 }
