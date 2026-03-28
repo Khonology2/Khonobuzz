@@ -1,6 +1,10 @@
-# Runs Flutter checks on every push, then triggers a Render deploy via deploy hook.
-# Add repository secret RENDER_DEPLOY_HOOK with your full hook URL from Render Dashboard
-# (Service → Settings → Deploy Hook → Create hook).
+# 1) Flutter analyze + test
+# 2) On khono-v2: flutter build web, commit build/web, push, then POST RENDER_DEPLOY_HOOK
+#
+# Render must serve pre-built files only (Static Site): buildCommand = no-op, publish = build/web.
+# Do NOT run flutter/npm build on Render — see render.yaml.
+#
+# Secrets: RENDER_DEPLOY_HOOK = full URL from Render → Service → Settings → Deploy Hook
 
 name: deploy-check
 
@@ -10,17 +14,23 @@ on:
       - khono-v2
       - main
 
+concurrency:
+  group: deploy-check-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  checks:
+  checks-build-deploy:
     if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
-    name: Flutter checks
+    name: Flutter CI, web build, Render deploy
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -37,15 +47,25 @@ jobs:
       - name: Test
         run: flutter test
 
-  deploy-render:
-    name: Trigger Render deploy
-    needs: checks
-    if: >
-      github.ref == 'refs/heads/khono-v2' &&
-      !contains(github.event.head_commit.message, '[skip ci]')
-    runs-on: ubuntu-latest
-    steps:
-      - name: POST deploy hook
+      - name: Build web (for Render — not built on Render)
+        if: github.ref == 'refs/heads/khono-v2'
+        run: flutter build web --release --base-href /
+
+      - name: Commit and push build/web
+        if: github.ref == 'refs/heads/khono-v2'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build/web
+          if git diff --staged --quiet; then
+            echo "No build/web changes to commit"
+          else
+            git commit -m "chore: update Flutter web build [skip ci]"
+            git push origin khono-v2
+          fi
+
+      - name: Trigger Render deploy hook
+        if: github.ref == 'refs/heads/khono-v2'
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
