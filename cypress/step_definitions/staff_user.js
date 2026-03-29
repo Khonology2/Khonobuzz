@@ -32,21 +32,14 @@ Given("I open the app on the auth screen for E2E", () => {
       }
     },
   });
+  cy.url({ timeout: 15000 }).should("include", "e2e=auth");
   cy.get("body", { timeout: 30000 }).should("be.visible");
 
-  // Wait a bit longer for Flutter to initialize accessibility tree
-  cy.wait(2000);
-
-  // Debug: Log what we're seeing before the assertion
-  cy.document().then((doc) => {
-    const preview = getFlutterAccessibleText(doc).slice(0, 400);
-    cy.log("Accessibility preview:", preview);
-    
+  // Production + CanvasKit can take well beyond 2s; .should() retries until timeout.
+  cy.document({ timeout: 120000 }).should((doc) => {
     const onAuth = surfaceHas(doc, "Select Login Preference");
     const onLanding = surfaceHas(doc, /\bGET STARTED\b/i);
-    cy.log("Looking for 'Select Login Preference':", onAuth);
-    cy.log("Looking for 'GET STARTED':", onLanding);
-    
+    const preview = getFlutterAccessibleText(doc).slice(0, 500);
     expect(
       onAuth || onLanding,
       `Flutter should expose auth or landing (CanvasKit uses aria-label in shadow). Surface sample:\n${preview}`,

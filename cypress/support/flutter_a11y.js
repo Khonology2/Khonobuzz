@@ -60,9 +60,6 @@ export function getFlutterAccessibleText(doc) {
   if (inner) {
     parts.push(inner);
   }
-  
-  // Debug: Log what we found
-  console.log('Flutter accessibility text found:', parts.join('\n'));
-  
-  return parts.join('\n');
+
+  return parts.join("\n");
 }
