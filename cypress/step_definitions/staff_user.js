@@ -34,10 +34,19 @@ Given("I open the app on the auth screen for E2E", () => {
   });
   cy.get("body", { timeout: 30000 }).should("be.visible");
 
+  // Wait a bit longer for Flutter to initialize accessibility tree
+  cy.wait(2000);
+
   cy.document({ timeout: 120000 }).should((doc) => {
     const onAuth = surfaceHas(doc, "Select Login Preference");
     const onLanding = surfaceHas(doc, /\bGET STARTED\b/i);
     const preview = getFlutterAccessibleText(doc).slice(0, 400);
+    
+    // Debug: Log what we're seeing
+    cy.log("Accessibility preview:", preview);
+    cy.log("Looking for 'Select Login Preference':", onAuth);
+    cy.log("Looking for 'GET STARTED':", onLanding);
+    
     expect(
       onAuth || onLanding,
       `Flutter should expose auth or landing (CanvasKit uses aria-label in shadow). Surface sample:\n${preview}`,

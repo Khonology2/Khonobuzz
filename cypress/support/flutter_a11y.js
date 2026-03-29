@@ -29,6 +29,15 @@ export function getFlutterAccessibleText(doc) {
       if (al) {
         parts.push(al);
       }
+      // Also check for other accessibility attributes
+      const role = el.getAttribute?.("role");
+      if (role) {
+        parts.push(`role: ${role}`);
+      }
+      const id = el.getAttribute?.("id");
+      if (id) {
+        parts.push(`id: ${id}`);
+      }
       if (el.shadowRoot) {
         walk(el.shadowRoot);
       }
@@ -51,5 +60,9 @@ export function getFlutterAccessibleText(doc) {
   if (inner) {
     parts.push(inner);
   }
-  return parts.join("\n");
+  
+  // Debug: Log what we found
+  console.log('Flutter accessibility text found:', parts.join('\n'));
+  
+  return parts.join('\n');
 }

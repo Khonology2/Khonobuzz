@@ -40,8 +40,17 @@ class AuthScreenState extends State<AuthScreen> {
     });
 
     if (kIsWeb) {
+      // Ensure accessibility tree is properly initialized for web testing
       Future.delayed(const Duration(milliseconds: 100), () {
         _handleRedirectResult();
+      });
+
+      // Additional delay for accessibility tree generation
+      Future.delayed(const Duration(milliseconds: 200), () {
+        // Force semantics update for testing
+        if (mounted) {
+          setState(() {});
+        }
       });
     }
   }
@@ -184,14 +193,21 @@ class AuthScreenState extends State<AuthScreen> {
                       const SizedBox(height: 48),
 
                       const SizedBox(height: 32),
-                      Semantics(
-                        label: 'Select Login Preference',
-                        child: Text(
-                          'Select Login Preference',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: appTextColor(context),
-                            fontSize: 20,
+                      Container(
+                        key: const Key('auth-title-container'),
+                        child: Semantics(
+                          label: 'Select Login Preference',
+                          header: true,
+                          child: ExcludeSemantics(
+                            excluding: false,
+                            child: Text(
+                              'Select Login Preference',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: appTextColor(context),
+                                fontSize: 20,
+                              ),
+                            ),
                           ),
                         ),
                       ),

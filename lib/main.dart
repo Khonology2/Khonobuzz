@@ -50,9 +50,8 @@ Locale? _trySupportedLocale(Locale device, Iterable<Locale> supported) {
     // Dart [Locale] only allows ISO 3166-1 alpha-2 for country (2 letters).
     // Headless Chrome/Electron may report "001", script subtags, etc. — those throw.
     final cc = device.countryCode;
-    final country = (cc != null &&
-            cc.length == 2 &&
-            RegExp(r'^[A-Za-z]{2}$').hasMatch(cc))
+    final country =
+        (cc != null && cc.length == 2 && RegExp(r'^[A-Za-z]{2}$').hasMatch(cc))
         ? cc
         : null;
     final candidate = Locale(device.languageCode, country);
@@ -115,35 +114,52 @@ class MyApp extends StatelessWidget {
       child: Consumer<ThemeModeProvider>(
         builder: (context, themeModeProvider, _) {
           return MaterialApp(
-        title: 'Khonology',
-        theme: AppThemes.light,
-        darkTheme: AppThemes.dark,
-        themeMode: themeModeProvider.themeMode,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        // Web: never trust navigator locale alone (Cypress/Electron breaks Locale()).
-        locale: kIsWeb ? const Locale('en') : null,
-        localeListResolutionCallback:
-            kIsWeb ? null : _resolveApplicationLocale,
-        home: Consumer<AuthProvider>(
-          builder: (context, authProvider, child) {
-            // Always use Modules screen (index 3) for authenticated users on login
-            // This ensures both Staff and Admin users land on Modules screen
-            final initialIndex = authProvider.isAuthenticated ? 3 : null;
-
-            if (authProvider.isAuthenticated) {
-              return MainScreen(
-                role: authProvider.userRole,
-                initialIndex: initialIndex,
+            title: 'Khonology',
+            theme: AppThemes.light,
+            darkTheme: AppThemes.dark,
+            themeMode: themeModeProvider.themeMode,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            // Web: never trust navigator locale alone (Cypress/Electron breaks Locale()).
+            locale: kIsWeb ? const Locale('en') : null,
+            localeListResolutionCallback: kIsWeb
+                ? null
+                : _resolveApplicationLocale,
+            // Enable accessibility for testing
+            debugShowCheckedModeBanner: false,
+            builder: (context, child) {
+              // Enable semantics for accessibility testing
+              return MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  accessibleNavigation: true,
+                  disableAnimations: true,
+                  invertColors: false,
+                  highContrast: false,
+                ),
+                child: DefaultTextStyle(
+                  style: const TextStyle(fontFamily: 'Poppins'),
+                  child: Semantics(child: child ?? const SizedBox.shrink()),
+                ),
               );
-            }
-            if (_e2eStartAtAuthScreen()) {
-              return const AuthScreen();
-            }
-            return LandingScreen();
-          },
-        ),
-        debugShowCheckedModeBanner: false,
+            },
+            home: Consumer<AuthProvider>(
+              builder: (context, authProvider, child) {
+                // Always use Modules screen (index 3) for authenticated users on login
+                // This ensures both Staff and Admin users land on Modules screen
+                final initialIndex = authProvider.isAuthenticated ? 3 : null;
+
+                if (authProvider.isAuthenticated) {
+                  return MainScreen(
+                    role: authProvider.userRole,
+                    initialIndex: initialIndex,
+                  );
+                }
+                if (_e2eStartAtAuthScreen()) {
+                  return const AuthScreen();
+                }
+                return LandingScreen();
+              },
+            ),
           );
         },
       ),
