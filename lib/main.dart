@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +7,7 @@ import 'screens/entity_management_screen.dart';
 import 'screens/user_management_screen.dart';
 import 'screens/module_access_screen.dart';
 import 'screens/module_screen.dart';
+import 'screens/auth_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/onboarding_alert_screen.dart';
 import 'providers/auth_provider.dart';
@@ -39,6 +41,17 @@ void main() async {
   runApp(MyApp(initialThemeMode: initialThemeMode));
 }
 
+/// Web-only: open `/?e2e=auth` to skip the landing screen and start on [AuthScreen]
+/// (manual login / onboarding). Used by Cypress; does not bypass authentication.
+bool _e2eStartAtAuthScreen() {
+  if (!kIsWeb) return false;
+  try {
+    return Uri.base.queryParameters['e2e'] == 'auth';
+  } catch (_) {
+    return false;
+  }
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key, this.initialThemeMode = ThemeMode.dark});
 
@@ -67,12 +80,16 @@ class MyApp extends StatelessWidget {
             // This ensures both Staff and Admin users land on Modules screen
             final initialIndex = authProvider.isAuthenticated ? 3 : null;
 
-            return authProvider.isAuthenticated
-                ? MainScreen(
-                    role: authProvider.userRole,
-                    initialIndex: initialIndex,
-                  ) // Pass role and initialIndex to MainScreen
-                : LandingScreen(); // Start with LandingScreen
+            if (authProvider.isAuthenticated) {
+              return MainScreen(
+                role: authProvider.userRole,
+                initialIndex: initialIndex,
+              );
+            }
+            if (_e2eStartAtAuthScreen()) {
+              return const AuthScreen();
+            }
+            return LandingScreen();
           },
         ),
         debugShowCheckedModeBanner: false,

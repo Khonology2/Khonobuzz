@@ -9,7 +9,15 @@ module.exports = defineConfig({
   allowCypressEnv: false,
   projectId: "m8xe2e",
   e2e: {
+    baseUrl:
+      process.env.CYPRESS_BASE_URL ||
+      process.env.BASE_URL ||
+      "http://127.0.0.1:8080",
     specPattern: "**/*.feature",
+    video: true,
+    screenshotOnRunFailure: true,
+    defaultCommandTimeout: 20000,
+    pageLoadTimeout: 90000,
     async setupNodeEvents(on, config) {
       const bundler = createBundler({
         plugins: [createEsbuildPlugin(config)],

@@ -1,8 +1,10 @@
 # 1) Flutter analyze + test
-# 2) On khono-v2: flutter build web, commit build/web, push, then POST RENDER_DEPLOY_HOOK
+# 2) On khono-v2: pull latest, flutter build web, stamp build/web with source commit SHA,
+#    commit + push build/web (always when SHA changes), wait, POST RENDER_DEPLOY_HOOK
 #
 # Render must serve pre-built files only (Static Site): buildCommand = no-op, publish = build/web.
-# Do NOT run flutter/npm build on Render — see render.yaml.
+# The version label (Ver … SIT) comes from assets/data/version.json bundled at build time — it must
+# be committed to the branch you deploy, or CI will keep building the old version string.
 #
 # Secrets: RENDER_DEPLOY_HOOK = full URL from Render → Service → Settings → Deploy Hook
 
@@ -13,6 +15,7 @@ on:
     branches:
       - khono-v2
       - main
+  workflow_dispatch:
 
 concurrency:
   group: deploy-check-${{ github.ref }}
@@ -23,7 +26,7 @@ permissions:
 
 jobs:
   checks-build-deploy:
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    if: ${{ !contains(github.event.head_commit.message || '', '[skip ci]') }}
     name: Flutter CI, web build, Render deploy
     runs-on: ubuntu-latest
     steps:
@@ -31,6 +34,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Sync branch (avoid stale checkout vs other bots)
+        if: github.ref == 'refs/heads/khono-v2'
+        run: |
+          git fetch origin khono-v2
+          git pull origin khono-v2 --rebase
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -51,6 +60,19 @@ jobs:
         if: github.ref == 'refs/heads/khono-v2'
         run: flutter build web --release --base-href /
 
+      - name: Disable service worker in web bundle (avoid stale cached JS after deploy)
+        if: github.ref == 'refs/heads/khono-v2'
+        run: python3 tool/strip_web_service_worker.py
+
+      - name: Stamp build with source commit (forces deploy when HEAD changes)
+        if: github.ref == 'refs/heads/khono-v2'
+        run: |
+          mkdir -p build/web
+          SOURCE_SHA=$(git rev-parse HEAD)
+          printf '%s\n' "$SOURCE_SHA" > build/web/.ci-source-commit
+          printf '{"sha":"%s","run_id":"%s","run_attempt":"%s"}\n' \
+            "$SOURCE_SHA" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > build/web/.ci-build-meta.json
+
       - name: Commit and push build/web
         if: github.ref == 'refs/heads/khono-v2'
         run: |
@@ -61,8 +83,20 @@ jobs:
             echo "No build/web changes to commit"
           else
             git commit -m "chore: update Flutter web build [skip ci]"
-            git push origin khono-v2
+            git fetch origin khono-v2
+            if ! git pull origin khono-v2 --rebase; then
+              echo "::error::Rebase failed (conflicts with origin/khono-v2). Resolve on the branch and re-run workflow."
+              exit 1
+            fi
+            if ! git push origin khono-v2; then
+              git pull origin khono-v2 --rebase
+              git push origin khono-v2
+            fi
           fi
+
+      - name: Wait for GitHub default branch tip (Render clones latest)
+        if: github.ref == 'refs/heads/khono-v2'
+        run: sleep 20
 
       - name: Trigger Render deploy hook
         if: github.ref == 'refs/heads/khono-v2'
@@ -75,3 +109,11 @@ jobs:
           fi
           curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
           echo "Render deploy hook invoked successfully."
+
+      - name: Deploy summary
+        if: ${{ always() && github.ref == 'refs/heads/khono-v2' }}
+        run: |
+          echo "## deploy-check summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Branch built:** khono-v2 at commit \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **build/web** includes \`.ci-source-commit\` (open \`https://<your-site>/.ci-source-commit\` after deploy to verify the live SHA)." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Render: use **only** the deploy hook after this workflow, or turn off auto-deploy on push so you never publish a commit before the bot updates \`build/web\`." >> "$GITHUB_STEP_SUMMARY"

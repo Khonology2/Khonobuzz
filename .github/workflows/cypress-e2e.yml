@@ -1,0 +1,52 @@
+# Cypress E2E against your deployed Flutter web app, recorded to Cypress Cloud.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   CYPRESS_RECORD_KEY  — Cypress Cloud → Project → Record key
+#   CYPRESS_BASE_URL    — Deployed site origin, e.g. https://yoursite.onrender.com
+#   STAFF_E2E_EMAIL     — Real staff @khonology.com email that exists in your backend
+#
+# The app must be built with main.dart support for /?e2e=auth (opens auth screen first).
+
+name: Cypress E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - khono-v2
+
+jobs:
+  cypress-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify secrets
+        env:
+          BASE: ${{ secrets.CYPRESS_BASE_URL }}
+          EMAIL: ${{ secrets.STAFF_E2E_EMAIL }}
+          KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+        run: |
+          missing=0
+          if [ -z "${BASE}" ]; then echo "::error::Add secret CYPRESS_BASE_URL"; missing=1; fi
+          if [ -z "${EMAIL}" ]; then echo "::error::Add secret STAFF_E2E_EMAIL (staff @khonology.com)"; missing=1; fi
+          if [ -z "${KEY}" ]; then echo "::error::Add secret CYPRESS_RECORD_KEY"; missing=1; fi
+          exit "${missing}"
+
+      - name: Cypress run (record to Cypress Cloud)
+        env:
+          CYPRESS_BASE_URL: ${{ secrets.CYPRESS_BASE_URL }}
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+          CYPRESS_STAFF_TEST_EMAIL: ${{ secrets.STAFF_E2E_EMAIL }}
+        run: npx cypress run --record

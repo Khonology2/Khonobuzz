@@ -24,6 +24,13 @@ services:
     # Flutter web output (committed by .github/workflows/deploy-check.yml)
     staticPublishPath: ./build/web
 
+    # Browsers/CDN must revalidate so new deploys are not masked by aggressive caching
+    # (complements CI stripping the Flutter service worker in flutter_bootstrap.js).
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+
     # SPA routing: serve index.html for all routes (Flutter web is a single-page app)
     routes:
       - type: rewrite
