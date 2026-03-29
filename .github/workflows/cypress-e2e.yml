@@ -6,6 +6,9 @@
 #   STAFF_E2E_EMAIL     — Real staff @khonology.com email that exists in your backend
 #
 # The app must be built with main.dart support for /?e2e=auth (opens auth screen first).
+#
+# khono-v2: Cypress runs after deploy in deploy-check.yml (2 min wait post–Render hook).
+# Use this workflow for manual runs or test-only branches.
 
 name: Cypress E2E
 
@@ -13,7 +16,6 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - khono-v2
       - khono-test-cypress
 
 jobs:

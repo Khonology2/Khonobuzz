@@ -7,6 +7,7 @@
 # be committed to the branch you deploy, or CI will keep building the old version string.
 #
 # Secrets: RENDER_DEPLOY_HOOK = full URL from Render → Service → Settings → Deploy Hook
+#          CYPRESS_BASE_URL, CYPRESS_RECORD_KEY, STAFF_E2E_EMAIL — for post-deploy E2E (khono-v2 only)
 
 name: deploy-check
 
@@ -118,3 +119,50 @@ jobs:
           echo "- **Branch built:** khono-v2 at commit \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **build/web** includes \`.ci-source-commit\` (open \`https://<your-site>/.ci-source-commit\` after deploy to verify the live SHA)." >> "$GITHUB_STEP_SUMMARY"
           echo "- Render: use **only** the deploy hook after this workflow, or turn off auto-deploy on push so you never publish a commit before the bot updates \`build/web\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Cypress** runs next (same workflow) on \`khono-v2\` after a 2-minute wait for Render." >> "$GITHUB_STEP_SUMMARY"
+
+  cypress-e2e-after-deploy:
+    name: Cypress E2E after Render
+    needs: checks-build-deploy
+    if: ${{ success() && github.ref == 'refs/heads/khono-v2' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Cypress secrets
+        env:
+          BASE: ${{ secrets.CYPRESS_BASE_URL }}
+          EMAIL: ${{ secrets.STAFF_E2E_EMAIL }}
+          KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+        run: |
+          missing=0
+          if [ -z "${BASE}" ]; then echo "::error::Add secret CYPRESS_BASE_URL (your Render static URL)"; missing=1; fi
+          if [ -z "${EMAIL}" ]; then echo "::error::Add secret STAFF_E2E_EMAIL"; missing=1; fi
+          if [ -z "${KEY}" ]; then echo "::error::Add secret CYPRESS_RECORD_KEY"; missing=1; fi
+          exit "${missing}"
+
+      - name: Wait for Render deploy to complete
+        run: |
+          echo "Deploy hook already ran in the previous job. Waiting 120s for Render to publish and propagate."
+          sleep 120
+          echo "Starting Cypress against live site."
+
+      - name: Cypress run (record to Cypress Cloud)
+        env:
+          CYPRESS_BASE_URL: ${{ secrets.CYPRESS_BASE_URL }}
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+          CYPRESS_STAFF_TEST_EMAIL: ${{ secrets.STAFF_E2E_EMAIL }}
+        run: npx cypress run --record
