@@ -150,18 +150,22 @@ class _LandingScreenState extends State<LandingScreen> {
                     ),
                   ),
                   const SizedBox(height: 50),
-                  _buildLoginButton(
-                    text: 'GET STARTED',
-                    color: const Color(0xFFC10D00),
-                    onPressed: () {
-                      AuthProvider.warmUpBackendForLogin();
-                      _pingBackend();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const AuthScreen(),
-                        ),
-                      );
-                    },
+                  Semantics(
+                    label: 'GET STARTED',
+                    button: true,
+                    child: _buildLoginButton(
+                      text: 'GET STARTED',
+                      color: const Color(0xFFC10D00),
+                      onPressed: () {
+                        AuthProvider.warmUpBackendForLogin();
+                        _pingBackend();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const AuthScreen(),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                   const SizedBox(height: 48),
                   Image.asset(

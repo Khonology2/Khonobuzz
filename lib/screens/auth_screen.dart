@@ -91,10 +91,15 @@ class AuthScreenState extends State<AuthScreen> {
                   Navigator.of(dialogContext).pop();
                   navigator.pushAndRemoveUntil(
                     PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) => const MainScreen(initialIndex: 8),
-                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                        return FadeTransition(opacity: animation, child: child);
-                      },
+                      pageBuilder: (context, animation, secondaryAnimation) =>
+                          const MainScreen(initialIndex: 8),
+                      transitionsBuilder:
+                          (context, animation, secondaryAnimation, child) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
                       transitionDuration: const Duration(milliseconds: 350),
                     ),
                     (route) => false,
@@ -168,7 +173,6 @@ class AuthScreenState extends State<AuthScreen> {
         ),
         child: Stack(
           children: [
-
             Center(
               child: SingleChildScrollView(
                 child: Padding(
@@ -180,12 +184,15 @@ class AuthScreenState extends State<AuthScreen> {
                       const SizedBox(height: 48),
 
                       const SizedBox(height: 32),
-                      Text(
-                        'Select Login Preference',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: appTextColor(context),
-                          fontSize: 20,
+                      Semantics(
+                        label: 'Select Login Preference',
+                        child: Text(
+                          'Select Login Preference',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: appTextColor(context),
+                            fontSize: 20,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -270,42 +277,56 @@ class AuthScreenState extends State<AuthScreen> {
                       //   },
                       // ),
                       // const SizedBox(height: 16),
-                      _buildLoginButton(
-                        text: 'MANUAL LOGIN',
-                        color: const Color(0xFFC10D00),
-                        onPressed: () {
-                          if (_isAnimatingNavigation) {
-                            return;
-                          }
-                          _isAnimatingNavigation = true;
-                          final navigator = Navigator.of(context);
-                          navigator.push(
-                            MaterialPageRoute(
-                              builder: (context) => const ManualLoginScreen(),
-                            ),
-                          ).then((_) {
-                            _isAnimatingNavigation = false;
-                          });
-                        },
+                      Semantics(
+                        label: 'MANUAL LOGIN',
+                        button: true,
+                        child: _buildLoginButton(
+                          text: 'MANUAL LOGIN',
+                          color: const Color(0xFFC10D00),
+                          onPressed: () {
+                            if (_isAnimatingNavigation) {
+                              return;
+                            }
+                            _isAnimatingNavigation = true;
+                            final navigator = Navigator.of(context);
+                            navigator
+                                .push(
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const ManualLoginScreen(),
+                                  ),
+                                )
+                                .then((_) {
+                                  _isAnimatingNavigation = false;
+                                });
+                          },
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      _buildLoginButton(
-                        text: 'ONBOARD WITH US',
-                        color: Colors.grey,
-                        onPressed: () {
-                          if (_isAnimatingNavigation) {
-                            return;
-                          }
-                          _isAnimatingNavigation = true;
-                          final navigator = Navigator.of(context);
-                          navigator.push(
-                            MaterialPageRoute(
-                              builder: (context) => const OnboardingScreen(),
-                            ),
-                          ).then((_) {
-                            _isAnimatingNavigation = false;
-                          });
-                        },
+                      Semantics(
+                        label: 'ONBOARD WITH US',
+                        button: true,
+                        child: _buildLoginButton(
+                          text: 'ONBOARD WITH US',
+                          color: Colors.grey,
+                          onPressed: () {
+                            if (_isAnimatingNavigation) {
+                              return;
+                            }
+                            _isAnimatingNavigation = true;
+                            final navigator = Navigator.of(context);
+                            navigator
+                                .push(
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const OnboardingScreen(),
+                                  ),
+                                )
+                                .then((_) {
+                                  _isAnimatingNavigation = false;
+                                });
+                          },
+                        ),
                       ),
                       const SizedBox(height: 48),
 

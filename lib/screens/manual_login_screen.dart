@@ -78,9 +78,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
       barrierColor: Colors.black54,
       builder: (BuildContext context) {
         final bool isDark = Theme.of(context).brightness == Brightness.dark;
-        final Color dialogBg = isDark
-            ? const Color(0xFF3D3F40)
-            : Colors.white;
+        final Color dialogBg = isDark ? const Color(0xFF3D3F40) : Colors.white;
         final Color dialogTextColor = isDark ? Colors.white : Colors.black;
 
         return Dialog(
@@ -164,10 +162,8 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final bool isLight = !isDark;
-    final Color widgetBg =
-        isDark ? manualLoginDarkWidgetBg : Colors.white;
-    final Color hintColor =
-        isDark ? Colors.white70 : Colors.black54;
+    final Color widgetBg = isDark ? manualLoginDarkWidgetBg : Colors.white;
+    final Color hintColor = isDark ? Colors.white70 : Colors.black54;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -180,7 +176,6 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
         ),
         child: Stack(
           children: [
-
             Center(
               child: SingleChildScrollView(
                 child: Padding(
@@ -198,12 +193,15 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                             child: child,
                           );
                         },
-                        child: Text(
-                          'Manual Login',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: appTextColor(context),
-                            fontSize: 20,
+                        child: Semantics(
+                          label: 'Manual Login',
+                          child: Text(
+                            'Manual Login',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: appTextColor(context),
+                              fontSize: 20,
+                            ),
                           ),
                         ),
                       ),
@@ -211,11 +209,16 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text(
-                            'Email Address',
-                            textAlign: TextAlign.center,
-                            style:
-                                TextStyle(color: appTextColor(context), fontSize: 16),
+                          Semantics(
+                            label: 'Email Address',
+                            child: Text(
+                              'Email Address',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: appTextColor(context),
+                                fontSize: 16,
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 8),
                           SizedBox(
@@ -382,8 +385,8 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           }
 
                           final authProvider = context.read<AuthProvider>();
-                          final themeModeProvider =
-                              context.read<ThemeModeProvider>();
+                          final themeModeProvider = context
+                              .read<ThemeModeProvider>();
                           final navigator = Navigator.of(context);
                           try {
                             final success = await authProvider.manualLogin(
@@ -437,8 +440,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                         Theme.of(context).brightness == Brightness.dark
                             ? 'assets/images/discs.png'
                             : 'assets/images/red_disc.png',
-                        height:
-                            Theme.of(context).brightness == Brightness.dark
+                        height: Theme.of(context).brightness == Brightness.dark
                             ? 72
                             : 110,
                       ),
@@ -523,13 +525,15 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
           Navigator.of(dialogContext).pop();
           navigator.pushAndRemoveUntil(
             PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => MainScreen(
-                initialIndex: 8,
-                playLoginSuccessSound: playLoginSuccessSound,
-              ),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return FadeTransition(opacity: animation, child: child);
-              },
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  MainScreen(
+                    initialIndex: 8,
+                    playLoginSuccessSound: playLoginSuccessSound,
+                  ),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    return FadeTransition(opacity: animation, child: child);
+                  },
               transitionDuration: const Duration(milliseconds: 350),
             ),
             (route) => false,
