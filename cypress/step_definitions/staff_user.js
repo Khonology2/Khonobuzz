@@ -21,6 +21,28 @@ const surfaceHas = (doc, needle) => {
 };
 
 Given("I open the app on the auth screen for E2E", () => {
+  const base = String(Cypress.config("baseUrl") || "").replace(/\/$/, "");
+  const expectedSha = Cypress.env("E2E_EXPECT_SOURCE_SHA");
+  if (expectedSha && String(expectedSha).trim().length >= 7) {
+    cy.request({
+      url: `${base}/.ci-source-commit`,
+      failOnStatusCode: false,
+    }).then((resp) => {
+      const live = String(resp.body ?? "").trim();
+      if (resp.status !== 200 || !live) {
+        throw new Error(
+          `Could not read /.ci-source-commit (HTTP ${resp.status}). Check CYPRESS_BASE_URL points at the Render static site root.`,
+        );
+      }
+      const exp = String(expectedSha).trim();
+      if (live !== exp) {
+        throw new Error(
+          `Stale or mismatched deploy: site serves source SHA ${live} but this CI run embedded ${exp} in build/web. Either Cypress is hitting the wrong URL, or Render/CDN has not published this build yet.`,
+        );
+      }
+    });
+  }
+
   cy.visit("/?e2e=auth", {
     timeout: 90000,
     onBeforeLoad(win) {

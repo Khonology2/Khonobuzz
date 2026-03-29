@@ -28,6 +28,13 @@ module.exports = defineConfig({
       on("file:preprocessor", bundler);
       await addCucumberPreprocessorPlugin(on, config);
 
+      on("before:browser:launch", (browser = {}, launchOptions) => {
+        if (browser.name === "electron" && browser.isHeadless) {
+          launchOptions.args.push("--enable-unsafe-swiftshader");
+        }
+        return launchOptions;
+      });
+
       return config;
     },
   },

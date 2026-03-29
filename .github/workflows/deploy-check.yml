@@ -31,6 +31,8 @@ jobs:
     if: ${{ !contains(github.event.head_commit.message || '', '[skip ci]') }}
     name: Flutter CI, web build, Render deploy
     runs-on: ubuntu-latest
+    outputs:
+      web_source_sha: ${{ steps.stamp.outputs.source_sha }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -67,10 +69,12 @@ jobs:
         run: python3 tool/strip_web_service_worker.py
 
       - name: Stamp build with source commit (forces deploy when HEAD changes)
+        id: stamp
         if: github.ref == 'refs/heads/khono-v2'
         run: |
           mkdir -p build/web
           SOURCE_SHA=$(git rev-parse HEAD)
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$SOURCE_SHA" > build/web/.ci-source-commit
           printf '{"sha":"%s","run_id":"%s","run_attempt":"%s"}\n' \
             "$SOURCE_SHA" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > build/web/.ci-build-meta.json
@@ -165,4 +169,5 @@ jobs:
           CYPRESS_BASE_URL: ${{ secrets.CYPRESS_BASE_URL }}
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           CYPRESS_STAFF_TEST_EMAIL: ${{ secrets.STAFF_E2E_EMAIL }}
+          CYPRESS_E2E_EXPECT_SOURCE_SHA: ${{ needs.checks-build-deploy.outputs.web_source_sha }}
         run: npx cypress run --record

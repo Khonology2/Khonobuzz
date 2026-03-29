@@ -22,6 +22,8 @@ import 'widgets/side_menu.dart';
 import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
 import 'firebase_options.dart'; // Import generated Firebase options
 import 'generated/app_localizations.dart';
+import 'e2e_browser_query_stub.dart'
+    if (dart.library.html) 'e2e_browser_query_web.dart' as e2e_browser_query;
 
 /// Headless browsers (e.g. Cypress / Electron) sometimes report locales that
 /// break [Locale] construction ("Incorrect locale information provided").
@@ -90,7 +92,8 @@ void main() async {
 bool _e2eStartAtAuthScreen() {
   if (!kIsWeb) return false;
   try {
-    return Uri.base.queryParameters['e2e'] == 'auth';
+    if (Uri.base.queryParameters['e2e'] == 'auth') return true;
+    return e2e_browser_query.browserUrlHasE2eAuth();
   } catch (_) {
     return false;
   }
