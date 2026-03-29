@@ -22,10 +22,14 @@ import 'widgets/side_menu.dart';
 import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
 import 'firebase_options.dart'; // Import generated Firebase options
 import 'generated/app_localizations.dart';
+
+// Import for web-specific functionality
 import 'e2e_browser_query_stub.dart'
-    if (dart.library.html) 'e2e_browser_query_web.dart' as e2e_browser_query;
+    if (dart.library.html) 'e2e_browser_query_web.dart'
+    as e2e_browser_query;
 import 'flutter_ready_body_stub.dart'
-    if (dart.library.html) 'flutter_ready_body_web.dart' as flutter_ready_body;
+    if (dart.library.html) 'flutter_ready_body_web.dart'
+    as flutter_ready_body;
 import 'widgets/flutter_web_readiness.dart';
 
 /// Headless browsers (e.g. Cypress / Electron) sometimes report locales that
@@ -91,6 +95,13 @@ void main() async {
     flutter_ready_body.setFlutterReadyAttribute(false);
   }
   runApp(MyApp(initialThemeMode: initialThemeMode));
+
+  // Mark app as ready after first frame for Cypress E2E testing
+  if (kIsWeb) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      flutter_ready_body.setFlutterReadyAttribute(true);
+    });
+  }
 }
 
 /// Web-only: open `/?e2e=auth` to skip the landing screen and start on [AuthScreen]
@@ -121,58 +132,58 @@ class MyApp extends StatelessWidget {
             create: (_) => ThemeModeProvider(initialMode: initialThemeMode),
           ),
         ],
-      child: Consumer<ThemeModeProvider>(
-        builder: (context, themeModeProvider, _) {
-          return MaterialApp(
-            title: 'Khonology',
-            theme: AppThemes.light,
-            darkTheme: AppThemes.dark,
-            themeMode: themeModeProvider.themeMode,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            // Web: never trust navigator locale alone (Cypress/Electron breaks Locale()).
-            locale: kIsWeb ? const Locale('en') : null,
-            localeListResolutionCallback: kIsWeb
-                ? null
-                : _resolveApplicationLocale,
-            // Enable accessibility for testing
-            debugShowCheckedModeBanner: false,
-            builder: (context, child) {
-              // Enable semantics for accessibility testing
-              return MediaQuery(
-                data: MediaQuery.of(context).copyWith(
-                  accessibleNavigation: true,
-                  disableAnimations: true,
-                  invertColors: false,
-                  highContrast: false,
-                ),
-                child: DefaultTextStyle(
-                  style: const TextStyle(fontFamily: 'Poppins'),
-                  child: Semantics(child: child ?? const SizedBox.shrink()),
-                ),
-              );
-            },
-            home: Consumer<AuthProvider>(
-              builder: (context, authProvider, child) {
-                // Always use Modules screen (index 3) for authenticated users on login
-                // This ensures both Staff and Admin users land on Modules screen
-                final initialIndex = authProvider.isAuthenticated ? 3 : null;
-
-                if (authProvider.isAuthenticated) {
-                  return MainScreen(
-                    role: authProvider.userRole,
-                    initialIndex: initialIndex,
-                  );
-                }
-                if (_e2eStartAtAuthScreen()) {
-                  return const AuthScreen();
-                }
-                return LandingScreen();
+        child: Consumer<ThemeModeProvider>(
+          builder: (context, themeModeProvider, _) {
+            return MaterialApp(
+              title: 'Khonology',
+              theme: AppThemes.light,
+              darkTheme: AppThemes.dark,
+              themeMode: themeModeProvider.themeMode,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              // Web: never trust navigator locale alone (Cypress/Electron breaks Locale()).
+              locale: kIsWeb ? const Locale('en') : null,
+              localeListResolutionCallback: kIsWeb
+                  ? null
+                  : _resolveApplicationLocale,
+              // Enable accessibility for testing
+              debugShowCheckedModeBanner: false,
+              builder: (context, child) {
+                // Enable semantics for accessibility testing
+                return MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    accessibleNavigation: true,
+                    disableAnimations: true,
+                    invertColors: false,
+                    highContrast: false,
+                  ),
+                  child: DefaultTextStyle(
+                    style: const TextStyle(fontFamily: 'Poppins'),
+                    child: Semantics(child: child ?? const SizedBox.shrink()),
+                  ),
+                );
               },
-            ),
-          );
-        },
-      ),
+              home: Consumer<AuthProvider>(
+                builder: (context, authProvider, child) {
+                  // Always use Modules screen (index 3) for authenticated users on login
+                  // This ensures both Staff and Admin users land on Modules screen
+                  final initialIndex = authProvider.isAuthenticated ? 3 : null;
+
+                  if (authProvider.isAuthenticated) {
+                    return MainScreen(
+                      role: authProvider.userRole,
+                      initialIndex: initialIndex,
+                    );
+                  }
+                  if (_e2eStartAtAuthScreen()) {
+                    return const AuthScreen();
+                  }
+                  return LandingScreen();
+                },
+              ),
+            );
+          },
+        ),
       ),
     );
   }

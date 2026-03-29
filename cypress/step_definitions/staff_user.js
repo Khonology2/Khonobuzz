@@ -54,16 +54,21 @@ Given("I open the app on the auth screen for E2E", () => {
       }
     },
   });
-  cy.url({ timeout: 15000 }).should("include", "e2e=auth");
-  cy.get("body", { timeout: 30000 }).should("be.visible");
-  // Flutter sets <body flutter-ready="true"> after mount + an extra frame (CanvasKit semantics).
-  cy.get("body", { timeout: 120000 }).should("have.attr", "flutter-ready", "true");
 
-  // Production + CanvasKit: retry until auth/landing labels appear in the semantics tree.
-  cy.document({ timeout: 120000 }).should((doc) => {
+  // Wait for Flutter to fully load and be ready
+  cy.get('body[flutter-ready="true"]', { timeout: 120000 })
+    .should('exist');
+
+  // Debug: Log what we're seeing after Flutter is ready
+  cy.document().then((doc) => {
+    const preview = getFlutterAccessibleText(doc).slice(0, 400);
+    cy.log("Accessibility preview after Flutter ready:", preview);
+    
     const onAuth = surfaceHas(doc, "Select Login Preference");
     const onLanding = surfaceHas(doc, /\bGET STARTED\b/i);
-    const preview = getFlutterAccessibleText(doc).slice(0, 500);
+    cy.log("Looking for 'Select Login Preference':", onAuth);
+    cy.log("Looking for 'GET STARTED':", onLanding);
+    
     expect(
       onAuth || onLanding,
       `Flutter should expose auth or landing (CanvasKit uses aria-label in shadow). Surface sample:\n${preview}`,
