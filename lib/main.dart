@@ -21,6 +21,45 @@ import 'screens/staff_profile_screen.dart';
 import 'widgets/side_menu.dart';
 import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
 import 'firebase_options.dart'; // Import generated Firebase options
+import 'generated/app_localizations.dart';
+
+/// Headless browsers (e.g. Cypress / Electron) sometimes report locales that
+/// break [Locale] construction ("Incorrect locale information provided").
+Locale _resolveApplicationLocale(
+  List<Locale>? locales,
+  Iterable<Locale> supported,
+) {
+  const fallback = Locale('en');
+  if (locales == null || locales.isEmpty) {
+    return fallback;
+  }
+  for (final device in locales) {
+    final resolved = _trySupportedLocale(device, supported);
+    if (resolved != null) {
+      return resolved;
+    }
+  }
+  return fallback;
+}
+
+Locale? _trySupportedLocale(Locale device, Iterable<Locale> supported) {
+  try {
+    if (device.languageCode.isEmpty) {
+      return null;
+    }
+    final cc = device.countryCode;
+    final country = (cc != null && cc.length == 2) ? cc : null;
+    final candidate = Locale(device.languageCode, country);
+    for (final s in supported) {
+      if (s.languageCode == candidate.languageCode) {
+        return candidate;
+      }
+    }
+  } catch (_) {
+    /* invalid device locale */
+  }
+  return null;
+}
 
 void main() async {
   // Made main async
@@ -74,6 +113,9 @@ class MyApp extends StatelessWidget {
         theme: AppThemes.light,
         darkTheme: AppThemes.dark,
         themeMode: themeModeProvider.themeMode,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        localeListResolutionCallback: _resolveApplicationLocale,
         home: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
             // Always use Modules screen (index 3) for authenticated users on login
