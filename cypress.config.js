@@ -10,6 +10,7 @@ module.exports = defineConfig({
   allowCypressEnv: true,
   projectId: "m8xe2e",
   e2e: {
+    includeShadowDom: true,
     baseUrl:
       process.env.CYPRESS_BASE_URL ||
       process.env.BASE_URL ||

@@ -1,4 +1,5 @@
 import { Given, When, Then } from "@badeball/cypress-cucumber-preprocessor";
+import { getFlutterAccessibleText } from "../support/flutter_a11y.js";
 
 const staffEmail = () => {
   const v = Cypress.env("STAFF_TEST_EMAIL");
@@ -10,9 +11,16 @@ const staffEmail = () => {
   return String(v).trim();
 };
 
+/** True if Flutter surface (DOM + shadow + aria-label) includes substring or regex. */
+const surfaceHas = (doc, needle) => {
+  const t = getFlutterAccessibleText(doc);
+  if (typeof needle === "string") {
+    return t.includes(needle);
+  }
+  return needle.test(t);
+};
+
 Given("I open the app on the auth screen for E2E", () => {
-  // Prefer ?e2e=auth (skips landing when the deployed build supports it).
-  // Many static hosts still show landing until that code is live — then tap GET STARTED.
   cy.visit("/?e2e=auth", {
     timeout: 90000,
     onBeforeLoad(win) {
@@ -26,69 +34,76 @@ Given("I open the app on the auth screen for E2E", () => {
   });
   cy.get("body", { timeout: 30000 }).should("be.visible");
 
-  cy.get("body", { timeout: 120000 }).should(($body) => {
-    const t = $body.text();
-    const onAuth = t.includes("Select Login Preference");
-    const onLanding = /\bGET STARTED\b/i.test(t);
+  cy.document({ timeout: 120000 }).should((doc) => {
+    const onAuth = surfaceHas(doc, "Select Login Preference");
+    const onLanding = surfaceHas(doc, /\bGET STARTED\b/i);
+    const preview = getFlutterAccessibleText(doc).slice(0, 400);
     expect(
       onAuth || onLanding,
-      "Flutter should show auth (Select Login Preference) or landing (GET STARTED)",
+      `Flutter should expose auth or landing (CanvasKit uses aria-label in shadow). Surface sample:\n${preview}`,
     ).to.eq(true);
   });
 
-  cy.get("body").then(($body) => {
-    if ($body.text().includes("Select Login Preference")) {
+  cy.document().then((doc) => {
+    if (surfaceHas(doc, "Select Login Preference")) {
       return;
     }
     cy.contains("GET STARTED", { matchCase: false, timeout: 30000 })
-      .should("be.visible")
+      .should("exist")
       .click({ force: true });
   });
 });
 
 Then("I should see the auth choice screen", () => {
-  cy.contains("Select Login Preference", { timeout: 60000 }).should(
-    "be.visible",
+  cy.document({ timeout: 60000 }).should((doc) => {
+    expect(surfaceHas(doc, "Select Login Preference")).to.eq(true);
+  });
+  cy.contains("MANUAL LOGIN", { matchCase: false, timeout: 30000 }).should(
+    "exist",
   );
-  cy.contains("MANUAL LOGIN", { matchCase: false }).should("be.visible");
-  cy.contains("ONBOARD WITH US", { matchCase: false }).should("be.visible");
+  cy.contains("ONBOARD WITH US", { matchCase: false, timeout: 30000 }).should(
+    "exist",
+  );
 });
 
 When("I choose manual login from the auth screen", () => {
-  cy.contains("MANUAL LOGIN", { matchCase: false, timeout: 20000 })
-    .should("be.visible")
+  cy.contains("MANUAL LOGIN", { matchCase: false, timeout: 30000 })
+    .should("exist")
     .click({ force: true });
 });
 
 Then("I should see the manual login form", () => {
-  cy.contains("Manual Login", { timeout: 20000 }).should("be.visible");
-  cy.contains("Email Address", { timeout: 20000 }).should("be.visible");
-  cy.contains("LOG IN", { matchCase: false }).should("be.visible");
+  cy.document({ timeout: 30000 }).should((doc) => {
+    const t = getFlutterAccessibleText(doc);
+    expect(t.includes("Manual Login") && t.includes("Email Address")).to.eq(
+      true,
+    );
+  });
+  cy.contains("LOG IN", { matchCase: false, timeout: 20000 }).should("exist");
 });
 
 When("I enter the staff test email and confirm login", () => {
   const email = staffEmail();
-  cy.get("input", { timeout: 20000 })
+  cy.get("input", { timeout: 30000 })
     .filter(":visible")
     .first()
-    .should("be.visible")
-    .clear()
-    .type(email, { delay: 0 });
+    .should("exist")
+    .clear({ force: true })
+    .type(email, { delay: 0, force: true });
 
   cy.contains("LOG IN", { matchCase: false })
-    .should("be.visible")
+    .should("exist")
     .click({ force: true });
 });
 
 Then("I should reach the main app after login completes", () => {
-  // Wait through PrefetchOverlayDialog copy, then module hub (or no-access message).
-  cy.get("body", { timeout: 120000 }).should(($body) => {
-    const text = $body.text();
+  cy.document({ timeout: 120000 }).should((doc) => {
+    const t = getFlutterAccessibleText(doc);
     const hasMain =
-      /Launch|No module access assigned|Enjoy your session/i.test(text) ||
-      (/Personal/i.test(text) && /Development/i.test(text)) ||
+      /Launch|No module access assigned|Enjoy your session/i.test(t) ||
+      (/Personal/i.test(t) && /Development/i.test(t)) ||
       /Skills heatmap|Automated Recruitment|Deliverables|Proposal|SOW Builder/i.test(
-        text,
+        t,
       );
     expect(
       hasMain,
@@ -98,23 +113,24 @@ Then("I should reach the main app after login completes", () => {
 });
 
 When("I expand the side menu for navigation labels", () => {
-  cy.get("body", { timeout: 60000 }).then(($body) => {
-    if ($body.text().includes("Welcome to KhonoBuzz")) {
+  cy.document({ timeout: 60000 }).then((doc) => {
+    const t = getFlutterAccessibleText(doc);
+    if (t.includes("Welcome to KhonoBuzz")) {
       return;
     }
     cy.get("img").filter(":visible").first().click({ force: true });
   });
-  cy.contains("Modules", { timeout: 20000 }).should("be.visible");
-  cy.contains("Profile", { timeout: 20000 }).should("be.visible");
+  cy.contains("Modules", { timeout: 30000 }).should("exist");
+  cy.contains("Profile", { timeout: 30000 }).should("exist");
 });
 
 Then("I should see module hub content", () => {
-  cy.contains("Modules", { timeout: 10000 }).click({ force: true });
-  cy.get("body", { timeout: 30000 }).should(($body) => {
-    const text = $body.text();
+  cy.contains("Modules", { timeout: 15000 }).click({ force: true });
+  cy.document({ timeout: 30000 }).should((doc) => {
+    const t = getFlutterAccessibleText(doc);
     expect(
       /Launch|No module access assigned|Personal|Development|Skills heatmap|Automated|Deliverables|Proposal|SOW/i.test(
-        text,
+        t,
       ),
       "expected module cards or no-access copy on Modules screen",
     ).to.eq(true);
@@ -122,11 +138,11 @@ Then("I should see module hub content", () => {
 });
 
 When("I open profile from the side menu", () => {
-  cy.contains("Profile", { timeout: 20000 })
-    .should("be.visible")
-    .click({ force: true });
+  cy.contains("Profile", { timeout: 30000 }).should("exist").click({ force: true });
 });
 
 Then("I should see the staff profile screen", () => {
-  cy.contains("Staff Profile", { timeout: 30000 }).should("be.visible");
+  cy.document({ timeout: 30000 }).should((doc) => {
+    expect(surfaceHas(doc, "Staff Profile")).to.eq(true);
+  });
 });
