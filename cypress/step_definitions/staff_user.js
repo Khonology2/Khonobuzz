@@ -11,12 +11,43 @@ const staffEmail = () => {
 };
 
 Given("I open the app on the auth screen for E2E", () => {
-  cy.visit("/?e2e=auth", { timeout: 90000 });
+  // Prefer ?e2e=auth (skips landing when the deployed build supports it).
+  // Many static hosts still show landing until that code is live — then tap GET STARTED.
+  cy.visit("/?e2e=auth", {
+    timeout: 90000,
+    onBeforeLoad(win) {
+      try {
+        win.localStorage?.clear?.();
+        win.sessionStorage?.clear?.();
+      } catch {
+        /* ignore */
+      }
+    },
+  });
   cy.get("body", { timeout: 30000 }).should("be.visible");
+
+  cy.get("body", { timeout: 120000 }).should(($body) => {
+    const t = $body.text();
+    const onAuth = t.includes("Select Login Preference");
+    const onLanding = /\bGET STARTED\b/i.test(t);
+    expect(
+      onAuth || onLanding,
+      "Flutter should show auth (Select Login Preference) or landing (GET STARTED)",
+    ).to.eq(true);
+  });
+
+  cy.get("body").then(($body) => {
+    if ($body.text().includes("Select Login Preference")) {
+      return;
+    }
+    cy.contains("GET STARTED", { matchCase: false, timeout: 30000 })
+      .should("be.visible")
+      .click({ force: true });
+  });
 });
 
 Then("I should see the auth choice screen", () => {
-  cy.contains("Select Login Preference", { timeout: 30000 }).should(
+  cy.contains("Select Login Preference", { timeout: 60000 }).should(
     "be.visible",
   );
   cy.contains("MANUAL LOGIN", { matchCase: false }).should("be.visible");
