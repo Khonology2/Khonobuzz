@@ -6,7 +6,8 @@ const createEsbuildPlugin =
   require("@badeball/cypress-cucumber-preprocessor/esbuild").createEsbuildPlugin;
 
 module.exports = defineConfig({
-  allowCypressEnv: false,
+  // Required for CYPRESS_STAFF_TEST_EMAIL in bundled Cucumber steps (Cypress 15 blocks Cypress.env otherwise).
+  allowCypressEnv: true,
   projectId: "m8xe2e",
   e2e: {
     baseUrl:

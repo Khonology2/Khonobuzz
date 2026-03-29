@@ -16,5 +16,5 @@
 // Import commands.js using ES2015 syntax:
 import './commands'
 
-// Import cucumber preprocessor
-import "@badeball/cypress-cucumber-preprocessor/steps";
+// @badeball/cypress-cucumber-preprocessor v24+ no longer ships the "steps" subpath;
+// step definitions are bundled via createEsbuildPlugin in cypress.config.js.
