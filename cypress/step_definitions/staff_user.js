@@ -56,8 +56,10 @@ Given("I open the app on the auth screen for E2E", () => {
   });
   cy.url({ timeout: 15000 }).should("include", "e2e=auth");
   cy.get("body", { timeout: 30000 }).should("be.visible");
+  // Flutter sets <body flutter-ready="true"> after mount + an extra frame (CanvasKit semantics).
+  cy.get("body", { timeout: 120000 }).should("have.attr", "flutter-ready", "true");
 
-  // Production + CanvasKit can take well beyond 2s; .should() retries until timeout.
+  // Production + CanvasKit: retry until auth/landing labels appear in the semantics tree.
   cy.document({ timeout: 120000 }).should((doc) => {
     const onAuth = surfaceHas(doc, "Select Login Preference");
     const onLanding = surfaceHas(doc, /\bGET STARTED\b/i);

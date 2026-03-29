@@ -410,13 +410,17 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Staff Profile',
-                            style: TextStyle(
-                              color: appTextColor(context),
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Poppins',
+                          Semantics(
+                            label: 'Staff Profile',
+                            header: true,
+                            child: Text(
+                              'Staff Profile',
+                              style: TextStyle(
+                                color: appTextColor(context),
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Poppins',
+                              ),
                             ),
                           ),
                           Text(

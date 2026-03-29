@@ -294,6 +294,7 @@ class AuthScreenState extends State<AuthScreen> {
                       // ),
                       // const SizedBox(height: 16),
                       Semantics(
+                        key: const ValueKey('e2e_manual_login_button'),
                         label: 'MANUAL LOGIN',
                         button: true,
                         child: _buildLoginButton(
@@ -320,6 +321,7 @@ class AuthScreenState extends State<AuthScreen> {
                       ),
                       const SizedBox(height: 16),
                       Semantics(
+                        key: const ValueKey('e2e_onboard_with_us_button'),
                         label: 'ONBOARD WITH US',
                         button: true,
                         child: _buildLoginButton(

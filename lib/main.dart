@@ -24,6 +24,9 @@ import 'firebase_options.dart'; // Import generated Firebase options
 import 'generated/app_localizations.dart';
 import 'e2e_browser_query_stub.dart'
     if (dart.library.html) 'e2e_browser_query_web.dart' as e2e_browser_query;
+import 'flutter_ready_body_stub.dart'
+    if (dart.library.html) 'flutter_ready_body_web.dart' as flutter_ready_body;
+import 'widgets/flutter_web_readiness.dart';
 
 /// Headless browsers (e.g. Cypress / Electron) sometimes report locales that
 /// break [Locale] construction ("Incorrect locale information provided").
@@ -84,6 +87,9 @@ void main() async {
       ? ThemeMode.light
       : ThemeMode.dark;
 
+  if (kIsWeb) {
+    flutter_ready_body.setFlutterReadyAttribute(false);
+  }
   runApp(MyApp(initialThemeMode: initialThemeMode));
 }
 
@@ -106,14 +112,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => UserProvider()),
-        ChangeNotifierProvider(
-          create: (_) => ThemeModeProvider(initialMode: initialThemeMode),
-        ),
-      ],
+    return FlutterWebReadiness(
+      child: MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+          ChangeNotifierProvider(create: (_) => UserProvider()),
+          ChangeNotifierProvider(
+            create: (_) => ThemeModeProvider(initialMode: initialThemeMode),
+          ),
+        ],
       child: Consumer<ThemeModeProvider>(
         builder: (context, themeModeProvider, _) {
           return MaterialApp(
@@ -165,6 +172,7 @@ class MyApp extends StatelessWidget {
             ),
           );
         },
+      ),
       ),
     );
   }

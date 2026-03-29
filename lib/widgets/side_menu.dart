@@ -15,6 +15,8 @@ class MenuItemWidget extends StatefulWidget {
   final bool isSelected;
   final bool isExpanded;
   final VoidCallback? onTap;
+  /// Optional key for E2E (e.g. Modules / Profile).
+  final Key? itemKey;
 
   const MenuItemWidget({
     super.key,
@@ -24,6 +26,7 @@ class MenuItemWidget extends StatefulWidget {
     required this.isSelected,
     required this.isExpanded,
     this.onTap,
+    this.itemKey,
   });
 
   @override
@@ -60,89 +63,96 @@ class _MenuItemWidgetState extends State<MenuItemWidget> {
         ? widget.selectedIconPath
         : widget.unselectedIconPath;
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _isHovering = true),
-      onExit: (_) => setState(() => _isHovering = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: EdgeInsets.zero,
-        decoration: BoxDecoration(
-          color: widget.isSelected
-              ? const Color(0xFFC10D00) // Solid red for selected
-              : _isHovering
-              ? const Color(0xFFC10D00).withAlpha(
-                  44,
-                ) // Light red for hover (doesn't override selected)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(
-            25,
-          ), // Fully rounded circular/pill design
-        ),
-        child: InkWell(
-          onTap: () {
-            SoundSystem.playButtonClick();
-            widget.onTap?.call();
-          },
-          borderRadius: BorderRadius.circular(
-            25,
-          ), // Fully rounded circular/pill design
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final bool showText =
-                  widget.isExpanded && constraints.maxWidth >= 150;
-              final EdgeInsets resolvedPadding = showText
-                  ? itemPadding
-                  : const EdgeInsets.all(8.0);
-              return Padding(
-                padding: resolvedPadding,
-                child: Row(
-                  mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: showText
-                      ? MainAxisAlignment.start
-                      : MainAxisAlignment.center,
-                  children: [
-                    // Icon container with dynamic icon switching
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: iconSize,
-                      height: iconSize,
-                      decoration: BoxDecoration(
-                        color: Colors
-                            .transparent, // Remove individual icon background
-                        borderRadius: BorderRadius.circular(
-                          25,
-                        ), // Fully rounded circular/pill design
-                      ),
-                      child: Center(
-                        child: AnimatedSwitcher(
+    return Semantics(
+      label: widget.title,
+      button: true,
+      child: KeyedSubtree(
+        key: widget.itemKey,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => _isHovering = true),
+          onExit: (_) => setState(() => _isHovering = false),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: EdgeInsets.zero,
+            decoration: BoxDecoration(
+              color: widget.isSelected
+                  ? const Color(0xFFC10D00) // Solid red for selected
+                  : _isHovering
+                  ? const Color(0xFFC10D00).withAlpha(
+                      44,
+                    ) // Light red for hover (doesn't override selected)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(
+                25,
+              ), // Fully rounded circular/pill design
+            ),
+            child: InkWell(
+              onTap: () {
+                SoundSystem.playButtonClick();
+                widget.onTap?.call();
+              },
+              borderRadius: BorderRadius.circular(
+                25,
+              ), // Fully rounded circular/pill design
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final bool showText =
+                      widget.isExpanded && constraints.maxWidth >= 150;
+                  final EdgeInsets resolvedPadding = showText
+                      ? itemPadding
+                      : const EdgeInsets.all(8.0);
+                  return Padding(
+                    padding: resolvedPadding,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.max,
+                      mainAxisAlignment: showText
+                          ? MainAxisAlignment.start
+                          : MainAxisAlignment.center,
+                      children: [
+                        // Icon container with dynamic icon switching
+                        AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
-                          child: Image.asset(
-                            currentIconPath,
-                            key: ValueKey(
-                              currentIconPath,
-                            ), // Key for smooth animation
-                            fit: BoxFit.contain,
+                          width: iconSize,
+                          height: iconSize,
+                          decoration: BoxDecoration(
+                            color: Colors
+                                .transparent, // Remove individual icon background
+                            borderRadius: BorderRadius.circular(
+                              25,
+                            ), // Fully rounded circular/pill design
+                          ),
+                          child: Center(
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 200),
+                              child: Image.asset(
+                                currentIconPath,
+                                key: ValueKey(
+                                  currentIconPath,
+                                ), // Key for smooth animation
+                                fit: BoxFit.contain,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        if (showText) ...[
+                          const SizedBox(width: 16),
+                          Flexible(
+                            child: Text(
+                              widget.title,
+                              style: itemTextStyle,
+                              softWrap: true,
+                              maxLines: 2,
+                              overflow: TextOverflow.visible,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    if (showText) ...[
-                      const SizedBox(width: 16),
-                      Flexible(
-                        child: Text(
-                          widget.title,
-                          style: itemTextStyle,
-                          softWrap: true,
-                          maxLines: 2,
-                          overflow: TextOverflow.visible,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            },
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ),
@@ -451,6 +461,7 @@ class _SideMenuState extends State<SideMenu> {
                   ),
                 // Modules - Available to all users (Staff and Admin)
                 MenuItemWidget(
+                  itemKey: const ValueKey('e2e_nav_modules'),
                   unselectedIconPath:
                       'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
                   selectedIconPath:
@@ -462,6 +473,7 @@ class _SideMenuState extends State<SideMenu> {
                 ),
                 // Profile - Available to all users (Staff and Admin)
                 MenuItemWidget(
+                  itemKey: const ValueKey('e2e_nav_profile'),
                   unselectedIconPath:
                       'assets/images/HR_Team_Management/Management_White_Badge_Red.png',
                   selectedIconPath:

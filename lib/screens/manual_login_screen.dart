@@ -209,8 +209,7 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Semantics(
-                            label: 'Email Address',
+                          ExcludeSemantics(
                             child: Text(
                               'Email Address',
                               textAlign: TextAlign.center,
@@ -223,24 +222,29 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           const SizedBox(height: 8),
                           SizedBox(
                             width: 590,
-                            child: TextField(
-                              controller: _emailController,
-                              style: TextStyle(
-                                color: appTextColor(context),
-                                fontFamily: 'Poppins',
-                              ),
-                              decoration: InputDecoration(
-                                hintText: 'example@khonology.com',
-                                hintStyle: TextStyle(color: hintColor),
-                                filled: true,
-                                fillColor: widgetBg,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(25.0),
-                                  borderSide: BorderSide.none,
+                            child: Semantics(
+                              label: 'Email Address',
+                              textField: true,
+                              child: TextField(
+                                key: const ValueKey('e2e_staff_email_field'),
+                                controller: _emailController,
+                                style: TextStyle(
+                                  color: appTextColor(context),
+                                  fontFamily: 'Poppins',
                                 ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16.0,
-                                  vertical: 12.0,
+                                decoration: InputDecoration(
+                                  hintText: 'example@khonology.com',
+                                  hintStyle: TextStyle(color: hintColor),
+                                  filled: true,
+                                  fillColor: widgetBg,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(25.0),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16.0,
+                                    vertical: 12.0,
+                                  ),
                                 ),
                               ),
                             ),
@@ -719,6 +723,7 @@ class _LoadingConfirmButtonWrapperState
   @override
   Widget build(BuildContext context) {
     return LoadingConfirmButton(
+      actionKey: const ValueKey('e2e_log_in_button'),
       text: widget.text,
       color: widget.color,
       onPressed: () async {

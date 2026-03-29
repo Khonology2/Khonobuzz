@@ -5,9 +5,12 @@ class LoadingConfirmButton extends StatefulWidget {
   final String text;
   final Color color;
   final Future<void> Function() onPressed;
+  /// Optional key on the tappable control (e.g. integration / E2E tooling).
+  final Key? actionKey;
 
   const LoadingConfirmButton({
     super.key,
+    this.actionKey,
     required this.text,
     required this.color,
     required this.onPressed,
@@ -22,10 +25,14 @@ class _LoadingConfirmButtonState extends State<LoadingConfirmButton> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 250,
-      child: ElevatedButton(
-        onPressed: _loading
+    return Semantics(
+      label: widget.text,
+      button: true,
+      child: SizedBox(
+        width: 250,
+        child: ElevatedButton(
+          key: widget.actionKey,
+          onPressed: _loading
             ? null
             : () async {
                 SoundSystem.playButtonClick();
@@ -63,6 +70,7 @@ class _LoadingConfirmButtonState extends State<LoadingConfirmButton> {
                   ),
                 ),
         ),
+      ),
       ),
     );
   }
