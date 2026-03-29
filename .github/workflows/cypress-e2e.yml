@@ -14,6 +14,7 @@ on:
   push:
     branches:
       - khono-v2
+      - khono-test-cypress
 
 jobs:
   cypress-run:

@@ -15,6 +15,7 @@ on:
     branches:
       - khono-v2
       - main
+      - khono-test-cypress
   workflow_dispatch:
 
 concurrency:
