@@ -2,7 +2,7 @@
 
 import 'dart:html' as html;
 
-/// Sets `flutter-ready` on `<body>` for Cypress / E2E (CanvasKit has no stable DOM text).
+/// Sets `flutter-ready` on `<body>` for browser automation (CanvasKit has little stable DOM text).
 void setFlutterReadyAttribute(bool ready) {
   html.document.body?.setAttribute('flutter-ready', ready ? 'true' : 'false');
 }

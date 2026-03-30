@@ -105,7 +105,7 @@ void main() async {
 }
 
 /// Web-only: open `/?e2e=auth` to skip the landing screen and start on [AuthScreen]
-/// (manual login / onboarding). Used by Cypress; does not bypass authentication.
+/// (manual login / onboarding). For automated tests; does not bypass authentication.
 bool _e2eStartAtAuthScreen() {
   if (!kIsWeb) return false;
   try {
@@ -141,7 +141,7 @@ class MyApp extends StatelessWidget {
               themeMode: themeModeProvider.themeMode,
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
-              // Web: never trust navigator locale alone (Cypress/Electron breaks Locale()).
+              // Web: never trust navigator locale alone (some embedded browsers break Locale()).
               locale: kIsWeb ? const Locale('en') : null,
               localeListResolutionCallback: kIsWeb
                   ? null

@@ -1,25 +1,12 @@
 const { defineConfig } = require("cypress");
 const createBundler = require("@bahmutov/cypress-esbuild-preprocessor");
-const addCucumberPreprocessorPlugin =
-  require("@badeball/cypress-cucumber-preprocessor").addCucumberPreprocessorPlugin;
-const createEsbuildPlugin =
-  require("@badeball/cypress-cucumber-preprocessor/esbuild").createEsbuildPlugin;
+const addCucumberPreprocessorPlugin = require("@badeball/cypress-cucumber-preprocessor").addCucumberPreprocessorPlugin;
+const createEsbuildPlugin = require("@badeball/cypress-cucumber-preprocessor/esbuild").createEsbuildPlugin;
 
 module.exports = defineConfig({
-  // Required for CYPRESS_STAFF_TEST_EMAIL in bundled Cucumber steps (Cypress 15 blocks Cypress.env otherwise).
-  allowCypressEnv: true,
-  projectId: "m8xe2e",
   e2e: {
-    includeShadowDom: true,
-    baseUrl:
-      process.env.CYPRESS_BASE_URL ||
-      process.env.BASE_URL ||
-      "http://127.0.0.1:8080",
+    baseUrl: "http://127.0.0.1:8080",
     specPattern: "**/*.feature",
-    video: true,
-    screenshotOnRunFailure: true,
-    defaultCommandTimeout: 20000,
-    pageLoadTimeout: 90000,
     async setupNodeEvents(on, config) {
       const bundler = createBundler({
         plugins: [createEsbuildPlugin(config)],
@@ -27,13 +14,6 @@ module.exports = defineConfig({
 
       on("file:preprocessor", bundler);
       await addCucumberPreprocessorPlugin(on, config);
-
-      on("before:browser:launch", (browser = {}, launchOptions) => {
-        if (browser.name === "electron" && browser.isHeadless) {
-          launchOptions.args.push("--enable-unsafe-swiftshader");
-        }
-        return launchOptions;
-      });
 
       return config;
     },
