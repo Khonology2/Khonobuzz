@@ -31227,7 +31227,7 @@ atg:function atg(){},
 af(a){$.baI().kJ(0,new A.w7(a,null)).ki(new A.aAq())},
 aAq:function aAq(){},
 aCQ(a){var s,r,q=J.a8(a),p=A.a7(q.h(a,"version"))
-if(p==null)p="2026.03.BA1"
+if(p==null)p="2026.03.AB1"
 s=A.a7(q.h(a,"last_feature_commit"))
 if(s==null)s=""
 r=A.a7(q.h(a,"feature_date"))
@@ -31431,11 +31431,11 @@ s=39
 break
 case 37:p=36
 b0=o.pop()
-A.lh("H5","lib/services/version_service.dart:163","Falling back to hardcoded version data",A.Z(["fallbackVersion","2026.03.BA1"],a,a0))
-$.zo=new A.v4("2026.03.BA1","","",1)
+A.lh("H5","lib/services/version_service.dart:163","Falling back to hardcoded version data",A.Z(["fallbackVersion","2026.03.AB1"],a,a0))
+$.zo=new A.v4("2026.03.AB1","","",1)
 s=42
-return A.m(A.qE(new A.v4("2026.03.BA1","","",1)),$async$li)
-case 42:q=new A.v4("2026.03.BA1","","",1)
+return A.m(A.qE(new A.v4("2026.03.AB1","","",1)),$async$li)
+case 42:q=new A.v4("2026.03.AB1","","",1)
 s=1
 break
 s=39
@@ -31681,7 +31681,7 @@ _.e=c
 _.a=d},
 ac1:function ac1(a,b){var _=this
 _.f=_.e=_.d=$
-_.r="Ver 2026.03.BA1 SIT"
+_.r="Ver 2026.03.AB1 SIT"
 _.w="Loading version..."
 _.x=null
 _.y=!1
