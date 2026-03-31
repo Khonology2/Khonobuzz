@@ -8,6 +8,7 @@ class ThemeModeProvider extends ChangeNotifier {
   static const prefsKey = 'app_theme_mode';
 
   ThemeMode _themeMode;
+  Future<void> Function(String themePreference)? _themeSyncCallback;
 
   ThemeModeProvider({ThemeMode initialMode = ThemeMode.dark})
       : _themeMode = initialMode;
@@ -16,7 +17,15 @@ class ThemeModeProvider extends ChangeNotifier {
 
   bool get isLight => _themeMode == ThemeMode.light;
 
-  Future<void> setThemeMode(ThemeMode mode, {bool persist = true}) async {
+  void setThemeSyncCallback(Future<void> Function(String)? callback) {
+    _themeSyncCallback = callback;
+  }
+
+  Future<void> setThemeMode(
+    ThemeMode mode, {
+    bool persist = true,
+    bool syncBackend = true,
+  }) async {
     if (_themeMode == mode) return;
     _themeMode = mode;
     notifyListeners();
@@ -27,18 +36,30 @@ class ThemeModeProvider extends ChangeNotifier {
         _themeMode == ThemeMode.light ? 'light' : 'dark',
       );
     }
+    if (syncBackend && _themeSyncCallback != null) {
+      await _themeSyncCallback!(_themeMode == ThemeMode.light ? 'light' : 'dark');
+    }
   }
 
   Future<void> applyThemePreference(
     String? preference, {
     bool persist = true,
+    bool syncBackend = false,
   }) async {
     if (preference == null || preference.isEmpty) return;
     final normalized = preference.toLowerCase();
     if (normalized == 'light') {
-      await setThemeMode(ThemeMode.light, persist: persist);
+      await setThemeMode(
+        ThemeMode.light,
+        persist: persist,
+        syncBackend: syncBackend,
+      );
     } else if (normalized == 'dark') {
-      await setThemeMode(ThemeMode.dark, persist: persist);
+      await setThemeMode(
+        ThemeMode.dark,
+        persist: persist,
+        syncBackend: syncBackend,
+      );
     }
   }
 

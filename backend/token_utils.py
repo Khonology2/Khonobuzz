@@ -20,7 +20,22 @@ try:
     fernet = Fernet(ENCRYPTION_KEY.encode())
 except Exception as e:
     raise RuntimeError(f"Invalid ENCRYPTION_KEY: {e}")
-def generate_jwt_token(user_id: str, email: str, full_name: str = "", roles: list = None, expiration_hours: int = None) -> str:
+def _normalize_token_theme(theme_preference: str = None) -> str:
+    """Map stored theme preference to token theme label."""
+    raw = (theme_preference or "").strip().lower()
+    if raw == "light":
+        return "Light"
+    return "dark"
+
+
+def generate_jwt_token(
+    user_id: str,
+    email: str,
+    full_name: str = "",
+    roles: list = None,
+    expiration_hours: int = None,
+    theme_preference: str = None,
+) -> str:
     """
     Generate a JWT token containing user information for PDH auto-login.
     Args:
@@ -44,6 +59,7 @@ def generate_jwt_token(user_id: str, email: str, full_name: str = "", roles: lis
         'email': email,
         'full_name': full_name,
         'roles': roles,
+        'theme': _normalize_token_theme(theme_preference),
         'iat': iat,
         'exp': exp,
     }
@@ -110,6 +126,7 @@ def verify_token(token: str) -> dict:
                 'email': payload.get('email') or payload.get('e', ''),
                 'full_name': payload.get('full_name', ''),
                 'roles': payload.get('roles', []),
+                'theme': payload.get('theme', 'dark'),
                 'exp': payload.get('exp'),
                 'iat': payload.get('iat', payload.get('exp', 0) - 86400),
             }
@@ -164,6 +181,7 @@ def generate_and_encrypt_token(
     full_name: str = "",
     roles: list = None,
     expiration_hours: int = None,
+    theme_preference: str = None,
 ) -> str:
     """
     Generate a JWT token and encrypt it for secure storage/transport.
@@ -176,7 +194,14 @@ def generate_and_encrypt_token(
     Returns:
         An encrypted token string
     """
-    plain_token = generate_jwt_token(user_id, email, full_name, roles, expiration_hours)
+    plain_token = generate_jwt_token(
+        user_id,
+        email,
+        full_name,
+        roles,
+        expiration_hours,
+        theme_preference,
+    )
     try:
         return encrypt_token(plain_token)
     except Exception as e:

@@ -128,8 +128,16 @@ class MyApp extends StatelessWidget {
         providers: [
           ChangeNotifierProvider(create: (_) => AuthProvider()),
           ChangeNotifierProvider(create: (_) => UserProvider()),
-          ChangeNotifierProvider(
+          ChangeNotifierProxyProvider<AuthProvider, ThemeModeProvider>(
             create: (_) => ThemeModeProvider(initialMode: initialThemeMode),
+            update: (_, authProvider, themeProvider) {
+              final provider =
+                  themeProvider ?? ThemeModeProvider(initialMode: initialThemeMode);
+              provider.setThemeSyncCallback(
+                authProvider.syncThemePreferenceAndRefreshToken,
+              );
+              return provider;
+            },
           ),
         ],
         child: Consumer<ThemeModeProvider>(

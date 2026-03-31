@@ -139,8 +139,12 @@ class ApiConfig {
     String email, {
     String? module,
     String? role,
+    String? theme,
   }) {
-    final base = '$baseUrl/api/auth/token?email=${Uri.encodeComponent(email)}';
+    var base = '$baseUrl/api/auth/token?email=${Uri.encodeComponent(email)}';
+    if (theme != null && theme.isNotEmpty) {
+      base = '$base&theme=${Uri.encodeComponent(theme)}';
+    }
     if (module != null && module.isNotEmpty) {
       final encodedModule = Uri.encodeComponent(module);
       if (role != null && role.isNotEmpty) {

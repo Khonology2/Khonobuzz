@@ -103,6 +103,18 @@ def derive_module_access_from_role(module_access: Optional[str], module_access_r
     return ','.join(module_names) if module_names else None
 
 
+def normalize_theme_preference(theme_value: Optional[str]) -> str:
+    raw = (theme_value or "").strip().lower()
+    return "light" if raw == "light" else "dark"
+
+
+def resolve_theme_preference(user_data: Dict[str, Any], onboarding_data: Dict[str, Any]) -> str:
+    # Prefer explicit onboarding preference, then user profile preference.
+    return normalize_theme_preference(
+        onboarding_data.get("themePreference") or user_data.get("themePreference")
+    )
+
+
 def _coerce_datetime(value: Any) -> Optional[datetime]:
     if value is None:
         return None
@@ -716,6 +728,10 @@ async def pdh_sync_user(data: dict):
                         email=user_email,
                         full_name=full_name,
                         roles=roles,
+                        theme_preference=resolve_theme_preference(
+                            user_data,
+                            onboarding_data,
+                        ),
                     )
                     onboarding_data['token'] = encrypted_token
                     onboarding_data['token_updated_at'] = datetime.utcnow()
@@ -768,6 +784,10 @@ async def pdh_update_user(uid: str, data: dict):
                         email=user_email,
                         full_name=full_name,
                         roles=roles,
+                        theme_preference=resolve_theme_preference(
+                            user_fields_dict,
+                            onboarding_fields,
+                        ),
                     )
                     onboarding_fields['token'] = encrypted_token
                     onboarding_fields['token_updated_at'] = datetime.utcnow()
@@ -1025,9 +1045,74 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
                 'created_at': datetime.utcnow(),
             })
 
+        regenerated_token = None
+        if theme_preference:
+            try:
+                refreshed_user_doc = users_ref.document(user_id).get()
+                refreshed_user = refreshed_user_doc.to_dict() or {}
+                _, refreshed_onboarding = _get_best_onboarding_record(user_id)
+                module_access_role = (
+                    refreshed_user.get('moduleAccessRole')
+                    or refreshed_onboarding.get('moduleAccessRole', '')
+                )
+                roles = parse_module_access_role_to_roles(module_access_role)
+                resolved_first = (
+                    refreshed_onboarding.get('firstName')
+                    or refreshed_onboarding.get('name')
+                    or refreshed_user.get('firstName')
+                    or ''
+                )
+                resolved_last = (
+                    refreshed_onboarding.get('lastName')
+                    or refreshed_onboarding.get('surname')
+                    or refreshed_user.get('lastName')
+                    or ''
+                )
+                resolved_full_name = f"{resolved_first} {resolved_last}".strip()
+                if not resolved_full_name:
+                    resolved_full_name = refreshed_user.get('name', '')
+
+                regenerated_token = generate_and_encrypt_token(
+                    user_id=user_id,
+                    email=normalized_email,
+                    full_name=resolved_full_name,
+                    roles=roles,
+                    theme_preference=theme_preference,
+                )
+
+                token_update_payload = {
+                    'token': regenerated_token,
+                    'token_updated_at': datetime.utcnow(),
+                    'fullName': resolved_full_name,
+                    'email': normalized_email,
+                    'themePreference': theme_preference,
+                    'updated_at': datetime.utcnow(),
+                }
+                db.collection('onboarding').document(user_id).set(
+                    {'user_id': user_id, **token_update_payload},
+                    merge=True,
+                )
+                if pdh_db:
+                    pdh_db.collection('onboarding').document(user_id).set(
+                        {
+                            'email': normalized_email,
+                            'token': regenerated_token,
+                            'fullName': resolved_full_name,
+                            'token_updated_at': datetime.utcnow(),
+                            'themePreference': theme_preference,
+                            'updated_at': datetime.utcnow(),
+                        },
+                        merge=True,
+                    )
+            except Exception as token_error:
+                print(f"[ERROR] admin_update_user_profile token refresh failed: {token_error}")
+
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content={"message": "Profile updated successfully"}
+            content={
+                "message": "Profile updated successfully",
+                **({"token": regenerated_token} if regenerated_token else {}),
+            }
         )
         
     except Exception as e:
@@ -1091,6 +1176,7 @@ async def register_user(user: UserRegister):
             'moduleAccess': '',
             'moduleRole': '',
             'moduleAccessRole': '',
+            'themePreference': 'dark',
         }
         print(f"[DEBUG] User data being sent to Firestore (users collection - FastAPI): {user_data}")
         doc_ref = users_ref.add(user_data)
@@ -1105,6 +1191,7 @@ async def register_user(user: UserRegister):
                 email=normalized_email,
                 full_name=full_name,
                 roles=roles,
+                theme_preference="dark",
             )
             print(f"[DEBUG] Token generated for new user: {user_id} with roles: {roles}")
         except Exception as token_error:
@@ -1129,6 +1216,7 @@ async def register_user(user: UserRegister):
             'moduleAccess': '',
             'moduleRole': '',
             'moduleAccessRole': '',
+            'themePreference': 'dark',
         }
         if encrypted_token:
             onboarding_data['token'] = encrypted_token
@@ -1318,6 +1406,10 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
                             email=user_email,
                             full_name=full_name,
                             roles=roles,
+                            theme_preference=resolve_theme_preference(
+                                current_user_data,
+                                onboarding_data,
+                            ),
                         )
                         update_data = {
                             'token': encrypted_token,
@@ -1760,6 +1852,10 @@ async def login_user(user_login: UserLogin, request: Request):
                 email=user_data['email'],
                 full_name=full_name,
                 roles=roles,
+                theme_preference=resolve_theme_preference(
+                    user_data,
+                    onboarding_data,
+                ),
             )
         except Exception:
             pass
@@ -1790,6 +1886,10 @@ async def login_user(user_login: UserLogin, request: Request):
                     'token_updated_at': datetime.utcnow(),
                     'fullName': full_name,
                     'email': user_data['email'],
+                    'themePreference': resolve_theme_preference(
+                        user_data,
+                        onboarding_data,
+                    ),
                 }
                 if not is_special_session:
                     update_data['updated_at'] = datetime.utcnow()
@@ -1806,6 +1906,10 @@ async def login_user(user_login: UserLogin, request: Request):
                         'token': encrypted_token,
                         'fullName': full_name,
                         'token_updated_at': datetime.utcnow(),
+                        'themePreference': resolve_theme_preference(
+                            user_data,
+                            onboarding_data,
+                        ),
                     }
                     if not is_special_session:
                         pdh_data['updated_at'] = datetime.utcnow()
@@ -1918,6 +2022,7 @@ async def login_user(user_login: UserLogin, request: Request):
 async def get_user_token(
     email: str = Query(..., description="User email address"),
     module: Optional[str] = Query(None, description="Target app: 'recruitment' or 'arw' for ARW token with roles like ARW - Admin, ARW - Hiring Manager"),
+    theme: Optional[str] = Query(None, description="Theme override: 'light' or 'dark'"),
 ):
     """
     Generate a fresh encrypted token for a user by email.
@@ -1958,11 +2063,17 @@ async def get_user_token(
         if not full_name:
             full_name = user_data.get('name', '')
         try:
+            requested_theme = normalize_theme_preference(theme) if theme else None
+            token_theme = requested_theme or resolve_theme_preference(
+                user_data,
+                onboarding_data,
+            )
             encrypted_token = generate_and_encrypt_token(
                 user_id=user_id,
                 email=user_data['email'],
                 full_name=full_name,
                 roles=roles,
+                theme_preference=token_theme,
             )
             if not is_arw:
                 if onboarding_doc_ref:
@@ -1984,6 +2095,7 @@ async def get_user_token(
                         'created_at': datetime.utcnow(),
                         'updated_at': datetime.utcnow(),
                         'moduleAccessRole': module_access_role,
+                        'themePreference': token_theme,
                     }
                     db.collection('onboarding').add(onboarding_data)
                     print(f"[DEBUG] Created onboarding document with token for user_id: {user_id}")
@@ -1996,6 +2108,7 @@ async def get_user_token(
                             'fullName': full_name,
                             'token_updated_at': datetime.utcnow(),
                             'updated_at': datetime.utcnow(),
+                            'themePreference': token_theme,
                         }, merge=True)
                         print(f"[DEBUG] Token synced to PDH onboarding collection for user_id: {user_id}")
                     except Exception as pdh_sync_error:
@@ -2009,6 +2122,7 @@ async def get_user_token(
                 "token": encrypted_token,
                 "email": user_data['email'],
                 "moduleAccessRole": module_access_role,
+                "themePreference": token_theme,
             }
         )
     except Exception as e:

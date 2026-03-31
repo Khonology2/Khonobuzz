@@ -850,6 +850,9 @@ Future<void> _launchUrlFromContext(
     }
 
     final authProvider = context.read<AuthProvider>();
+    final userProvider = context.read<UserProvider>();
+    final isLightMode = context.read<ThemeModeProvider>().isLight;
+    final theme = isLightMode ? 'light' : 'dark';
     final String? existingToken = authProvider.userToken;
     if (existingToken == null || existingToken.isEmpty) {
       if (!context.mounted) return;
@@ -866,17 +869,55 @@ Future<void> _launchUrlFromContext(
 
     String token = existingToken;
     final email = authProvider.userEmail;
-    final String cacheKey = '$moduleKey:${email ?? ''}';
+    final String cacheKey = '$moduleKey:${email ?? ''}:$theme';
     final cachedToken = _moduleLaunchTokenCache[cacheKey];
     if (cachedToken != null && cachedToken.isNotEmpty) {
       token = cachedToken;
+    }
+
+    if (email != null &&
+        email.isNotEmpty &&
+        moduleKey != 'recruitment' &&
+        moduleKey != 'skills_heatmap') {
+      try {
+        final tokenUri = Uri.parse(
+          ApiConfig.authTokenEndpoint(email, theme: theme),
+        );
+        final response = await http
+            .get(
+              tokenUri,
+              headers: {
+                'Authorization': 'Bearer $existingToken',
+                'Accept': 'application/json',
+              },
+            )
+            .timeout(_moduleTokenFetchTimeout);
+        if (response.statusCode == 200) {
+          final body = json.decode(response.body);
+          if (body is Map<String, dynamic>) {
+            final freshToken = body['token'] as String?;
+            if (freshToken != null && freshToken.isNotEmpty) {
+              token = freshToken;
+              _moduleLaunchTokenCache[cacheKey] = freshToken;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint(
+          '[ModuleLaunch] Theme token fetch failed, using cached/default token: $e',
+        );
+      }
     }
 
     if (moduleKey == 'recruitment') {
       if (email != null && email.isNotEmpty) {
         try {
           final tokenUri = Uri.parse(
-            ApiConfig.authTokenEndpoint(email, module: 'recruitment'),
+            ApiConfig.authTokenEndpoint(
+              email,
+              module: 'recruitment',
+              theme: theme,
+            ),
           );
           final response = await http
               .get(
@@ -911,7 +952,6 @@ Future<void> _launchUrlFromContext(
         // Get the user's selected skills heatmap role
         String? selectedRole;
         try {
-          final userProvider = context.read<UserProvider>();
           if (userProvider.users.isNotEmpty) {
             final currentUser = userProvider.users.firstWhere(
               (u) => u.email.toLowerCase() == email.toLowerCase(),
@@ -944,7 +984,7 @@ Future<void> _launchUrlFromContext(
 
         try {
           final String skillsCacheKey =
-              '$moduleKey:$email:${selectedRole ?? 'Executive'}';
+              '$moduleKey:$email:${selectedRole ?? 'Executive'}:$theme';
           final cachedSkillsToken = _moduleLaunchTokenCache[skillsCacheKey];
           if (cachedSkillsToken != null && cachedSkillsToken.isNotEmpty) {
             token = cachedSkillsToken;
@@ -955,6 +995,7 @@ Future<void> _launchUrlFromContext(
               email,
               module: 'skills_heatmap',
               role: selectedRole,
+              theme: theme,
             ),
           );
           final response = await http
@@ -985,7 +1026,7 @@ Future<void> _launchUrlFromContext(
           );
           // Keep launch path fast on next click.
           _moduleLaunchTokenCache.putIfAbsent(
-            '$moduleKey:$email:${selectedRole ?? 'Executive'}',
+            '$moduleKey:$email:${selectedRole ?? 'Executive'}:$theme',
             () => existingToken,
           );
         }

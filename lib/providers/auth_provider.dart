@@ -926,7 +926,7 @@ class AuthProvider extends ChangeNotifier {
 
   // Fetch user token from backend
   // This method now ALWAYS generates a fresh token (the backend endpoint has been updated)
-  Future<void> fetchUserToken() async {
+  Future<void> fetchUserToken({String? themePreference}) async {
     if (_userEmail == null) {
       _userToken = null;
       notifyListeners();
@@ -936,8 +936,18 @@ class AuthProvider extends ChangeNotifier {
     try {
       // Call the backend endpoint which now always generates a fresh token
       // Reduced timeout for faster failure
+      final normalizedTheme = (themePreference ?? _userThemePreference ?? '')
+          .trim()
+          .toLowerCase();
       final response = await http
-          .get(Uri.parse(ApiConfig.authTokenEndpoint(_userEmail!)))
+          .get(
+            Uri.parse(
+              ApiConfig.authTokenEndpoint(
+                _userEmail!,
+                theme: normalizedTheme.isEmpty ? null : normalizedTheme,
+              ),
+            ),
+          )
           .timeout(
             const Duration(seconds: 15),
             onTimeout: () {
@@ -968,5 +978,46 @@ class AuthProvider extends ChangeNotifier {
       _userToken = null;
       notifyListeners();
     }
+  }
+
+  Future<void> syncThemePreferenceAndRefreshToken(String themePreference) async {
+    final normalizedTheme = themePreference.trim().toLowerCase();
+    if (_userEmail == null || _userEmail!.isEmpty) {
+      _userThemePreference = normalizedTheme;
+      notifyListeners();
+      return;
+    }
+    if (normalizedTheme != 'light' && normalizedTheme != 'dark') {
+      return;
+    }
+
+    _userThemePreference = normalizedTheme;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('userThemePreference', normalizedTheme);
+
+    try {
+      final response = await http
+          .put(
+            Uri.parse('${ApiConfig.baseUrl}/api/admin/users/$_userEmail/profile'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({'themePreference': normalizedTheme}),
+          )
+          .timeout(const Duration(seconds: 12));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final token = (data is Map<String, dynamic>) ? data['token'] as String? : null;
+        if (token != null && token.isNotEmpty) {
+          _userToken = token;
+          await prefs.setString('userToken', token);
+          notifyListeners();
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('[AuthProvider] Theme sync endpoint failed, fallback token refresh: $e');
+    }
+
+    await fetchUserToken(themePreference: normalizedTheme);
   }
 }
