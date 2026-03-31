@@ -36,8 +36,8 @@ class VersionData {
 }
 
 /// Loads version from assets/data/version.json (updated by version-control workflow).
-/// Tries network (same-origin on web, then backend /api/version) until a valid payload is obtained,
-/// then keeps it in memory and [SharedPreferences] so /api/version is not called repeatedly.
+/// On web, same-origin `version.json` is fetched before [SharedPreferences] so new deploys are not
+/// masked by a stale persisted payload. Then backend `/api/version` if configured; prefs and assets follow.
 class VersionService {
   /// Bundled asset parse cache (offline fallback).
   static VersionData? _cached;
@@ -156,22 +156,17 @@ class VersionService {
     );
     // #endregion
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final jsonStr = prefs.getString(_prefsKey);
-      if (jsonStr != null && jsonStr.isNotEmpty) {
-        final map = json.decode(jsonStr) as Map<String, dynamic>?;
-        if (map != null && _isCustomVersionFormat(map)) {
-          _networkCached = VersionData.fromJson(map);
-          return _networkCached!;
-        }
-      }
-    } catch (_) {}
-
     // 1) Try network: same-origin (web) then backend (at most [_maxNetworkAttempts] HTTP tries per process).
+    // Do not read SharedPreferences before this on web — old persisted payloads would mask new deploys.
     if (kIsWeb) {
       try {
-        final uri = Uri.base.resolve('version.json');
+        final resolved = Uri.base.resolve('version.json');
+        final uri = resolved.replace(
+          queryParameters: {
+            ...resolved.queryParameters,
+            '_': DateTime.now().millisecondsSinceEpoch.toString(),
+          },
+        );
         final response = await http
             .get(uri)
             .timeout(const Duration(seconds: 3));
@@ -268,6 +263,19 @@ class VersionService {
         // Fall through to assets
       }
     }
+
+    // Offline / no valid network payload: last known version from SharedPreferences
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString(_prefsKey);
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final map = json.decode(jsonStr) as Map<String, dynamic>?;
+        if (map != null && _isCustomVersionFormat(map)) {
+          _networkCached = VersionData.fromJson(map);
+          return _networkCached!;
+        }
+      }
+    } catch (_) {}
 
     // 2) Use cached asset result if we have it
     if (_cached != null) {
