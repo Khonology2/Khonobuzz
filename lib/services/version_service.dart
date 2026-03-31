@@ -20,7 +20,7 @@ class VersionData {
 
   factory VersionData.fromJson(Map<String, dynamic> json) {
     return VersionData(
-      version: json['version'] as String? ?? '2026.03.BA1',
+      version: json['version'] as String? ?? '2026.03.AB1',
       lastFeatureCommit: json['last_feature_commit'] as String? ?? '',
       featureDate: json['feature_date'] as String? ?? '',
       commitCountSinceFeature: json['commit_count_since_feature'] as int? ?? 0,
@@ -28,7 +28,7 @@ class VersionData {
   }
 
   static VersionData get fallback => VersionData(
-    version: '2026.03.BA1',
+    version: '2026.03.AB1',
     lastFeatureCommit: '',
     featureDate: '',
     commitCountSinceFeature: 1,

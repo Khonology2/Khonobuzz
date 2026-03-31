@@ -51,9 +51,9 @@ jobs:
           else
             echo "skip_weekend=false" >> $GITHUB_OUTPUT
           fi
-          # Track whether the commit starts with "Feature" (case-insensitive)
+          # Track whether the commit starts with "Feature" or "feat:" (case-insensitive)
           TRIMMED=$(echo "$MSG" | sed 's/^[[:space:]]*//')
-          if echo "$TRIMMED" | grep -qi '^Feature'; then
+          if echo "$TRIMMED" | grep -Eqi '^(Feature|feat)([[:space:]]*[-:]|:)'; then
             echo "starts_with_feature=true" >> $GITHUB_OUTPUT
           else
             echo "starts_with_feature=false" >> $GITHUB_OUTPUT
@@ -62,7 +62,7 @@ jobs:
           echo "$MSG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           echo "date=$COMMIT_DATE" >> $GITHUB_OUTPUT
-          if echo "$TRIMMED" | grep -qi '^Feature'; then
+          if echo "$TRIMMED" | grep -Eqi '^(Feature|feat)([[:space:]]*[-:]|:)'; then
             echo "is_feature=true" >> $GITHUB_OUTPUT
           else
             echo "is_feature=false" >> $GITHUB_OUTPUT
@@ -104,7 +104,8 @@ jobs:
 
           if [ "$IS_FEATURE" = "true" ]; then
             NEW_COUNT=1
-            NEW_VERSION="${DATE_PART}${NEW_COUNT}"
+            # Product convention: a new feature release starts a fresh AB1 sequence for the month.
+            NEW_VERSION="${YEAR}.${MONTH}.AB${NEW_COUNT}"
             NEW_LAST_FEATURE="$COMMIT_MSG"
             NEW_FEATURE_DATE="$COMMIT_DATE"
           else

@@ -34,7 +34,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   late AnimationController _animationController;
   late Animation<Color?> _colorAnimation;
   late Animation<double> _scaleAnimation;
-  String _currentVersion = 'Ver 2026.03.BA1 SIT';
+  String _currentVersion = 'Ver 2026.03.AB1 SIT';
   String _tooltipMessage = 'Loading version...';
   String? _rawVersion;
   bool _showAttentionCatcher = false;
