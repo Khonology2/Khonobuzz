@@ -1350,7 +1350,7 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
         current_user_doc = user_ref.get()
         current_user_data = current_user_doc.to_dict() or {}
         user_ref.update(update_payload)
-        onboarding_update_payload = {}
+        onboarding_update_payload = {'user_id': user_id}
         if not is_special_session:
             onboarding_update_payload['updated_at'] = datetime.utcnow()
         if user_update.role is not None:
@@ -1375,69 +1375,70 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
             onboarding_update_payload['admin'] = {'approved': user_update.adminApproved}
         should_regenerate_token = user_update.moduleAccessRole is not None and (user_update.regenerateToken is True)
         if len(onboarding_update_payload) > 1:
-            onboarding_query = (
-                db.collection('onboarding')
-                .where('user_id', '==', user_id)
-                .limit(1)
-                .stream()
-            )
-            onboarding_doc = None
-            for doc in onboarding_query:
-                onboarding_doc = doc
-                break
-            if onboarding_doc is not None and onboarding_update_payload:
-                onboarding_doc.reference.update(onboarding_update_payload)
-                if should_regenerate_token:
-                    try:
-                        print(f"[DEBUG] Regenerating token for user_id: {user_id} due to moduleAccessRole update")
-                        user_email = current_user_data.get('email', '')
-                        onboarding_data = onboarding_doc.to_dict() or {}
-                        if not user_email:
-                            user_email = onboarding_data.get('email', '')
-                        new_module_access_role = user_update.moduleAccessRole or ''
-                        roles = parse_module_access_role_to_roles(new_module_access_role)
-                        first_name = onboarding_data.get('firstName') or onboarding_data.get('name') or current_user_data.get('firstName') or ''
-                        last_name = onboarding_data.get('lastName') or onboarding_data.get('surname') or current_user_data.get('lastName') or ''
-                        full_name = f"{first_name} {last_name}".strip()
-                        if not full_name:
-                            full_name = current_user_data.get('name', '') or onboarding_data.get('name', '')
-                        encrypted_token = generate_and_encrypt_token(
-                            user_id=user_id,
-                            email=user_email,
-                            full_name=full_name,
-                            roles=roles,
-                            theme_preference=resolve_theme_preference(
-                                current_user_data,
-                                onboarding_data,
-                            ),
-                        )
-                        update_data = {
-                            'token': encrypted_token,
-                            'token_updated_at': datetime.utcnow(),
-                            'fullName': full_name,
-                        }
-                        if user_email and not onboarding_data.get('email'):
-                            update_data['email'] = user_email
-                        onboarding_doc.reference.update(update_data)
-                        print(f"[DEBUG] Token regenerated and updated in main onboarding collection for user_id: {user_id}")
-                        # Sync new token to PDH
-                        if pdh_db:
-                            try:
-                                pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
-                                pdh_onboarding_ref.set({
-                                    'email': user_email,
-                                    'token': encrypted_token,
-                                    'fullName': full_name,
-                                    'token_updated_at': datetime.utcnow(),
-                                    'updated_at': datetime.utcnow(),
-                                }, merge=True)
-                                print(f"[DEBUG] New token synced to PDH onboarding collection for user_id: {user_id}")
-                            except Exception as pdh_sync_error:
-                                print(f"[ERROR] Failed to sync new token to PDH: {pdh_sync_error}")
-                        else:
-                            print("[WARNING] PDH Firebase not initialized, skipping token sync")
-                    except Exception as token_error:
-                        print(f"[ERROR] Failed to regenerate token: {token_error}")
+            onboarding_ref, onboarding_data = _get_best_onboarding_record(user_id)
+            onboarding_ref.set(onboarding_update_payload, merge=True)
+            if should_regenerate_token:
+                try:
+                    print(f"[DEBUG] Regenerating token for user_id: {user_id} due to moduleAccessRole update")
+                    refreshed_onboarding_doc = onboarding_ref.get()
+                    refreshed_onboarding = refreshed_onboarding_doc.to_dict() or {}
+                    user_email = current_user_data.get('email', '') or refreshed_onboarding.get('email', '')
+                    new_module_access_role = user_update.moduleAccessRole or ''
+                    roles = parse_module_access_role_to_roles(new_module_access_role)
+                    first_name = (
+                        refreshed_onboarding.get('firstName')
+                        or refreshed_onboarding.get('name')
+                        or current_user_data.get('firstName')
+                        or ''
+                    )
+                    last_name = (
+                        refreshed_onboarding.get('lastName')
+                        or refreshed_onboarding.get('surname')
+                        or current_user_data.get('lastName')
+                        or ''
+                    )
+                    full_name = f"{first_name} {last_name}".strip()
+                    if not full_name:
+                        full_name = current_user_data.get('name', '') or refreshed_onboarding.get('name', '')
+                    encrypted_token = generate_and_encrypt_token(
+                        user_id=user_id,
+                        email=user_email,
+                        full_name=full_name,
+                        roles=roles,
+                        theme_preference=resolve_theme_preference(
+                            current_user_data,
+                            refreshed_onboarding,
+                        ),
+                    )
+                    update_data = {
+                        'user_id': user_id,
+                        'token': encrypted_token,
+                        'token_updated_at': datetime.utcnow(),
+                        'fullName': full_name,
+                        'updated_at': datetime.utcnow(),
+                    }
+                    if user_email:
+                        update_data['email'] = user_email
+                    onboarding_ref.set(update_data, merge=True)
+                    print(f"[DEBUG] Token regenerated and updated in main onboarding collection for user_id: {user_id}")
+                    # Sync new token to PDH
+                    if pdh_db:
+                        try:
+                            pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
+                            pdh_onboarding_ref.set({
+                                'email': user_email,
+                                'token': encrypted_token,
+                                'fullName': full_name,
+                                'token_updated_at': datetime.utcnow(),
+                                'updated_at': datetime.utcnow(),
+                            }, merge=True)
+                            print(f"[DEBUG] New token synced to PDH onboarding collection for user_id: {user_id}")
+                        except Exception as pdh_sync_error:
+                            print(f"[ERROR] Failed to sync new token to PDH: {pdh_sync_error}")
+                    else:
+                        print("[WARNING] PDH Firebase not initialized, skipping token sync")
+                except Exception as token_error:
+                    print(f"[ERROR] Failed to regenerate token: {token_error}")
         updated_doc = user_ref.get()
         updated_data = updated_doc.to_dict() or {}
         _, onboarding_info = _get_best_onboarding_record(user_id)
@@ -2041,15 +2042,10 @@ async def get_user_token(
             return JSONResponse(status_code=404, content={"error": "User not found"})
         user_id = users[0].id
         user_data = users[0].to_dict()
-        onboarding_query = db.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
-        onboarding_data = {}
+        onboarding_ref, onboarding_data = _get_best_onboarding_record(user_id)
         module_access_role = ""
-        onboarding_doc_ref = None
-        for onboarding_doc in onboarding_query:
-            onboarding_data = onboarding_doc.to_dict() or {}
-            onboarding_doc_ref = onboarding_doc.reference
-            module_access_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
-            break
+        onboarding_doc_ref = onboarding_ref
+        module_access_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
         is_arw = module and module.strip().lower() in ("recruitment", "arw")
         if is_arw:
             roles = parse_module_access_role_to_arw_roles(module_access_role)
