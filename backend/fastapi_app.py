@@ -35,6 +35,10 @@ try:
     from .cloudinary_service import cloudinary_service
 except ImportError:
     from cloudinary_service import cloudinary_service
+try:
+    from .sso_pg_sync import sync_sso_user_login
+except ImportError:
+    from sso_pg_sync import sync_sso_user_login
 load_dotenv()
 DEBUG_MODE = os.environ.get('DEBUG', 'True').lower() == 'true'
 LOG_LEVEL = logging.DEBUG if DEBUG_MODE else logging.INFO
@@ -743,6 +747,7 @@ async def pdh_sync_user(data: dict):
             pdh_db.collection('onboarding').document(uid).set(onboarding_data, merge=True)
         else:
             print("[WARNING] PDH Firebase not initialized, skipping sync")
+        sync_sso_user_login(uid, user_data, onboarding_data)
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH sync successful"})
     except Exception as e:
         print(f"[ERROR] During PDH sync: {e}")
@@ -1223,6 +1228,7 @@ async def register_user(user: UserRegister):
             onboarding_data['token_updated_at'] = datetime.utcnow()
         print(f"[DEBUG] Onboarding data being sent to Firestore (onboarding collection - FastAPI): {onboarding_data}")
         db.collection('onboarding').add(onboarding_data)
+        sync_sso_user_login(user_id, user_data, onboarding_data)
         response_content = {
             "message": "User created successfully",
             "user": {
