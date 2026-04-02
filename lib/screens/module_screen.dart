@@ -316,7 +316,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   cardWidth: calculatedCardWidth,
                                   titleLines: ['Proposal &', 'SOW Builder'],
                                   buttonText: 'Launch',
-                                  url: 'https://lukens-1.onrender.com',
+                                  url: 'https://lukens-ivdu.onrender.com',
                                   moduleKey: 'sow_builder',
                                 ),
                               );
@@ -869,168 +869,164 @@ Future<void> _launchUrlFromContext(
 
     String token = existingToken;
     final email = authProvider.userEmail;
-    final String cacheKey = '$moduleKey:${email ?? ''}:$theme';
-    final cachedToken = _moduleLaunchTokenCache[cacheKey];
-    if (cachedToken != null && cachedToken.isNotEmpty) {
-      token = cachedToken;
+    if (email == null || email.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'User email is missing. Please log in again.',
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
+        ),
+      );
+      return;
     }
 
-    if (email != null &&
-        email.isNotEmpty &&
-        moduleKey != 'recruitment' &&
-        moduleKey != 'skills_heatmap') {
+    final String cacheKey = '$moduleKey:$email:$theme';
+    String? latestModuleAccessRole;
+    try {
+      final userByEmailUri = Uri.parse(ApiConfig.userByEmailEndpoint(email));
+      final userByEmailRes = await http
+          .get(
+            userByEmailUri,
+            headers: {
+              'Authorization': 'Bearer $existingToken',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(_moduleTokenFetchTimeout);
+      if (userByEmailRes.statusCode == 200) {
+        final payload = json.decode(userByEmailRes.body);
+        if (payload is Map<String, dynamic>) {
+          final userMap = (payload['user'] is Map<String, dynamic>)
+              ? payload['user'] as Map<String, dynamic>
+              : payload;
+          latestModuleAccessRole = userMap['moduleAccessRole'] as String?;
+        }
+      }
+    } catch (e) {
+      debugPrint('[ModuleLaunch] Could not refresh moduleAccessRole: $e');
+    }
+
+    Future<String?> fetchLatestToken({
+      required String tokenEndpoint,
+    }) async {
+      const int maxAttempts = 5;
+      for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse(tokenEndpoint),
+                headers: {
+                  'Authorization': 'Bearer $existingToken',
+                  'Accept': 'application/json',
+                },
+              )
+              .timeout(const Duration(seconds: 8));
+          if (response.statusCode == 200) {
+            final body = json.decode(response.body);
+            if (body is Map<String, dynamic>) {
+              final freshToken = body['token'] as String?;
+              if (freshToken != null && freshToken.isNotEmpty) {
+                return freshToken;
+              }
+            }
+          }
+          debugPrint(
+            '[ModuleLaunch] Token fetch attempt $attempt/$maxAttempts failed '
+            '(status ${response.statusCode})',
+          );
+        } catch (e) {
+          debugPrint(
+            '[ModuleLaunch] Token fetch attempt $attempt/$maxAttempts error: $e',
+          );
+        }
+        if (attempt < maxAttempts) {
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+        }
+      }
+      return null;
+    }
+
+    if (moduleKey == 'recruitment') {
+      final fresh = await fetchLatestToken(
+        tokenEndpoint: ApiConfig.authTokenEndpoint(
+          email,
+          module: 'recruitment',
+          theme: theme,
+        ),
+      );
+      if (fresh == null || fresh.isEmpty) {
+        return;
+      }
+      token = fresh;
+      _moduleLaunchTokenCache[cacheKey] = fresh;
+      debugPrint('[ModuleLaunch] Using latest ARW token for recruitment app');
+    } else if (moduleKey == 'skills_heatmap') {
+      String? selectedRole;
       try {
-        final tokenUri = Uri.parse(
-          ApiConfig.authTokenEndpoint(email, theme: theme),
-        );
-        final response = await http
-            .get(
-              tokenUri,
-              headers: {
-                'Authorization': 'Bearer $existingToken',
-                'Accept': 'application/json',
-              },
-            )
-            .timeout(_moduleTokenFetchTimeout);
-        if (response.statusCode == 200) {
-          final body = json.decode(response.body);
-          if (body is Map<String, dynamic>) {
-            final freshToken = body['token'] as String?;
-            if (freshToken != null && freshToken.isNotEmpty) {
-              token = freshToken;
-              _moduleLaunchTokenCache[cacheKey] = freshToken;
+        final roleSource = latestModuleAccessRole;
+        if (roleSource != null && roleSource.isNotEmpty) {
+          final parts = roleSource.split(',');
+          for (final part in parts) {
+            final trimmedPart = part.trim();
+            if (trimmedPart.startsWith('Skills Heatmap - ')) {
+              selectedRole = trimmedPart.replaceFirst('Skills Heatmap - ', '').trim();
+              break;
+            }
+          }
+        }
+        if ((selectedRole == null || selectedRole.isEmpty) &&
+            userProvider.users.isNotEmpty) {
+          final currentUser = userProvider.users.firstWhere(
+            (u) => u.email.toLowerCase() == email.toLowerCase(),
+            orElse: () => throw StateError('Current user not found'),
+          );
+          final localRole = currentUser.moduleAccessRole;
+          if (localRole != null && localRole.isNotEmpty) {
+            final parts = localRole.split(',');
+            for (final part in parts) {
+              final trimmedPart = part.trim();
+              if (trimmedPart.startsWith('Skills Heatmap - ')) {
+                selectedRole = trimmedPart.replaceFirst('Skills Heatmap - ', '').trim();
+                break;
+              }
             }
           }
         }
       } catch (e) {
-        debugPrint(
-          '[ModuleLaunch] Theme token fetch failed, using cached/default token: $e',
-        );
+        debugPrint('[ModuleLaunch] Error getting skills heatmap role: $e');
       }
-    }
+      selectedRole = (selectedRole == null || selectedRole.isEmpty)
+          ? 'Executive'
+          : selectedRole;
 
-    if (moduleKey == 'recruitment') {
-      if (email != null && email.isNotEmpty) {
-        try {
-          final tokenUri = Uri.parse(
-            ApiConfig.authTokenEndpoint(
-              email,
-              module: 'recruitment',
-              theme: theme,
-            ),
-          );
-          final response = await http
-              .get(
-                tokenUri,
-                headers: {
-                  'Authorization': 'Bearer $existingToken',
-                  'Accept': 'application/json',
-                },
-              )
-              .timeout(_moduleTokenFetchTimeout);
-          if (response.statusCode == 200) {
-            final body = json.decode(response.body);
-            if (body is Map<String, dynamic>) {
-              final arwToken = body['token'] as String?;
-              if (arwToken != null && arwToken.isNotEmpty) {
-                token = arwToken;
-                _moduleLaunchTokenCache[cacheKey] = arwToken;
-                debugPrint(
-                  '[ModuleLaunch] Using ARW token for recruitment app',
-                );
-              }
-            }
-          }
-        } catch (e) {
-          debugPrint(
-            '[ModuleLaunch] ARW token fetch failed, using default token: $e',
-          );
-        }
+      final String skillsCacheKey = '$moduleKey:$email:$selectedRole:$theme';
+      final fresh = await fetchLatestToken(
+        tokenEndpoint: ApiConfig.authTokenEndpoint(
+          email,
+          module: 'skills_heatmap',
+          role: selectedRole,
+          theme: theme,
+        ),
+      );
+      if (fresh == null || fresh.isEmpty) {
+        return;
       }
-    } else if (moduleKey == 'skills_heatmap') {
-      if (email != null && email.isNotEmpty) {
-        // Get the user's selected skills heatmap role
-        String? selectedRole;
-        try {
-          if (userProvider.users.isNotEmpty) {
-            final currentUser = userProvider.users.firstWhere(
-              (u) => u.email.toLowerCase() == email.toLowerCase(),
-              orElse: () => throw StateError('Current user not found'),
-            );
-
-            if (currentUser.moduleAccessRole != null &&
-                currentUser.moduleAccessRole!.isNotEmpty) {
-              final parts = currentUser.moduleAccessRole!.split(', ');
-              for (var part in parts) {
-                final trimmedPart = part.trim();
-                if (trimmedPart.startsWith('Skills Heatmap - ')) {
-                  selectedRole = trimmedPart
-                      .replaceFirst('Skills Heatmap - ', '')
-                      .trim();
-                  break;
-                }
-              }
-            }
-
-            // Default to first role if no specific role found
-            if (selectedRole == null || selectedRole.isEmpty) {
-              selectedRole = 'Executive'; // Default role
-            }
-          }
-        } catch (e) {
-          debugPrint('[ModuleLaunch] Error getting skills heatmap role: $e');
-          selectedRole = 'Executive'; // Default role on error
-        }
-
-        try {
-          final String skillsCacheKey =
-              '$moduleKey:$email:${selectedRole ?? 'Executive'}:$theme';
-          final cachedSkillsToken = _moduleLaunchTokenCache[skillsCacheKey];
-          if (cachedSkillsToken != null && cachedSkillsToken.isNotEmpty) {
-            token = cachedSkillsToken;
-          }
-
-          final tokenUri = Uri.parse(
-            ApiConfig.authTokenEndpoint(
-              email,
-              module: 'skills_heatmap',
-              role: selectedRole,
-              theme: theme,
-            ),
-          );
-          final response = await http
-              .get(
-                tokenUri,
-                headers: {
-                  'Authorization': 'Bearer $existingToken',
-                  'Accept': 'application/json',
-                },
-              )
-              .timeout(_moduleTokenFetchTimeout);
-          if (response.statusCode == 200) {
-            final body = json.decode(response.body);
-            if (body is Map<String, dynamic>) {
-              final skillsHeatmapToken = body['token'] as String?;
-              if (skillsHeatmapToken != null && skillsHeatmapToken.isNotEmpty) {
-                token = skillsHeatmapToken;
-                _moduleLaunchTokenCache[skillsCacheKey] = skillsHeatmapToken;
-                debugPrint(
-                  '[ModuleLaunch] Using skills heatmap token with role: $selectedRole',
-                );
-              }
-            }
-          }
-        } catch (e) {
-          debugPrint(
-            '[ModuleLaunch] Skills heatmap token fetch failed, using default token: $e',
-          );
-          // Keep launch path fast on next click.
-          _moduleLaunchTokenCache.putIfAbsent(
-            '$moduleKey:$email:${selectedRole ?? 'Executive'}:$theme',
-            () => existingToken,
-          );
-        }
+      token = fresh;
+      _moduleLaunchTokenCache[skillsCacheKey] = fresh;
+      debugPrint(
+        '[ModuleLaunch] Using latest skills heatmap token with role: $selectedRole',
+      );
+    } else {
+      final fresh = await fetchLatestToken(
+        tokenEndpoint: ApiConfig.authTokenEndpoint(email, theme: theme),
+      );
+      if (fresh == null || fresh.isEmpty) {
+        return;
       }
+      token = fresh;
+      _moduleLaunchTokenCache[cacheKey] = fresh;
     }
 
     Uri uri = Uri.parse(secureUrl);
