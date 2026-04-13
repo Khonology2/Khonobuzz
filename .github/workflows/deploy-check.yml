@@ -1,10 +1,10 @@
 # 1) Flutter analyze + test
-# 2) On khono-v2: pull latest, flutter build web, stamp build/web with source commit SHA,
+# 2) On main: pull latest, flutter build web, stamp build/web with source commit SHA,
 #    commit + push build/web (always when SHA changes), wait, POST RENDER_DEPLOY_HOOK
 #
 # Render must serve pre-built files only (Static Site): buildCommand = no-op, publish = build/web.
 # The version label (Ver … SIT) comes from assets/data/version.json bundled at build time — it must
-# be committed to the branch you deploy, or CI will keep building the old version string.
+# be committed to the branch you deploy, or CI will keep building old version string.
 #
 # Secrets: RENDER_DEPLOY_HOOK = full URL from Render → Service → Settings → Deploy Hook
 
@@ -36,10 +36,10 @@ jobs:
           fetch-depth: 0
 
       - name: Sync branch (avoid stale checkout vs other bots)
-        if: github.ref == 'refs/heads/khono-v2'
+        if: github.ref == 'refs/heads/main'
         run: |
-          git fetch origin khono-v2
-          git pull origin khono-v2 --rebase
+          git fetch origin main
+          git pull origin main --rebase
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -57,15 +57,15 @@ jobs:
         run: flutter test
 
       - name: Build web (for Render — not built on Render)
-        if: github.ref == 'refs/heads/khono-v2'
+        if: github.ref == 'refs/heads/main'
         run: flutter build web --release --base-href /
 
       - name: Disable service worker in web bundle (avoid stale cached JS after deploy)
-        if: github.ref == 'refs/heads/khono-v2'
+        if: github.ref == 'refs/heads/main'
         run: python3 tool/strip_web_service_worker.py
 
       - name: Stamp build with source commit (forces deploy when HEAD changes)
-        if: github.ref == 'refs/heads/khono-v2'
+        if: github.ref == 'refs/heads/main'
         run: |
           mkdir -p build/web
           SOURCE_SHA=$(git rev-parse HEAD)
@@ -74,7 +74,7 @@ jobs:
             "$SOURCE_SHA" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > build/web/.ci-build-meta.json
 
       - name: Commit and push build/web
-        if: github.ref == 'refs/heads/khono-v2'
+        if: github.ref == 'refs/heads/main'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -83,23 +83,23 @@ jobs:
             echo "No build/web changes to commit"
           else
             git commit -m "chore: update Flutter web build [skip ci]"
-            git fetch origin khono-v2
-            if ! git pull origin khono-v2 --rebase; then
-              echo "::error::Rebase failed (conflicts with origin/khono-v2). Resolve on the branch and re-run workflow."
+            git fetch origin main
+            if ! git pull origin main --rebase; then
+              echo "::error::Rebase failed (conflicts with origin/main). Resolve on branch and re-run workflow."
               exit 1
             fi
-            if ! git push origin khono-v2; then
-              git pull origin khono-v2 --rebase
-              git push origin khono-v2
+            if ! git push origin main; then
+              git pull origin main --rebase
+              git push origin main
             fi
           fi
 
       - name: Wait for GitHub default branch tip (Render clones latest)
-        if: github.ref == 'refs/heads/khono-v2'
+        if: github.ref == 'refs/heads/main'
         run: sleep 20
 
       - name: Trigger Render deploy hook
-        if: github.ref == 'refs/heads/khono-v2'
+        if: github.ref == 'refs/heads/main'
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
@@ -111,9 +111,9 @@ jobs:
           echo "Render deploy hook invoked successfully."
 
       - name: Deploy summary
-        if: ${{ always() && github.ref == 'refs/heads/khono-v2' }}
+        if: ${{ always() && github.ref == 'refs/heads/main' }}
         run: |
           echo "## deploy-check summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Branch built:** khono-v2 at commit \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **build/web** includes \`.ci-source-commit\` (open \`https://<your-site>/.ci-source-commit\` after deploy to verify the live SHA)." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Render: use **only** the deploy hook after this workflow, or turn off auto-deploy on push so you never publish a commit before the bot updates \`build/web\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Branch built:** main at commit \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **build/web** includes \`.ci-source-commit\` (open \`https://<your-site>/.ci-source-commit\` after deploy to verify live SHA)." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Render: use **only** deploy hook after this workflow, or turn off auto-deploy on push so you never publish a commit before the bot updates \`build/web\`." >> "$GITHUB_STEP_SUMMARY"
