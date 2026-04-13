@@ -28,7 +28,7 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
   static const List<String> _progressMessages = [
     'Getting ready...',
     'Authenticating...',
-    'Granting access...',
+    'Setting theme preferences...',
     'Loading your profile...',
     'Loading your modules...',
     'Loading your module roles...',
