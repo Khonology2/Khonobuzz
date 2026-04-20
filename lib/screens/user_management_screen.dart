@@ -32,7 +32,10 @@ const String _kAddNewDesignation = '__add_new_designation__';
 const String _kAllFilterOption = '__all_filter_option__';
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
-  static const Color userMgmtDarkWidgetBg = Color(0xFF3D3F40);
+  static final Color userMgmtDarkWidgetBg = Color.alphaBlend(
+    Colors.white.withValues(alpha: 0.10),
+    const Color(0xFF3D3F40).withValues(alpha: 0.40),
+  );
 
   String? _updatingUserId;
   Timer? _debounceTimer;
@@ -204,7 +207,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Future<void> _showAddDepartmentDialog({String? initialSelectForUser}) async {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color dialogBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+    final Color dialogBg = isDark
+        ? userMgmtDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final controller = TextEditingController();
     final result = await showDialog<String>(
       context: context,
@@ -280,7 +285,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Future<void> _showAddDesignationDialog({String? initialSelectForUser}) async {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color dialogBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+    final Color dialogBg = isDark
+        ? userMgmtDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final controller = TextEditingController();
     final result = await showDialog<String>(
       context: context,
@@ -583,7 +590,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? userMgmtDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
 
     return Scaffold(
       bottomNavigationBar: _isSelectionMode && _selectedUserIds.isNotEmpty
@@ -807,61 +816,74 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Widget _buildFiltersAndSearch() {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? userMgmtDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     return Column(
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             Expanded(
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedStatus,
-                  hint: Text(
-                    'FILTER STATUS',
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: widgetBg,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: appTextColor(context).withValues(alpha: 0.25),
+                  ),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedStatus,
+                    hint: Text(
+                      'FILTER STATUS',
+                      style: TextStyle(
+                        color: appTextColor(context),
+                        fontFamily: 'Poppins',
+                        fontSize: 12.0,
+                      ),
+                    ),
+                    dropdownColor: widgetBg,
                     style: TextStyle(
                       color: appTextColor(context),
                       fontFamily: 'Poppins',
-                      fontSize: 12.0,
                     ),
-                  ),
-                  dropdownColor: widgetBg,
-                  style: TextStyle(
-                    color: appTextColor(context),
-                    fontFamily: 'Poppins',
-                  ),
-                  isExpanded: true,
-                  icon: Icon(
-                    Icons.arrow_drop_down,
-                    color: appTextColor(context),
-                  ),
-                  onChanged: (String? newValue) {
-                    SoundSystem.playButtonClick();
-                    setState(() {
-                      _selectedStatus = newValue;
-                    });
-                  },
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('All Statuses'),
+                    isExpanded: true,
+                    icon: Icon(
+                      Icons.arrow_drop_down,
+                      color: appTextColor(context),
                     ),
-                    ..._availableStatuses.map<DropdownMenuItem<String>>((
-                      String value,
-                    ) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(
-                          value,
-                          style: TextStyle(
-                            color: appTextColor(context),
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.w500,
+                    onChanged: (String? newValue) {
+                      SoundSystem.playButtonClick();
+                      setState(() {
+                        _selectedStatus = newValue;
+                      });
+                    },
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('All Statuses'),
+                      ),
+                      ..._availableStatuses.map<DropdownMenuItem<String>>((
+                        String value,
+                      ) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(
+                            value,
+                            style: TextStyle(
+                              color: appTextColor(context),
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                      );
-                    }),
-                  ],
+                        );
+                      }),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -968,7 +990,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: widgetBg,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: appTextColor(context).withValues(alpha: 0.25),
           ),
@@ -1007,7 +1029,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       context: context,
       builder: (dialogContext) {
         final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final widgetBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+        final widgetBg = isDark
+            ? userMgmtDarkWidgetBg
+            : Colors.white.withValues(alpha: 0.40);
         return StatefulBuilder(
           builder: (context, setDialogState) {
             final filtered = options
@@ -1226,7 +1250,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
     final isSelected = _selectedUserIds.contains(user.id);
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color normalWidgetBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+    final Color normalWidgetBg = isDark
+        ? userMgmtDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final bool isHovered = _hoveredUserId == user.id;
 
     return MouseRegion(
@@ -1455,6 +1481,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           fontSize: 12.0,
           fontWeight: FontWeight.bold,
           fontFamily: 'Poppins',
+          color: Colors.white,
         ),
       ),
     );
@@ -1473,6 +1500,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           fontSize: 12.0,
           fontWeight: FontWeight.bold,
           fontFamily: 'Poppins',
+          color: Colors.white,
         ),
       ),
     );
@@ -1480,7 +1508,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Widget _buildDropdownContent(ManagedUser user) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color panelBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+    final Color panelBg = isDark
+        ? userMgmtDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final Color dividerColor = appTextColor(context).withValues(
       alpha: isDark ? 0.22 : 0.30,
     );
@@ -2076,7 +2106,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final allUsers = userProvider.users;
 
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color dialogBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+    final Color dialogBg = isDark
+        ? userMgmtDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
 
     final TextEditingController searchController = TextEditingController();
     ManagedUser? selectedManager;
@@ -2253,7 +2285,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             final bool isDark = Theme.of(context).brightness == Brightness.dark;
-            final Color dialogBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+            final Color dialogBg = isDark
+                ? userMgmtDarkWidgetBg
+                : Colors.white.withValues(alpha: 0.40);
             return AlertDialog(
               backgroundColor: dialogBg,
               title: Text(
@@ -2628,7 +2662,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       context: context,
       builder: (BuildContext context) {
         final bool isDark = Theme.of(context).brightness == Brightness.dark;
-        final Color dialogBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+        final Color dialogBg = isDark
+            ? userMgmtDarkWidgetBg
+            : Colors.white.withValues(alpha: 0.40);
         return AlertDialog(
           backgroundColor: dialogBg,
           title: Text(
@@ -2978,7 +3014,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             final bool isDark = Theme.of(context).brightness == Brightness.dark;
-            final Color dialogBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+            final Color dialogBg = isDark
+                ? userMgmtDarkWidgetBg
+                : Colors.white.withValues(alpha: 0.40);
             return AlertDialog(
               backgroundColor: dialogBg,
               title: Text(
@@ -3266,7 +3304,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       context: context,
       builder: (BuildContext context) {
         final bool isDark = Theme.of(context).brightness == Brightness.dark;
-        final Color dialogBg = isDark ? userMgmtDarkWidgetBg : Colors.white;
+        final Color dialogBg = isDark
+            ? userMgmtDarkWidgetBg
+            : Colors.white.withValues(alpha: 0.40);
         return AlertDialog(
           backgroundColor: dialogBg,
           title: Text(

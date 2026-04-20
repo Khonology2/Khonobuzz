@@ -8,7 +8,6 @@ import '../providers/theme_mode_provider.dart';
 import '../services/sound_system.dart';
 import 'auth_screen.dart';
 import '../theme/app_backgrounds.dart';
-import '../theme/app_text_colors.dart';
 import '../theme/app_themes.dart';
 import '../widgets/version_control_widget.dart';
 
@@ -241,9 +240,9 @@ class _LandingScreenState extends State<LandingScreen> {
         padding: const EdgeInsets.symmetric(vertical: 16.0),
         child: Text(
           text,
-          style: TextStyle(
+          style: const TextStyle(
             fontFamily: 'Poppins',
-            color: appTextColor(context),
+            color: Colors.white,
             fontWeight: FontWeight.bold,
           ),
         ),

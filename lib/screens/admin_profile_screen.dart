@@ -23,7 +23,10 @@ class AdminProfileScreen extends StatefulWidget {
 }
 
 class AdminProfileScreenState extends State<AdminProfileScreen> {
-  static const Color profileDarkWidgetBg = Color(0xFF3D3F40);
+  static final Color profileDarkWidgetBg = Color.alphaBlend(
+    Colors.white.withValues(alpha: 0.10),
+    const Color(0xFF3D3F40).withValues(alpha: 0.40),
+  );
 
   // Text editing controllers
   late TextEditingController _firstNameController;
@@ -377,7 +380,9 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
 
   Widget _buildReadOnlyLabelValue(String label, String value) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? profileDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? profileDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -421,7 +426,9 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
     bool readOnly = false,
   }) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? profileDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? profileDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -481,7 +488,9 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
     void Function(String?) onChanged,
   ) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? profileDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? profileDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -555,7 +564,9 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? profileDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? profileDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
