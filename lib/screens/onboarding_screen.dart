@@ -25,7 +25,10 @@ class OnboardingScreen extends StatefulWidget {
 
 class OnboardingScreenState extends State<OnboardingScreen>
     with TickerProviderStateMixin {
-  static const Color onboardingDarkWidgetBg = Color(0xFF3D3F40);
+  static final Color onboardingDarkWidgetBg = Color.alphaBlend(
+    Colors.white.withValues(alpha: 0.10),
+    const Color(0xFF3D3F40).withValues(alpha: 0.40),
+  );
 
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
@@ -104,7 +107,9 @@ class OnboardingScreenState extends State<OnboardingScreen>
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final bool isLight = !isDark;
-    final Color widgetBg = isDark ? onboardingDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? onboardingDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final Color hintColor = isDark ? Colors.white70 : Colors.black54;
 
     return Scaffold(
@@ -778,7 +783,9 @@ class OnboardingScreenState extends State<OnboardingScreen>
     required TextEditingController controller,
   }) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? onboardingDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? onboardingDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final Color hintColor = isDark ? Colors.white70 : Colors.black54;
 
     return Column(
@@ -1148,9 +1155,9 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Text(
               widget.text,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'Poppins',
-                color: appTextColor(context),
+                color: Colors.white,
                 fontWeight: FontWeight.bold,
               ),
             ),

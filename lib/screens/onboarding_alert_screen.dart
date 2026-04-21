@@ -204,7 +204,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
             Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).brightness == Brightness.light
-                    ? Colors.white.withValues(alpha: 0.9)
+                    ? Colors.white.withValues(alpha: 0.40)
                     : const Color(0xFF1A1A1A).withValues(alpha: 0.85),
               ),
             ),

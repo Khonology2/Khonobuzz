@@ -261,7 +261,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Development',
                                     'Hub',
                                   ],
-                                  buttonText: 'Launch',
+                                  buttonText: 'LAUNCH',
                                   url:
                                       'https://personal-development-hub.onrender.com',
                                   moduleKey: 'pdh',
@@ -281,7 +281,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Capacity &',
                                     'Skills heatmap',
                                   ],
-                                  buttonText: 'Launch',
+                                  buttonText: 'LAUNCH',
                                   url: 'https://resource-capacity-hczd.onrender.com',
                                   moduleKey: 'skills_heatmap',
                                 ),
@@ -300,7 +300,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Recruitment',
                                     'Workflow',
                                   ],
-                                  buttonText: 'Launch',
+                                  buttonText: 'LAUNCH',
                                   url:
                                       'https://recruitment-web-59qy.onrender.com/',
                                   moduleKey: 'recruitment',
@@ -315,7 +315,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   context: context,
                                   cardWidth: calculatedCardWidth,
                                   titleLines: ['Proposal &', 'SOW Builder'],
-                                  buttonText: 'Launch',
+                                  buttonText: 'LAUNCH',
                                   url: 'https://lukens-ivdu.onrender.com',
                                   moduleKey: 'sow_builder',
                                 ),
@@ -333,7 +333,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Deliverables & Sprint',
                                     'Sign Off Hub',
                                   ],
-                                  buttonText: 'Launch',
+                                  buttonText: 'LAUNCH',
                                   url: 'https://flow-space-1.onrender.com/',
                                   moduleKey: 'deliverable_sprint',
                                   isComingSoon: false,
@@ -470,7 +470,12 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
   Widget build(BuildContext context) {
     final String? description = _getModuleDescription(widget.moduleKey);
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color cardBg = isDark ? moduleCardDarkSurface : Colors.white;
+    final Color cardBg = isDark
+        ? Color.alphaBlend(
+            Colors.white.withValues(alpha: 0.10),
+            moduleCardDarkSurface.withValues(alpha: 0.40),
+          )
+        : Colors.white.withValues(alpha: 0.40);
     final Color titleColor = appTextColor(context);
     final Color secondaryTextColor =
         isDark ? appTextColor(context).withValues(alpha: 0.85) : Colors.black87;
@@ -681,7 +686,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                             },
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: primaryAccent,
-                                        foregroundColor: appTextColor(context),
+                                        foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 36.0,
                                           vertical: 14.4,

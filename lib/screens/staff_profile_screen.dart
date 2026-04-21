@@ -23,7 +23,10 @@ class StaffProfileScreen extends StatefulWidget {
 }
 
 class _StaffProfileScreenState extends State<StaffProfileScreen> {
-  static const Color profileDarkWidgetBg = Color(0xFF3D3F40);
+  static final Color profileDarkWidgetBg = Color.alphaBlend(
+    Colors.white.withValues(alpha: 0.10),
+    const Color(0xFF3D3F40).withValues(alpha: 0.40),
+  );
 
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _surnameController = TextEditingController();
@@ -378,7 +381,7 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                 decoration: BoxDecoration(
                   color: Theme.of(context).brightness == Brightness.dark
                       ? profileDarkWidgetBg
-                      : Colors.white,
+                      : Colors.white.withValues(alpha: 0.40),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: const Color(0xFFC10D00).withValues(alpha: 0.3),
@@ -451,7 +454,7 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                 decoration: BoxDecoration(
                   color: Theme.of(context).brightness == Brightness.dark
                       ? profileDarkWidgetBg
-                      : Colors.white,
+                      : Colors.white.withValues(alpha: 0.40),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: const Color(0xFFC10D00).withValues(alpha: 0.3),
@@ -621,7 +624,9 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
 
   Widget _buildReadOnlyLabelValue(String label, String value) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? profileDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? profileDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -666,7 +671,9 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
     bool readOnly = false,
   }) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? profileDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? profileDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -726,7 +733,9 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
     void Function(String?) onChanged,
   ) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? profileDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? profileDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -29,7 +29,10 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<String> _entityOptions = ['Khonology Internal'];
   static const String _notAssignedValue = 'Not Assigned';
-  static const Color entityDarkWidgetBg = Color(0xFF3D3F40);
+  static final Color entityDarkWidgetBg = Color.alphaBlend(
+    Colors.white.withValues(alpha: 0.10),
+    const Color(0xFF3D3F40).withValues(alpha: 0.40),
+  );
 
   String? expandedUserId;
   String? _updatingUserId;
@@ -373,7 +376,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
 
   Widget _buildSearch() {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color filledBg = isDark ? entityDarkWidgetBg : Colors.white;
+    final Color filledBg = isDark
+        ? entityDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     return TextField(
       controller: _searchController,
       decoration: InputDecoration(
@@ -506,7 +511,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
 
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? entityDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? entityDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final bool isHovered = _hoveredUserId == user.id;
     return MouseRegion(
       onEnter: (_) => setState(() => _hoveredUserId = user.id),
@@ -669,7 +676,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
 
   Widget _buildEntityChip(String? entity) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color chipBg = isDark ? entityDarkWidgetBg : Colors.white;
+    final Color chipBg = isDark
+        ? entityDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final displayText = (entity == null || entity.isEmpty)
         ? _notAssignedValue
         : entity;
@@ -715,7 +724,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
 
   Widget _buildEntityPanel(ManagedUser user) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color panelBg = isDark ? entityDarkWidgetBg : Colors.white;
+    final Color panelBg = isDark
+        ? entityDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final Color dividerColor = appTextColor(context).withValues(
       alpha: isDark ? 0.22 : 0.30,
     );

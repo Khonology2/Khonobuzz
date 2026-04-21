@@ -139,8 +139,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   // Required for module-access user widgets:
   // - Light mode: solid white containers
-  // - Dark mode: solid #3D3F40 containers
-  static const Color moduleAccessDarkWidgetBg = Color(0xFF3D3F40);
+  // - Dark mode: translucent dark surface + subtle white tint
+  static final Color moduleAccessDarkWidgetBg = Color.alphaBlend(
+    Colors.white.withValues(alpha: 0.10),
+    const Color(0xFF3D3F40).withValues(alpha: 0.40),
+  );
 
   String? _canonicalModuleName(String raw) {
     final t = raw.trim();
@@ -1704,7 +1707,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   Widget _buildSearch() {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color filledBg = isDark ? moduleAccessDarkWidgetBg : Colors.white;
+    final Color filledBg = isDark
+        ? moduleAccessDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     return TextField(
       controller: _searchController,
       decoration: InputDecoration(
@@ -1738,7 +1743,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   Widget _buildLoadingSkeleton() {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? moduleAccessDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? moduleAccessDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     return Column(
       children: List.generate(5, (_) {
         return Padding(
@@ -1930,8 +1937,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   Widget _sortChip(String label, String value) {
     final isSelected = _sortOption == value;
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color normalChipBg =
-        isDark ? moduleAccessDarkWidgetBg : Colors.white;
+    final Color normalChipBg = isDark
+        ? moduleAccessDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     return GestureDetector(
       onTap: () {
         SoundSystem.playButtonClick();
@@ -1980,8 +1988,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color normalWidgetBg =
-        isDark ? moduleAccessDarkWidgetBg : Colors.white;
+    final Color normalWidgetBg = isDark
+        ? moduleAccessDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final moduleAccessDots = _buildModuleAccessDots(user.moduleAccess);
     final isSelected = _selectedUserIds.contains(user.id);
     final bool isHovered = _hoveredUserId == user.id;
@@ -2193,7 +2202,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   Widget _buildModuleLegend() {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color legendBg = isDark ? moduleAccessDarkWidgetBg : Colors.white;
+    final Color legendBg = isDark
+        ? moduleAccessDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: BoxDecoration(
@@ -2254,7 +2265,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   Widget _buildModuleAccessPanel(ManagedUser user) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color widgetBg = isDark ? moduleAccessDarkWidgetBg : Colors.white;
+    final Color widgetBg = isDark
+        ? moduleAccessDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final Color dividerColor = appTextColor(context).withValues(
       alpha: isDark ? 0.22 : 0.30,
     );

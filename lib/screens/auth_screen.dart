@@ -594,9 +594,9 @@ class _AnimatedBubblyButtonState extends State<_AnimatedBubblyButton>
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Text(
               widget.text,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'Poppins',
-                color: appTextColor(context),
+                color: Colors.white,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -709,9 +709,9 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Text(
               widget.text,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'Poppins',
-                color: appTextColor(context),
+                color: Colors.white,
                 fontWeight: FontWeight.bold,
               ),
             ),
