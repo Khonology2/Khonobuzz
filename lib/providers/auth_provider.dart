@@ -10,7 +10,7 @@ import '../services/modules_ping_service.dart';
 class AuthProvider extends ChangeNotifier {
   static const String _fallbackBackendBaseUrl = String.fromEnvironment(
     'BACKEND_FALLBACK_URL',
-    defaultValue: 'https://khonobuzz-backend-ac0j.onrender.com',
+    defaultValue: '',
   );
 
   bool _isAuthenticated = false;
