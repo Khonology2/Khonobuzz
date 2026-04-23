@@ -8,6 +8,11 @@ import '../config/api_config.dart';
 import '../services/modules_ping_service.dart';
 
 class AuthProvider extends ChangeNotifier {
+  static const String _fallbackBackendBaseUrl = String.fromEnvironment(
+    'BACKEND_FALLBACK_URL',
+    defaultValue: 'https://khonobuzz-backend-ac0j.onrender.com',
+  );
+
   bool _isAuthenticated = false;
   String? _userEmail;
   String? _userRole; // New: To store the user's role
@@ -174,6 +179,34 @@ class AuthProvider extends ChangeNotifier {
       throw lastError;
     }
     throw Exception(lastError?.toString() ?? 'Request failed after retries');
+  }
+
+  List<Uri> _candidateAuthLoginUris() {
+    final primary = Uri.parse(ApiConfig.authLoginEndpoint);
+    final uris = <Uri>[primary];
+    if (_fallbackBackendBaseUrl.isNotEmpty) {
+      final fallback = Uri.parse(
+        '${_fallbackBackendBaseUrl.replaceAll(RegExp(r"/+$"), "")}/api/auth/login',
+      );
+      if (fallback.toString() != primary.toString()) {
+        uris.add(fallback);
+      }
+    }
+    return uris;
+  }
+
+  List<Uri> _candidateUserLookupUris(String email) {
+    final primary = Uri.parse(ApiConfig.userByEmailEndpoint(email));
+    final uris = <Uri>[primary];
+    if (_fallbackBackendBaseUrl.isNotEmpty) {
+      final fallback = Uri.parse(
+        '${_fallbackBackendBaseUrl.replaceAll(RegExp(r"/+$"), "")}/api/users/by-email?email=${Uri.encodeComponent(email)}',
+      );
+      if (fallback.toString() != primary.toString()) {
+        uris.add(fallback);
+      }
+    }
+    return uris;
   }
 
   Future<void> _loadAuthState() async {
@@ -404,7 +437,6 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> manualLogin(String email, {bool isSpecialAccess = false}) async {
     final normalizedEmail = email.trim().toLowerCase();
-    final url = Uri.parse(ApiConfig.authLoginEndpoint);
 
     // Clear previous user's profile and cache as soon as login is attempted so we never show their data
     _cachedProfileData = null;
@@ -425,13 +457,40 @@ class AuthProvider extends ChangeNotifier {
         headers['X-Session-Type'] = 'special';
       }
 
-      final response = await _postWithTimeoutAndRetry(
-        url,
-        headers: headers,
-        body: json.encode({'email': normalizedEmail}),
-        maxRetries: 1,
-        timeout: const Duration(seconds: 35),
-      );
+      http.Response? response;
+      Object? lastError;
+      const int rounds = 2;
+      for (int round = 1; round <= rounds && response == null; round++) {
+        for (final url in _candidateAuthLoginUris()) {
+          try {
+            debugPrint('[AuthProvider] Trying login endpoint (round $round/$rounds): $url');
+            final candidateResponse = await _postWithTimeoutAndRetry(
+              url,
+              headers: headers,
+              body: json.encode({'email': normalizedEmail}),
+              maxRetries: 1,
+              timeout: const Duration(seconds: 35),
+            );
+            if (candidateResponse.statusCode < 500) {
+              response = candidateResponse;
+              break;
+            }
+            lastError = Exception(
+              'status ${candidateResponse.statusCode} from $url',
+            );
+          } catch (e) {
+            lastError = e;
+            debugPrint('[AuthProvider] Login endpoint failed ($url): $e');
+            continue;
+          }
+        }
+        if (response == null && round < rounds) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+        }
+      }
+      if (response == null) {
+        throw Exception(lastError?.toString() ?? 'All login endpoints failed');
+      }
       final elapsed = DateTime.now().millisecondsSinceEpoch - start;
       debugPrint(
         '[AuthProvider] manualLogin response ${response.statusCode} in ${elapsed}ms',
@@ -674,14 +733,41 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> _attemptFallbackLogin(String email) async {
-    final userCheckUrl = Uri.parse(ApiConfig.userByEmailEndpoint(email));
     try {
-      // Render cold starts can exceed 30s; keep fallback resilient.
-      final userCheckResponse = await _getWithTimeoutAndRetry(
-        userCheckUrl,
-        maxRetries: 2,
-        timeout: const Duration(seconds: 45),
-      );
+      http.Response? userCheckResponse;
+      Object? lastError;
+      const int rounds = 2;
+      for (int round = 1; round <= rounds && userCheckResponse == null; round++) {
+        for (final userCheckUrl in _candidateUserLookupUris(email)) {
+          try {
+            debugPrint(
+              '[AuthProvider] Trying user lookup endpoint (round $round/$rounds): $userCheckUrl',
+            );
+            final candidateResponse = await _getWithTimeoutAndRetry(
+              userCheckUrl,
+              maxRetries: 2,
+              timeout: const Duration(seconds: 45),
+            );
+            if (candidateResponse.statusCode < 500) {
+              userCheckResponse = candidateResponse;
+              break;
+            }
+            lastError = Exception(
+              'status ${candidateResponse.statusCode} from $userCheckUrl',
+            );
+          } catch (e) {
+            lastError = e;
+            debugPrint('[AuthProvider] User lookup endpoint failed ($userCheckUrl): $e');
+            continue;
+          }
+        }
+        if (userCheckResponse == null && round < rounds) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+        }
+      }
+      if (userCheckResponse == null) {
+        throw Exception(lastError?.toString() ?? 'All user lookup endpoints failed');
+      }
 
       if (userCheckResponse.statusCode == 200) {
         final usersData = json.decode(userCheckResponse.body);
