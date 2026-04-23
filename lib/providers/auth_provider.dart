@@ -118,6 +118,64 @@ class AuthProvider extends ChangeNotifier {
     throw Exception(lastError?.toString() ?? 'Request failed after retries');
   }
 
+  Future<http.Response> _getWithTimeoutAndRetry(
+    Uri url, {
+    Map<String, String>? headers,
+    int maxRetries = 2,
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    http.Response? lastResponse;
+    Object? lastError;
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      final attemptStart = DateTime.now().millisecondsSinceEpoch;
+      try {
+        final response = await http
+            .get(url, headers: headers)
+            .timeout(
+              timeout,
+              onTimeout: () {
+                throw TimeoutException(
+                  'Request timed out after ${timeout.inSeconds} seconds.',
+                );
+              },
+            );
+        final elapsed = DateTime.now().millisecondsSinceEpoch - attemptStart;
+        debugPrint(
+          '[AuthProvider] GET ${url.path} attempt ${attempt + 1} '
+          'completed in ${elapsed}ms with status ${response.statusCode}',
+        );
+        lastResponse = response;
+        if (response.statusCode < 500) {
+          return response;
+        }
+      } on TimeoutException catch (e) {
+        lastError = e;
+        final elapsed = DateTime.now().millisecondsSinceEpoch - attemptStart;
+        debugPrint(
+          '[AuthProvider] GET ${url.path} attempt ${attempt + 1} '
+          'timed out after ${elapsed}ms: ${e.message}',
+        );
+      } catch (e) {
+        lastError = e;
+        final elapsed = DateTime.now().millisecondsSinceEpoch - attemptStart;
+        debugPrint(
+          '[AuthProvider] GET ${url.path} attempt ${attempt + 1} '
+          'failed after ${elapsed}ms: $e',
+        );
+      }
+      if (attempt < maxRetries) {
+        await Future.delayed(const Duration(milliseconds: 600));
+      }
+    }
+    if (lastResponse != null) {
+      return lastResponse;
+    }
+    if (lastError is TimeoutException) {
+      throw lastError;
+    }
+    throw Exception(lastError?.toString() ?? 'Request failed after retries');
+  }
+
   Future<void> _loadAuthState() async {
     final prefs = await SharedPreferences.getInstance();
     _isAuthenticated = prefs.getBool('isAuthenticated') ?? false;
@@ -618,14 +676,12 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> _attemptFallbackLogin(String email) async {
     final userCheckUrl = Uri.parse(ApiConfig.userByEmailEndpoint(email));
     try {
-      final userCheckResponse = await http
-          .get(userCheckUrl)
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () {
-              throw TimeoutException('Request timed out');
-            },
-          );
+      // Render cold starts can exceed 30s; keep fallback resilient.
+      final userCheckResponse = await _getWithTimeoutAndRetry(
+        userCheckUrl,
+        maxRetries: 2,
+        timeout: const Duration(seconds: 45),
+      );
 
       if (userCheckResponse.statusCode == 200) {
         final usersData = json.decode(userCheckResponse.body);
