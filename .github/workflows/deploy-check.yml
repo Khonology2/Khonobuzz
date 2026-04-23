@@ -13,7 +13,7 @@ name: deploy-check
 on:
   push:
     branches:
-      - khono-v2
+      - khono-v4  # This is the branch we want to deploy to Render. It should match the branch in the Render dashboard. 
       - main
   workflow_dispatch:
 
