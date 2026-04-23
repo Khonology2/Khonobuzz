@@ -5,6 +5,11 @@
 name: Auto Version Control Update
 
 on:
+  push:
+    branches:
+      - khono_v4
+      - khono-v4
+      - main
   workflow_dispatch:
     inputs:
       force_update:

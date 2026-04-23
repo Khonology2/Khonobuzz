@@ -4,6 +4,11 @@
 name: Generate Daily Commits
 
 on:
+  push:
+    branches:
+      - khono_v4
+      - khono-v4
+      - main
   schedule:
     - cron: '30 16 * * *'
   workflow_dispatch:
