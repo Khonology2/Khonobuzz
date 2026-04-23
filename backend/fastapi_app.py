@@ -10,6 +10,7 @@ import json
 import base64
 import time
 import re
+import asyncio
 from datetime import datetime
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
@@ -427,9 +428,17 @@ app = FastAPI(
 async def startup_warmup():
     start = time.time()
     try:
-        db.collection('users').limit(1).get()
+        # Keep startup non-blocking: Firestore can be slow on cold starts.
+        await asyncio.wait_for(
+            asyncio.to_thread(lambda: db.collection('users').limit(1).get()),
+            timeout=6.0,
+        )
         info_log(
             f"Startup warm-up Firestore users took {time.time() - start:.3f} seconds",
+        )
+    except asyncio.TimeoutError:
+        error_log(
+            "Startup warm-up timed out after 6s; continuing startup without blocking",
         )
     except Exception as e:
         error_log(f"Startup warm-up failed: {e}")
