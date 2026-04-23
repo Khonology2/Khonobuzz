@@ -591,15 +591,22 @@ async def get_version(request: Request):
             append_agent_debug_log(
                 "H3",
                 "backend/fastapi_app.py:458",
-                "Returning 404 because version.json was not found",
+                "version.json missing; returning safe fallback payload",
                 {
                     "path": str(path),
                 },
             )
             # endregion
-            resp = JSONResponse(status_code=404, content={"error": "version.json not found"})
-            resp.headers.update(_cors_headers_for_request(request))
-            return resp
+            fallback_payload = {
+                "version": "2026.03.AB1",
+                "last_feature_commit": "",
+                "feature_date": "",
+                "commit_count_since_feature": 1,
+            }
+            response = JSONResponse(content=fallback_payload)
+            response.headers["X-Version-Cache"] = "FALLBACK"
+            response.headers.update(_cors_headers_for_request(request))
+            return response
 
         now = time.time()
         mtime = path.stat().st_mtime
