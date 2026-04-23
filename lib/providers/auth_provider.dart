@@ -482,6 +482,14 @@ class AuthProvider extends ChangeNotifier {
         _schedulePostLoginWarmup();
 
         return true;
+      } else if (!isSpecialAccess && response.statusCode >= 500) {
+        final success = await _attemptFallbackLogin(email);
+        if (success) {
+          return true;
+        }
+        _isAuthenticated = false;
+        notifyListeners();
+        return false;
       } else if (!isSpecialAccess &&
           (response.statusCode == 403 ||
               response.statusCode == 404 ||
@@ -513,7 +521,12 @@ class AuthProvider extends ChangeNotifier {
           (e.toString().contains('SocketException') ||
               e.toString().contains('Failed host lookup') ||
               e.toString().contains('Connection refused') ||
-              e.toString().contains('timeout'))) {
+              e.toString().contains('timeout') ||
+              e.toString().contains('TimeoutException') ||
+              e.toString().contains('XMLHttpRequest error') ||
+              e.toString().contains('ClientException') ||
+              e.toString().contains('net::ERR_FAILED') ||
+              e.toString().contains('CORS'))) {
         final success = await _attemptFallbackLogin(email);
         if (success) {
           return true;
