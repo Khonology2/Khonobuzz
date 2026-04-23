@@ -9,6 +9,7 @@ import logging
 import json
 import base64
 import time
+import re
 from datetime import datetime
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
@@ -536,12 +537,25 @@ async def health_check():
 def _cors_headers_for_request(request: Request) -> dict:
     """Return CORS headers so browser allows the response (avoids net::ERR_FAILED 200)."""
     origin = request.headers.get("origin") or ""
-    if origin and (
-        origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1")
-    ):
+    if not origin:
+        return {}
+
+    allow_origin = False
+    if origin in cors_origins:
+        allow_origin = True
+    elif cors_origin_regex:
+        try:
+            allow_origin = re.match(cors_origin_regex, origin) is not None
+        except re.error:
+            allow_origin = False
+
+    if allow_origin:
         return {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Vary": "Origin",
         }
     return {}
 

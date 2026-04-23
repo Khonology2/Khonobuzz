@@ -52,7 +52,7 @@ class AuthProvider extends ChangeNotifier {
   static void warmUpBackendForLogin() {
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/health');
-      http.get(uri).timeout(const Duration(seconds: 5)).then((_) {}, onError: (_) {});
+      http.get(uri).timeout(const Duration(seconds: 20)).then((_) {}, onError: (_) {});
     } catch (_) {}
   }
 
@@ -372,7 +372,7 @@ class AuthProvider extends ChangeNotifier {
         headers: headers,
         body: json.encode({'email': normalizedEmail}),
         maxRetries: 1,
-        timeout: const Duration(seconds: 18),
+        timeout: const Duration(seconds: 35),
       );
       final elapsed = DateTime.now().millisecondsSinceEpoch - start;
       debugPrint(
