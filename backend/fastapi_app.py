@@ -84,6 +84,8 @@ def append_agent_debug_log(hypothesis_id: str, location: str, message: str, data
 
 LOGIN_CACHE_TTL_SECONDS = int(os.environ.get('LOGIN_CACHE_TTL_SECONDS', '600'))
 USER_CACHE: Dict[str, Dict[str, Any]] = {}
+LOGIN_QUERY_TIMEOUT_SECONDS = float(os.environ.get('LOGIN_QUERY_TIMEOUT_SECONDS', '8'))
+ONBOARDING_QUERY_TIMEOUT_SECONDS = float(os.environ.get('ONBOARDING_QUERY_TIMEOUT_SECONDS', '6'))
 
 # Cache for /api/version to avoid re-reading version.json on every request.
 # This is useful when the Flutter app (or multiple dev hot-reloads) call the endpoint repeatedly.
@@ -171,12 +173,15 @@ def _get_best_onboarding_record(user_id: str):
     Prefers canonical document id == user_id; otherwise best legacy record by recency.
     """
     canonical_ref = db.collection('onboarding').document(user_id)
-    canonical_doc = canonical_ref.get()
+    canonical_doc = canonical_ref.get(timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS)
     if canonical_doc.exists:
         return canonical_ref, (canonical_doc.to_dict() or {})
 
     docs = list(
-        db.collection('onboarding').where('user_id', '==', user_id).stream()
+        db.collection('onboarding')
+        .where('user_id', '==', user_id)
+        .limit(5)
+        .stream(timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS)
     )
     if not docs:
         return canonical_ref, {}
@@ -1832,7 +1837,10 @@ async def login_user(user_login: UserLogin, request: Request):
         else:
             try:
                 query = users_ref.where('email', '==', normalized_email).limit(1)
-                users = query.get()
+                users = await asyncio.wait_for(
+                    asyncio.to_thread(query.get, timeout=LOGIN_QUERY_TIMEOUT_SECONDS),
+                    timeout=LOGIN_QUERY_TIMEOUT_SECONDS + 1.0,
+                )
                 if users:
                     user_doc = users[0]
                     doc_data = user_doc.to_dict()
@@ -1847,23 +1855,17 @@ async def login_user(user_login: UserLogin, request: Request):
                         "expires_at": now + LOGIN_CACHE_TTL_SECONDS,
                     }
                     debug_log(f"Login cache populated for {normalized_email}")
-                else:
-                    # Case-insensitive fallback: user may be stored with mixed case
-                    for doc in users_ref.stream():
-                        doc_data = doc.to_dict() or {}
-                        doc_email = (doc_data.get('email') or '').strip()
-                        if doc_email.lower() == normalized_email:
-                            user_data = doc_data
-                            user_id = doc.id
-                            stored_email = doc_email
-                            USER_CACHE[cache_key] = {
-                                "user_data": user_data,
-                                "user_id": user_id,
-                                "stored_email": stored_email,
-                                "expires_at": now + LOGIN_CACHE_TTL_SECONDS,
-                            }
-                            debug_log(f"Login cache populated (case-insensitive) for {normalized_email}")
-                            break
+            except asyncio.TimeoutError:
+                user_lookup_end = time.time()
+                if not is_special_session:
+                    error_log(
+                        f"Firestore user lookup timed out for {normalized_email} "
+                        f"after {LOGIN_QUERY_TIMEOUT_SECONDS:.1f}s"
+                    )
+                return JSONResponse(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    content={"error": "Login service temporarily unavailable. Please try again."}
+                )
             except Exception as query_error:
                 user_lookup_end = time.time()
                 if not is_special_session:
@@ -1900,10 +1902,18 @@ async def login_user(user_login: UserLogin, request: Request):
         module_access_role = ""
         onboarding_lookup_start = time.time()
         try:
-            onboarding_ref, onboarding_data = _get_best_onboarding_record(user_id)
+            onboarding_ref, onboarding_data = await asyncio.wait_for(
+                asyncio.to_thread(_get_best_onboarding_record, user_id),
+                timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS + 1.0,
+            )
             module_access_role = (
                 onboarding_data.get('moduleAccessRole', '')
                 or user_data.get('moduleAccessRole', '')
+            )
+        except asyncio.TimeoutError:
+            error_log(
+                f"Onboarding lookup timed out for user {user_id} "
+                f"after {ONBOARDING_QUERY_TIMEOUT_SECONDS:.1f}s"
             )
         except Exception as onboarding_query_error:
             error_log(f"Failed to query onboarding collection: {onboarding_query_error}")
@@ -1998,7 +2008,10 @@ async def login_user(user_login: UserLogin, request: Request):
         if not is_special_session:
             try:
                 if onboarding_ref is None:
-                    onboarding_ref, onboarding_info = _get_best_onboarding_record(user_id)
+                    onboarding_ref, onboarding_info = await asyncio.wait_for(
+                        asyncio.to_thread(_get_best_onboarding_record, user_id),
+                        timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS + 1.0,
+                    )
                 else:
                     onboarding_info = onboarding_data or {}
                 existing_login_count = _safe_int(
