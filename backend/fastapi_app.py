@@ -443,11 +443,15 @@ async def startup_warmup():
     except Exception as e:
         error_log(f"Startup warm-up failed: {e}")
 cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
+PRIMARY_FRONTEND_URL = os.environ.get(
+    'FRONTEND_URL',
+    'https://khono-buzz-central-hub-web.onrender.com',
+).rstrip('/')
 PRODUCTION_BACKEND_URLS = [
     'https://khonobuzz-central-hub.onrender.com',
 ]
 PRODUCTION_FRONTEND_URLS = [
-    'https://khono-buzz-central-hub-web.onrender.com',
+    PRIMARY_FRONTEND_URL,
     'https://khonobuzz-web-app-llfi.onrender.com',
     'https://khonology-buzz-build.onrender.com',
 ]
@@ -492,10 +496,9 @@ else:
     info_log(
         f"CORS configured with {len(cors_origins)} origins from CORS_ORIGINS env var",
     )
-# Allow localhost with any port (prod and dev) so Flutter web dev works.
-# Also allow any Render subdomain so frontends deployed at custom URLs work.
-RENDER_ORIGIN_REGEX = r"https://[a-z0-9-]+\.onrender\.com"
-cors_origin_regex = "|".join([LOCALHOST_ORIGIN_REGEX, RENDER_ORIGIN_REGEX])
+# In production, pin CORS to explicit origins only.
+# In development, still allow localhost origins with arbitrary ports.
+cors_origin_regex = None if is_production else LOCALHOST_ORIGIN_REGEX
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -524,6 +527,14 @@ async def log_requests(request, call_next):
         info_log(
             f"← {request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)"
         )
+    return response
+
+
+@app.middleware("http")
+async def enforce_cors_headers(request, call_next):
+    """Ensure CORS headers are present for every cross-origin response."""
+    response = await call_next(request)
+    response.headers.update(_cors_headers_for_request(request))
     return response
 @app.get("/")
 async def root():
@@ -560,7 +571,9 @@ def _cors_headers_for_request(request: Request) -> dict:
 
     if allow_origin:
         return {
-            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Origin": (
+                PRIMARY_FRONTEND_URL if is_production else origin
+            ),
             "Access-Control-Allow-Credentials": "true",
             "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
             "Access-Control-Allow-Headers": "*",
