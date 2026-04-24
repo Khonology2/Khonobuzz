@@ -177,10 +177,9 @@ class _LandingScreenState extends State<LandingScreen> {
               ),
             ),
             Positioned(
-              left: 0,
-              right: 0,
-              bottom: 76,
-              child: Center(
+              left: 16,
+              bottom: 16,
+              child: SafeArea(
                 child: VersionControlWidget(
                   textColor: isLight ? Colors.black54 : Colors.white70,
                   hoverColor: isLight ? Colors.black : Colors.white,

@@ -206,6 +206,30 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
     Returns:
         credentials.Certificate object
     """
+    def _normalize_credential_dict(cred_dict: dict) -> dict:
+        """Normalize service account fields commonly mangled in env vars."""
+        normalized = dict(cred_dict)
+        private_key = normalized.get('private_key')
+        if isinstance(private_key, str) and private_key:
+            pk = private_key.strip()
+            # Remove accidental wrapping quotes from env editors.
+            if (pk.startswith('"') and pk.endswith('"')) or (
+                pk.startswith("'") and pk.endswith("'")
+            ):
+                pk = pk[1:-1]
+            # Convert escaped newlines to real newlines.
+            pk = pk.replace('\\r\\n', '\n').replace('\\n', '\n')
+            # Ensure header/footer start on their own lines.
+            pk = pk.replace(
+                "-----BEGIN PRIVATE KEY----- ",
+                "-----BEGIN PRIVATE KEY-----\n",
+            ).replace(
+                " -----END PRIVATE KEY-----",
+                "\n-----END PRIVATE KEY-----",
+            )
+            normalized['private_key'] = pk
+        return normalized
+
     json_env_var = f"{env_var_name}_JSON"
     json_str = os.environ.get(json_env_var)
     if json_str:
@@ -274,6 +298,7 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
                 missing_fields = [field for field in required_fields if field not in cred_dict]
                 if missing_fields:
                     raise ValueError(f"Missing required Firebase credential fields: {missing_fields}")
+                cred_dict = _normalize_credential_dict(cred_dict)
                 debug_log(f"Successfully loaded credentials from {json_env_var} (direct JSON)")
                 return credentials.Certificate(cred_dict)
             except json.JSONDecodeError as e:
@@ -283,6 +308,7 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
                 try:
                     json_str = base64.b64decode(json_str).decode('utf-8')
                     cred_dict = json.loads(json_str)
+                    cred_dict = _normalize_credential_dict(cred_dict)
                     debug_log(f"Successfully loaded credentials from {json_env_var} (base64 decoded)")
                     return credentials.Certificate(cred_dict)
                 except Exception as decode_error:
@@ -355,9 +381,12 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
 # Initialize PDH Firebase (optional)
 pdh_db = None
 try:
-    pdh_cred = load_firebase_credentials('PDH_FIREBASE_CREDENTIALS', 'pdh-fe6eb-firebase-adminsdk-fbsvc-6fbc402974.json')
+    pdh_cred = load_firebase_credentials('PDH_FIREBASE_CREDENTIALS', 'pdh-v2-firebase-adminsdk-fbsvc-24b03c7996.json')
     pdh_app = initialize_app(pdh_cred, name='pdhApp')
-    pdh_db = firestore.client(app=pdh_app)
+    candidate_pdh_db = firestore.client(app=pdh_app)
+    # Validate PDH credentials once up front; if invalid, disable PDH sync paths.
+    candidate_pdh_db.collection('_health').limit(1).get()
+    pdh_db = candidate_pdh_db
     info_log("PDH Firebase credentials loaded successfully")
 except Exception as e:
     error_log(f"Failed to initialize PDH Firebase (continuing without it): {e}")
@@ -412,7 +441,7 @@ class UserUpdate(BaseModel):
 class NameBody(BaseModel):
     name: str
 try:
-    main_cred = load_firebase_credentials('FIREBASE_CREDENTIALS', 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json')
+    main_cred = load_firebase_credentials('FIREBASE_CREDENTIALS', 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json')
     initialize_app(main_cred)
     db = firestore.client()
     info_log("Main Firebase credentials loaded successfully")
