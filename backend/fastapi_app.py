@@ -236,15 +236,24 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
         return normalized
 
     json_env_var = f"{env_var_name}_JSON"
-    json_str = os.environ.get(json_env_var)
-    if json_str:
-        if not json_str.strip():
-            error_log(f"{json_env_var} is set but EMPTY (only whitespace). Please set a valid JSON value.")
-            json_str = None
-        else:
-            debug_log(f"Checking for {json_env_var}: SET (length: {len(json_str)} chars)")
-    else:
+    literal_json_env_var = env_var_name
+    json_str = None
+    json_source_var = None
+    for candidate_var in (json_env_var, literal_json_env_var):
+        candidate_value = os.environ.get(candidate_var)
+        if candidate_value is None:
+            continue
+        if not candidate_value.strip():
+            error_log(f"{candidate_var} is set but EMPTY (only whitespace). Please set a valid JSON value.")
+            continue
+        json_str = candidate_value
+        json_source_var = candidate_var
+        debug_log(f"Checking for {candidate_var}: SET (length: {len(candidate_value)} chars)")
+        break
+
+    if not json_str:
         debug_log(f"Checking for {json_env_var}: NOT SET")
+        debug_log(f"Checking for {literal_json_env_var}: NOT SET")
         possible_vars = [
             json_env_var.upper(),
             json_env_var.lower(),
@@ -253,9 +262,13 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
             f"{env_var_name}_CREDENTIALS_JSON",
         ]
         for possible_var in possible_vars:
-            if possible_var != json_env_var and possible_var in os.environ:
-                debug_log(f"Found similar variable '{possible_var}' but looking for '{json_env_var}'")
-    if json_str:
+            if possible_var not in (json_env_var, literal_json_env_var) and possible_var in os.environ:
+                debug_log(
+                    f"Found similar variable '{possible_var}' but looking for "
+                    f"'{json_env_var}' or '{literal_json_env_var}'"
+                )
+
+    if json_str and json_source_var:
         try:
             json_str = json_str.strip()
             # Remove surrounding quotes if present
@@ -266,7 +279,7 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
             # Check for common formatting issues
             if json_str.startswith('"') and not json_str.startswith('{"'):
                 error_msg = (
-                    f"Invalid format in {json_env_var}. The value appears to have extra quotes.\n"
+                    f"Invalid format in {json_source_var}. The value appears to have extra quotes.\n"
                     f"Current format starts with: {json_str[:50]}...\n"
                     f"Expected format: {{\"type\":\"service_account\",...}}\n"
                     f"Solution: Remove surrounding quotes from the environment variable in Render."
@@ -276,9 +289,9 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
             # Additional check for malformed JSON that starts with quotes but not proper JSON
             if json_str.startswith('"') and '\n' in json_str:
                 error_msg = (
-                    f"Invalid format in {json_env_var}. The JSON appears to be quoted with newlines.\n"
+                    f"Invalid format in {json_source_var}. The JSON appears to be quoted with newlines.\n"
                     f"This usually happens when copying multi-line JSON into Render's environment variable field.\n"
-                    f"Solution: Use base64 encoding or ensure the JSON is on a single line without extra quotes.\n"
+                    f"Solution: Ensure the JSON is valid and without extra quotes.\n"
                     f"First 100 chars: {json_str[:100]}..."
                 )
                 raise ValueError(error_msg)
@@ -286,17 +299,17 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
             # Check if it looks like base64 (starts with base64 characters)
             import re
             if re.match(r'^[A-Za-z0-9+/]+={0,2}$', json_str.strip()) and len(json_str.strip()) > 50:
-                debug_log(f"{json_env_var} appears to be base64 encoded, attempting decode...")
+                debug_log(f"{json_source_var} appears to be base64 encoded, attempting decode...")
                 try:
                     json_str = base64.b64decode(json_str).decode('utf-8')
-                    debug_log(f"Successfully base64 decoded {json_env_var}")
+                    debug_log(f"Successfully base64 decoded {json_source_var}")
                 except Exception as decode_error:
-                    debug_log(f"Base64 decode failed for {json_env_var}: {decode_error}")
+                    debug_log(f"Base64 decode failed for {json_source_var}: {decode_error}")
                     # Continue with original string
             
-            debug_log(f"{json_env_var} value length: {len(json_str)} characters")
-            debug_log(f"{json_env_var} starts with: {json_str[:50]}...")
-            debug_log(f"{json_env_var} ends with: ...{json_str[-50:]}")
+            debug_log(f"{json_source_var} value length: {len(json_str)} characters")
+            debug_log(f"{json_source_var} starts with: {json_str[:50]}...")
+            debug_log(f"{json_source_var} ends with: ...{json_str[-50:]}")
             try:
                 cred_dict = json.loads(json_str)
                 required_fields = ['type', 'project_id', 'private_key', 'client_email']
@@ -304,22 +317,28 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
                 if missing_fields:
                     raise ValueError(f"Missing required Firebase credential fields: {missing_fields}")
                 cred_dict = _normalize_credential_dict(cred_dict)
-                debug_log(f"Successfully loaded credentials from {json_env_var} (direct JSON)")
+                info_log(
+                    f"Using {json_source_var} as credential source for {env_var_name}"
+                )
+                debug_log(f"Successfully loaded credentials from {json_source_var} (direct JSON)")
                 return credentials.Certificate(cred_dict)
             except json.JSONDecodeError as e:
-                error_log(f"JSON decode error for {json_env_var}: {str(e)}")
+                error_log(f"JSON decode error for {json_source_var}: {str(e)}")
                 error_log(f"Error at position {e.pos if hasattr(e, 'pos') else 'unknown'}")
-                debug_log(f"Direct JSON parse failed for {json_env_var}, trying base64 decode...")
+                debug_log(f"Direct JSON parse failed for {json_source_var}, trying base64 decode...")
                 try:
                     json_str = base64.b64decode(json_str).decode('utf-8')
                     cred_dict = json.loads(json_str)
                     cred_dict = _normalize_credential_dict(cred_dict)
-                    debug_log(f"Successfully loaded credentials from {json_env_var} (base64 decoded)")
+                    info_log(
+                        f"Using {json_source_var} as credential source for {env_var_name}"
+                    )
+                    debug_log(f"Successfully loaded credentials from {json_source_var} (base64 decoded)")
                     return credentials.Certificate(cred_dict)
                 except Exception as decode_error:
-                    error_log(f"Base64 decode failed for {json_env_var}: {decode_error}")
+                    error_log(f"Base64 decode failed for {json_source_var}: {decode_error}")
                     error_msg = (
-                        f"Invalid JSON format in {json_env_var}.\n"
+                        f"Invalid JSON format in {json_source_var}.\n"
                         f"JSON Parse Error: {str(e)}\n"
                         f"Make sure you copied the ENTIRE JSON content from your Firebase service account file.\n"
                         f"The value should start with '{{\"type\":\"service_account\"' and end with '}}'.\n"
@@ -330,13 +349,13 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
             except ValueError:
                 raise
             except Exception as e:
-                error_log(f"Unexpected error parsing {json_env_var}: {type(e).__name__}: {str(e)}")
+                error_log(f"Unexpected error parsing {json_source_var}: {type(e).__name__}: {str(e)}")
                 raise
         except (ValueError, json.JSONDecodeError) as e:
-            error_log(f"Failed to parse credentials from {json_env_var}: {e}")
+            error_log(f"Failed to parse credentials from {json_source_var}: {e}")
             raise
         except Exception as e:
-            error_log(f"Failed to load credentials from {json_env_var}: {e}")
+            error_log(f"Failed to load credentials from {json_source_var}: {e}")
     path_env_var = f"{env_var_name}_PATH"
     file_path = os.environ.get(path_env_var)
     debug_log(f"Checking for {path_env_var}: {'SET' if file_path else 'NOT SET'}")
