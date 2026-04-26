@@ -312,7 +312,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   ],
                                   buttonText: 'LAUNCH',
                                   url:
-                                      'https://recruitment-web-59qy.onrender.com/',
+                                      'https://recruitment-web-59qy.onrender.com/splash',
                                   moduleKey: 'recruitment',
                                 ),
                               );
