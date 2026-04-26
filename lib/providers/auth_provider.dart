@@ -1034,6 +1034,81 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Re-fetches the signed-in user’s module list from [ApiConfig.usersEndpoint].
+  /// Used while the Modules screen is open so adds/removals by an admin show up without logging out.
+  /// On request failure, keeps the current access if [preserveStateOnFailure] is true (default).
+  Future<void> refreshModuleAccessFromServer({
+    bool preserveStateOnFailure = true,
+  }) async {
+    if (_userEmail == null) {
+      return;
+    }
+    try {
+      final response = await http
+          .get(Uri.parse(ApiConfig.usersEndpoint))
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              throw Exception('Request timeout');
+            },
+          );
+
+      if (response.statusCode != 200) {
+        debugPrint(
+          '[AuthProvider] refreshModuleAccess: HTTP ${response.statusCode}',
+        );
+        if (!preserveStateOnFailure) {
+          _userModuleAccess = null;
+          notifyListeners();
+        }
+        return;
+      }
+
+      final usersData = json.decode(response.body) as Map<String, dynamic>;
+      final users = usersData['users'] as List<dynamic>? ?? [];
+
+      Map<String, dynamic>? foundUser;
+      for (final u in users) {
+        if (u is Map<String, dynamic> &&
+            u['email']?.toString().toLowerCase() == _userEmail!.toLowerCase()) {
+          foundUser = u;
+          break;
+        }
+      }
+
+      if (foundUser == null) {
+        debugPrint('[AuthProvider] refreshModuleAccess: user not in API list');
+        if (!preserveStateOnFailure) {
+          _userModuleAccess = null;
+          notifyListeners();
+        }
+        return;
+      }
+
+      final moduleAccessRaw = foundUser['moduleAccess'] as String?;
+      final moduleAccessRoleRaw = foundUser['moduleAccessRole'] as String?;
+      _userModuleAccess = _deriveModuleAccessFromRole(
+        moduleAccessRaw,
+        moduleAccessRoleRaw,
+      );
+      notifyListeners();
+      debugPrint('[AuthProvider] Module access refreshed from server (poll)');
+
+      final prefs = await SharedPreferences.getInstance();
+      if (_userModuleAccess != null && _userModuleAccess!.isNotEmpty) {
+        await prefs.setString('userModuleAccess', _userModuleAccess!);
+      } else {
+        await prefs.remove('userModuleAccess');
+      }
+    } catch (e) {
+      debugPrint('[AuthProvider] refreshModuleAccess: $e');
+      if (!preserveStateOnFailure) {
+        _userModuleAccess = null;
+        notifyListeners();
+      }
+    }
+  }
+
   // Check if user has specific module access
   // Supports both short names (PDH, Skills Heatmap) and full names (Personal Development Hub, Resource & Capacity Skills Heatmap)
   bool hasModuleAccess(String moduleName) {

@@ -31,16 +31,26 @@ class ModuleScreen extends StatefulWidget {
 class _ModuleScreenState extends State<ModuleScreen> {
   bool _isLoadingModuleAccess = false;
   final ScrollController _scrollController = ScrollController();
+  Timer? _moduleAccessPollTimer;
 
   @override
   void initState() {
     super.initState();
 
     _loadModuleAccess();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Pick up module changes from admins without logging out (matches admin refresh cadence).
+      _moduleAccessPollTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+        if (!mounted) return;
+        context.read<AuthProvider>().refreshModuleAccessFromServer();
+      });
+    });
   }
 
   @override
   void dispose() {
+    _moduleAccessPollTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
