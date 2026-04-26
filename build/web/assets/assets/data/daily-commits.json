@@ -1,13 +1,13 @@
 {
   "version": "2026.03.AB19",
-  "generated_at": "2026-04-25T11:50:02Z",
+  "generated_at": "2026-04-26T08:41:52Z",
   "commits": [
     {
       "author": "Nathi2266",
-      "message": "refactor: enhance load_firebase_credentials function for improved environment variable handling",
-      "timestamp": "2026-04-25T13:49:38+02:00"
+      "message": "feat: enhance entity management and onboarding functionality",
+      "timestamp": "2026-04-26T10:41:25+02:00"
     }
   ],
   "total_commits": 1,
-  "date_range": "2026-04-25"
+  "date_range": "2026-04-26"
 }
