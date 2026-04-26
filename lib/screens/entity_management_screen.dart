@@ -451,19 +451,34 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                 ),
               ),
             ),
-            OutlinedButton.icon(
-              onPressed: _showAddEntityDialog,
-              icon: const Icon(Icons.add),
-              label: const Text(
-                'Add Entity',
-                style: TextStyle(fontFamily: 'Poppins'),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.55),
-                ),
-              ),
+            Builder(
+              builder: (context) {
+                final isLight =
+                    Theme.of(context).brightness == Brightness.light;
+                return OutlinedButton.icon(
+                  onPressed: _showAddEntityDialog,
+                  icon: Icon(
+                    Icons.add,
+                    color: isLight ? Colors.black : Colors.white,
+                  ),
+                  label: Text(
+                    'Add Entity',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: isLight ? Colors.black : Colors.white,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor:
+                        isLight ? Colors.black : Colors.white,
+                    side: BorderSide(
+                      color: isLight
+                          ? Colors.black.withValues(alpha: 0.35)
+                          : Colors.white.withValues(alpha: 0.55),
+                    ),
+                  ),
+                );
+              },
             ),
             const SizedBox(width: 8),
             IconButton(

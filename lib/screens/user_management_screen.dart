@@ -2558,7 +2558,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     if (userProvider.users.isEmpty) {
       onProgress('Loading existing users...');
-      await userProvider.fetchUsers();
+      await userProvider.fetchUsers(forceRefresh: true);
     }
 
     final validEmails = <String>[];
@@ -2636,12 +2636,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
     }
 
-    if (successCount > 0) {
+      if (successCount > 0) {
       onProgress('Refreshing user list...');
 
       if (mounted) {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
-        await userProvider.fetchUsers();
+        await userProvider.fetchUsers(forceRefresh: true);
       }
     }
 
@@ -2976,7 +2976,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
       if (!skipRefresh && mounted) {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
-        await userProvider.fetchUsers();
+        await userProvider.fetchUsers(forceRefresh: true);
 
         if (mounted) {
           SoundSystem.playSuccess();
