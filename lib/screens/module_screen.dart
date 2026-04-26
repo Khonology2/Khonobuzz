@@ -311,8 +311,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Workflow',
                                   ],
                                   buttonText: 'LAUNCH',
-                                  url:
-                                      'https://recruitment-web-59qy.onrender.com/splash',
+                                  url: 'https://recruitment-web-59qy.onrender.com/',
                                   moduleKey: 'recruitment',
                                 ),
                               );
@@ -1044,10 +1043,27 @@ Future<void> _launchUrlFromContext(
       _moduleLaunchTokenCache[cacheKey] = fresh;
     }
 
-    Uri uri = Uri.parse(secureUrl);
-    final existingParams = Map<String, String>.from(uri.queryParameters);
-    existingParams['token'] = token;
-    uri = uri.replace(queryParameters: existingParams);
+    final Uri uri;
+    if (moduleKey == 'recruitment') {
+      // Hash-router SPA: .../#/splash?token=... (not /splash?token=... on the server path)
+      final base = Uri.parse(secureUrl);
+      final fragmentPath = Uri(
+        path: '/splash',
+        queryParameters: <String, String>{'token': token},
+      );
+      uri = Uri(
+        scheme: base.scheme,
+        host: base.host,
+        path: '/',
+        fragment: fragmentPath.toString(),
+      );
+    } else {
+      var built = Uri.parse(secureUrl);
+      final existingParams = Map<String, String>.from(built.queryParameters);
+      existingParams['token'] = token;
+      built = built.replace(queryParameters: existingParams);
+      uri = built;
+    }
 
     debugPrint('[ModuleLaunch] Launching URL for $moduleKey: $uri');
 
