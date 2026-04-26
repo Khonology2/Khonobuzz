@@ -225,11 +225,6 @@ class _MainScreenState extends State<MainScreen> {
     return role == 'admin';
   }
 
-  bool _isStaffOrAdmin() {
-    final role = context.read<AuthProvider>().userRole?.toLowerCase() ?? '';
-    return role == 'admin' || role == 'staff';
-  }
-
   // Check if screen index is Admin-only
   bool _isAdminOnlyScreen(int index) {
     // Indices 0 (User Management), 1 (Entity Management), and 2 (Module Access) are Admin-only
@@ -365,32 +360,6 @@ class _MainScreenState extends State<MainScreen> {
                         ],
                       ),
                     ),
-                    if (_isStaffOrAdmin())
-                      Positioned(
-                        right: 16,
-                        // Avoid overlap with UserManagementScreen add-user FAB.
-                        bottom: _selectedIndex == 0 ? 88 : 16,
-                        child: SafeArea(
-                          child: Consumer<ThemeModeProvider>(
-                            builder: (context, themeMode, _) {
-                              return FloatingActionButton.small(
-                                heroTag: 'khono_theme_toggle_fab',
-                                onPressed: () {
-                                  SoundSystem.playButtonClick();
-                                  themeMode.toggle();
-                                },
-                                backgroundColor: const Color(0xFFC10D00),
-                                child: Icon(
-                                  themeMode.isLight
-                                      ? Icons.dark_mode_rounded
-                                      : Icons.light_mode_rounded,
-                                  color: Colors.white,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),

@@ -169,4 +169,5 @@ class ApiConfig {
       '$baseUrl/api/onboarding/update-user/$userId';
   static String get departmentsEndpoint => '$baseUrl/api/departments';
   static String get designationsEndpoint => '$baseUrl/api/designations';
+  static String get entitiesEndpoint => '$baseUrl/api/entities';
 }

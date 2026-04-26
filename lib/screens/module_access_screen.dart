@@ -1,3 +1,5 @@
+// ignore_for_file: unused_import
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -1627,32 +1629,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ),
             ),
           ),
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: SafeArea(
-              child: Consumer<ThemeModeProvider>(
-                builder: (context, themeMode, _) {
-                  return FloatingActionButton(
-                    mini: true,
-                    shape: const CircleBorder(),
-                    heroTag: 'module_access_theme_toggle_fab',
-                    onPressed: () {
-                      SoundSystem.playButtonClick();
-                      themeMode.toggle();
-                    },
-                    backgroundColor: AppThemes.light.primaryColor,
-                    child: Icon(
-                      themeMode.isLight
-                          ? Icons.dark_mode_rounded
-                          : Icons.light_mode_rounded,
-                      color: appTextColor(context),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -3185,7 +3161,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFC10D00),
-                foregroundColor: appTextColor(context),
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),
@@ -3196,7 +3172,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(appTextColor(context)),
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
                   : Text(

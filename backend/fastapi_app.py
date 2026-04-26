@@ -1669,16 +1669,23 @@ async def delete_user(user_id: str):
 
 @app.get("/api/departments")
 async def list_departments():
-    """Return all department names from Firestore collection."""
+    """Return all department names from both Firestore collections."""
     try:
-        docs = db.collection("departments").stream()
         names = []
-        for doc in docs:
-            data = doc.to_dict() or {}
-            n = (data.get("name") or "").strip()
-            if n and n not in names:
-                names.append(n)
-        names.sort(key=str.lower)
+        for collection_name in ("departments", "department"):
+            docs = list(db.collection(collection_name).stream())
+            docs.sort(
+                key=lambda doc: (
+                    _coerce_datetime((doc.to_dict() or {}).get("created_at"))
+                    or datetime.min
+                ),
+                reverse=True,
+            )
+            for doc in docs:
+                data = doc.to_dict() or {}
+                n = (data.get("name") or "").strip()
+                if n and n not in names:
+                    names.append(n)
         return JSONResponse(status_code=200, content={"departments": names})
     except Exception as e:
         print(f"[ERROR] list_departments: {e}")
@@ -1687,7 +1694,7 @@ async def list_departments():
 
 @app.post("/api/departments")
 async def create_department(body: NameBody):
-    """Add a new department; store in Firestore collection. Returns updated list."""
+    """Add a new department to canonical collection. Returns merged updated list."""
     try:
         name = (body.name or "").strip()
         if not name:
@@ -1697,15 +1704,22 @@ async def create_department(body: NameBody):
         if next(existing, None) is not None:
             pass
         else:
-            coll.add({"name": name})
-        docs = coll.stream()
+            coll.add({"name": name, "created_at": datetime.utcnow()})
         names = []
-        for doc in docs:
-            data = doc.to_dict() or {}
-            n = (data.get("name") or "").strip()
-            if n and n not in names:
-                names.append(n)
-        names.sort(key=str.lower)
+        for collection_name in ("departments", "department"):
+            docs = list(db.collection(collection_name).stream())
+            docs.sort(
+                key=lambda doc: (
+                    _coerce_datetime((doc.to_dict() or {}).get("created_at"))
+                    or datetime.min
+                ),
+                reverse=True,
+            )
+            for doc in docs:
+                data = doc.to_dict() or {}
+                n = (data.get("name") or "").strip()
+                if n and n not in names:
+                    names.append(n)
         return JSONResponse(status_code=201, content={"departments": names})
     except HTTPException:
         raise
@@ -1716,19 +1730,87 @@ async def create_department(body: NameBody):
 
 @app.get("/api/designations")
 async def list_designations():
-    """Return all designation names from Firestore collection."""
+    """Return all designation names with newest created options first."""
     try:
-        docs = db.collection("designations").stream()
         names = []
-        for doc in docs:
+        for collection_name in ("designations", "designation"):
+            docs = list(db.collection(collection_name).stream())
+            docs.sort(
+                key=lambda doc: (
+                    _coerce_datetime((doc.to_dict() or {}).get("created_at"))
+                    or datetime.min
+                ),
+                reverse=True,
+            )
+            for doc in docs:
+                data = doc.to_dict() or {}
+                n = (data.get("name") or "").strip()
+                if n and n not in names:
+                    names.append(n)
+        return JSONResponse(status_code=200, content={"designations": names})
+    except Exception as e:
+        print(f"[ERROR] list_designations: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/entities")
+async def list_entities():
+    """Return all entity names from entities collection plus assigned users."""
+    try:
+        names = []
+
+        # Canonical entity options collection.
+        for doc in db.collection("entities").stream():
             data = doc.to_dict() or {}
             n = (data.get("name") or "").strip()
             if n and n not in names:
                 names.append(n)
+
+        # Include already-assigned entity values so legacy data stays selectable.
+        for doc in db.collection("users").stream():
+            data = doc.to_dict() or {}
+            n = (data.get("entity") or "").strip()
+            if n and n not in names:
+                names.append(n)
+
         names.sort(key=str.lower)
-        return JSONResponse(status_code=200, content={"designations": names})
+        return JSONResponse(status_code=200, content={"entities": names})
     except Exception as e:
-        print(f"[ERROR] list_designations: {e}")
+        print(f"[ERROR] list_entities: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/api/entities")
+async def create_entity(body: NameBody):
+    """Add a new entity in canonical entities collection. Returns updated list."""
+    try:
+        name = (body.name or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="name is required")
+
+        coll = db.collection("entities")
+        existing = coll.where("name", "==", name).limit(1).stream()
+        if next(existing, None) is None:
+            coll.add({"name": name})
+
+        names = []
+        for doc in coll.stream():
+            data = doc.to_dict() or {}
+            n = (data.get("name") or "").strip()
+            if n and n not in names:
+                names.append(n)
+        for doc in db.collection("users").stream():
+            data = doc.to_dict() or {}
+            n = (data.get("entity") or "").strip()
+            if n and n not in names:
+                names.append(n)
+
+        names.sort(key=str.lower)
+        return JSONResponse(status_code=201, content={"entities": names})
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] create_entity: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -1744,15 +1826,22 @@ async def create_designation(body: NameBody):
         if next(existing, None) is not None:
             pass
         else:
-            coll.add({"name": name})
-        docs = coll.stream()
+            coll.add({"name": name, "created_at": datetime.utcnow()})
         names = []
-        for doc in docs:
-            data = doc.to_dict() or {}
-            n = (data.get("name") or "").strip()
-            if n and n not in names:
-                names.append(n)
-        names.sort(key=str.lower)
+        for collection_name in ("designations", "designation"):
+            docs = list(db.collection(collection_name).stream())
+            docs.sort(
+                key=lambda doc: (
+                    _coerce_datetime((doc.to_dict() or {}).get("created_at"))
+                    or datetime.min
+                ),
+                reverse=True,
+            )
+            for doc in docs:
+                data = doc.to_dict() or {}
+                n = (data.get("name") or "").strip()
+                if n and n not in names:
+                    names.append(n)
         return JSONResponse(status_code=201, content={"designations": names})
     except HTTPException:
         raise
