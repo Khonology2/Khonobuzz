@@ -32,6 +32,7 @@ const String _kAddNewDesignation = '__add_new_designation__';
 const String _kAllFilterOption = '__all_filter_option__';
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
+  static const Color _filterPopupDarkBg = Color(0xFF3D3F40);
   static final Color userMgmtDarkWidgetBg = Color.alphaBlend(
     Colors.white.withValues(alpha: 0.10),
     const Color(0xFF3D3F40).withValues(alpha: 0.40),
@@ -819,6 +820,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final Color widgetBg = isDark
         ? userMgmtDarkWidgetBg
         : Colors.white.withValues(alpha: 0.40);
+    final Color popupBg = isDark ? _filterPopupDarkBg : Colors.white;
     return Column(
       children: [
         Row(
@@ -846,7 +848,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         fontSize: 12.0,
                       ),
                     ),
-                    dropdownColor: widgetBg,
+                    dropdownColor: popupBg,
                     style: TextStyle(
                       color: appTextColor(context),
                       fontFamily: 'Poppins',
@@ -863,9 +865,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       });
                     },
                     items: [
-                      const DropdownMenuItem<String>(
+                      DropdownMenuItem<String>(
                         value: null,
-                        child: Text('All Statuses'),
+                        child: Text(
+                          'All Statuses',
+                          style: TextStyle(
+                            color: appTextColor(context),
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
                       ..._availableStatuses.map<DropdownMenuItem<String>>((
                         String value,
@@ -1029,9 +1038,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       context: context,
       builder: (dialogContext) {
         final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final widgetBg = isDark
-            ? userMgmtDarkWidgetBg
-            : Colors.white.withValues(alpha: 0.40);
+        final dialogBg = isDark ? _filterPopupDarkBg : Colors.white;
         return StatefulBuilder(
           builder: (context, setDialogState) {
             final filtered = options
@@ -1048,7 +1055,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             ];
             final visibleItems = rows.length < 10 ? rows.length : 10;
             return AlertDialog(
-              backgroundColor: widgetBg,
+              backgroundColor: dialogBg,
               title: Text(
                 title,
                 style: TextStyle(
@@ -1080,7 +1087,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           color: appTextColor(dialogContext),
                         ),
                         filled: true,
-                        fillColor: widgetBg,
+                        fillColor: dialogBg,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -2551,7 +2558,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     if (userProvider.users.isEmpty) {
       onProgress('Loading existing users...');
-      await userProvider.fetchUsers();
+      await userProvider.fetchUsers(forceRefresh: true);
     }
 
     final validEmails = <String>[];
@@ -2629,12 +2636,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
     }
 
-    if (successCount > 0) {
+      if (successCount > 0) {
       onProgress('Refreshing user list...');
 
       if (mounted) {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
-        await userProvider.fetchUsers();
+        await userProvider.fetchUsers(forceRefresh: true);
       }
     }
 
@@ -2969,7 +2976,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
       if (!skipRefresh && mounted) {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
-        await userProvider.fetchUsers();
+        await userProvider.fetchUsers(forceRefresh: true);
 
         if (mounted) {
           SoundSystem.playSuccess();

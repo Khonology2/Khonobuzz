@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../providers/theme_mode_provider.dart';
 import '../services/sound_system.dart';
 import 'auth_screen.dart';
+import 'learn_more_screen.dart';
 import '../theme/app_backgrounds.dart';
 import '../theme/app_themes.dart';
 import '../widgets/version_control_widget.dart';
@@ -149,21 +150,47 @@ class _LandingScreenState extends State<LandingScreen> {
                     ),
                   ),
                   const SizedBox(height: 50),
-                  Semantics(
-                    label: 'GET STARTED',
-                    button: true,
-                    child: _buildLoginButton(
-                      text: 'GET STARTED',
-                      color: const Color(0xFFC10D00),
-                      onPressed: () {
-                        AuthProvider.warmUpBackendForLogin();
-                        _pingBackend();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const AuthScreen(),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Semantics(
+                          label: 'GET STARTED',
+                          button: true,
+                          child: _buildLoginButton(
+                            text: 'GET STARTED',
+                            color: const Color(0xFFC10D00),
+                            onPressed: () {
+                              AuthProvider.warmUpBackendForLogin();
+                              _pingBackend();
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const AuthScreen(),
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
+                        ),
+                        const SizedBox(height: 16),
+                        Semantics(
+                          label: 'LEARN MORE',
+                          button: true,
+                          child: _buildThemeSecondaryPillButton(
+                            text: 'LEARN MORE',
+                            isLight: isLight,
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const LearnMoreScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 48),
@@ -177,10 +204,9 @@ class _LandingScreenState extends State<LandingScreen> {
               ),
             ),
             Positioned(
-              left: 0,
-              right: 0,
-              bottom: 76,
-              child: Center(
+              left: 16,
+              bottom: 16,
+              child: SafeArea(
                 child: VersionControlWidget(
                   textColor: isLight ? Colors.black54 : Colors.white70,
                   hoverColor: isLight ? Colors.black : Colors.white,
@@ -214,6 +240,38 @@ class _LandingScreenState extends State<LandingScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Filled pill that inverts with theme (black/white) — pairs with the brand red [GET STARTED] button.
+  Widget _buildThemeSecondaryPillButton({
+    required String text,
+    required bool isLight,
+    required VoidCallback onPressed,
+  }) {
+    final bg = isLight ? Colors.black : Colors.white;
+    final fg = isLight ? Colors.white : Colors.black;
+    return Container(
+      width: 250,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(50.0),
+      ),
+      child: MaterialButton(
+        onPressed: () {
+          SoundSystem.playButtonClick();
+          onPressed();
+        },
+        padding: const EdgeInsets.symmetric(vertical: 16.0),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            color: fg,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );

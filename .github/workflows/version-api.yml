@@ -2,6 +2,10 @@ name: Version Control API
 
 on:
   push:
+    branches:
+      - khono_v4
+      - khono-v4
+      - main
   workflow_dispatch:
 
 jobs:

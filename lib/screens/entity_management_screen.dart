@@ -1,3 +1,5 @@
+// ignore_for_file: unused_import
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -29,6 +31,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<String> _entityOptions = ['Khonology Internal'];
   static const String _notAssignedValue = 'Not Assigned';
+  static const Color _popupDarkBg = Color(0xFF3D3F40);
   static final Color entityDarkWidgetBg = Color.alphaBlend(
     Colors.white.withValues(alpha: 0.10),
     const Color(0xFF3D3F40).withValues(alpha: 0.40),
@@ -78,6 +81,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     if (userProvider.hasCachedData) {
       userProvider.refreshUsersInBackground();
     }
+    unawaited(_loadEntityOptions());
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -121,6 +125,134 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         backgroundColor: Color(0xFFC10D00),
       ),
     );
+  }
+
+  Future<void> _loadEntityOptions() async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse(ApiConfig.entitiesEndpoint),
+            headers: {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 12));
+      if (response.statusCode != 200) return;
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final entities = (decoded['entities'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      if (!mounted) return;
+      setState(() {
+        _entityOptions
+          ..clear()
+          ..addAll(entities.isNotEmpty ? entities : ['Khonology Internal']);
+      });
+    } catch (_) {
+      // Keep existing options silently if API is unavailable.
+    }
+  }
+
+  Future<void> _showAddEntityDialog() async {
+    final controller = TextEditingController();
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color dialogBg = isDark ? _popupDarkBg : Colors.white;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: dialogBg,
+          title: Text(
+            'Add new entity',
+            style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
+          ),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
+            decoration: InputDecoration(
+              labelText: 'Entity name',
+              labelStyle: TextStyle(color: appTextColor(context)),
+            ),
+            onSubmitted: (v) => Navigator.of(dialogContext).pop(v.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                SoundSystem.playButtonClick();
+                Navigator.of(dialogContext).pop();
+              },
+              child: Text('Cancel', style: TextStyle(color: appTextColor(context))),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                SoundSystem.playButtonClick();
+                Navigator.of(dialogContext).pop(controller.text.trim());
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFC10D00),
+              ),
+              child: const Text('Add', style: TextStyle(fontFamily: 'Poppins')),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+
+    final entityName = result?.trim() ?? '';
+    if (entityName.isEmpty) return;
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse(ApiConfig.entitiesEndpoint),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'name': entityName}),
+          )
+          .timeout(const Duration(seconds: 12));
+      if (response.statusCode != 201 && response.statusCode != 200) {
+        throw Exception('Failed to add entity');
+      }
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final entities = (decoded['entities'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      if (!mounted) return;
+      setState(() {
+        _entityOptions
+          ..clear()
+          ..addAll(entities.isNotEmpty ? entities : ['Khonology Internal']);
+      });
+      SoundSystem.playSuccess();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Entity "$entityName" added successfully.',
+            style: const TextStyle(fontFamily: 'Poppins'),
+          ),
+          backgroundColor: const Color(0xFFC10D00),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      SoundSystem.playError();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Failed to add entity. Please try again.',
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+    }
   }
 
   @override
@@ -296,32 +428,6 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
               ),
             ),
           ),
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: SafeArea(
-              child: Consumer<ThemeModeProvider>(
-                builder: (context, themeMode, _) {
-                  return FloatingActionButton(
-                    mini: true,
-                    shape: const CircleBorder(),
-                    heroTag: 'entity_management_theme_toggle_fab',
-                    onPressed: () {
-                      SoundSystem.playButtonClick();
-                      themeMode.toggle();
-                    },
-                    backgroundColor: AppThemes.light.primaryColor,
-                    child: Icon(
-                      themeMode.isLight
-                          ? Icons.dark_mode_rounded
-                          : Icons.light_mode_rounded,
-                      color: appTextColor(context),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -345,6 +451,36 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                 ),
               ),
             ),
+            Builder(
+              builder: (context) {
+                final isLight =
+                    Theme.of(context).brightness == Brightness.light;
+                return OutlinedButton.icon(
+                  onPressed: _showAddEntityDialog,
+                  icon: Icon(
+                    Icons.add,
+                    color: isLight ? Colors.black : Colors.white,
+                  ),
+                  label: Text(
+                    'Add Entity',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: isLight ? Colors.black : Colors.white,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor:
+                        isLight ? Colors.black : Colors.white,
+                    side: BorderSide(
+                      color: isLight
+                          ? Colors.black.withValues(alpha: 0.35)
+                          : Colors.white.withValues(alpha: 0.55),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 8),
             IconButton(
               tooltip: 'Refresh users',
               onPressed: userProvider.isLoading ? null : _refreshUsers,
@@ -458,7 +594,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
               const SizedBox(height: 16.0),
               Text(
                 userProvider.errorMessage ??
-                    'Failed to load users. The server may be waking up.',
+                    'Failed to load users. please try again later.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: appTextColor(context),
@@ -727,6 +863,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     final Color panelBg = isDark
         ? entityDarkWidgetBg
         : Colors.white.withValues(alpha: 0.40);
+    final Color popupBg = isDark ? _popupDarkBg : Colors.white;
     final Color dividerColor = appTextColor(context).withValues(
       alpha: isDark ? 0.22 : 0.30,
     );
@@ -783,7 +920,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
               child: DropdownButton<String?>(
                 value: selectedEntity,
                 isExpanded: true,
-                dropdownColor: panelBg,
+                dropdownColor: popupBg,
                 icon: Icon(Icons.arrow_drop_down, color: appTextColor(context)),
                 style: TextStyle(
                   color: appTextColor(context),

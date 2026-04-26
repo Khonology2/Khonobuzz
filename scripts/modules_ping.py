@@ -28,6 +28,7 @@ from typing import Iterable, List, Optional, Tuple
 DEFAULT_URLS: Tuple[str, ...] = (
     "https://resource-capacity-backend.onrender.com",
     "https://personal-development-backend.onrender.com",
+    "https://recruitment-api-zovg.onrender.com",
 )
 
 # Paths tried per base URL (first 2xx wins for that base)

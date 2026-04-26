@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from fastapi import status
 from fastapi import HTTPException
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable
 from pathlib import Path
 import jwt
 try:
@@ -84,6 +84,8 @@ def append_agent_debug_log(hypothesis_id: str, location: str, message: str, data
 
 LOGIN_CACHE_TTL_SECONDS = int(os.environ.get('LOGIN_CACHE_TTL_SECONDS', '600'))
 USER_CACHE: Dict[str, Dict[str, Any]] = {}
+LOGIN_QUERY_TIMEOUT_SECONDS = float(os.environ.get('LOGIN_QUERY_TIMEOUT_SECONDS', '8'))
+ONBOARDING_QUERY_TIMEOUT_SECONDS = float(os.environ.get('ONBOARDING_QUERY_TIMEOUT_SECONDS', '6'))
 
 # Cache for /api/version to avoid re-reading version.json on every request.
 # This is useful when the Flutter app (or multiple dev hot-reloads) call the endpoint repeatedly.
@@ -171,12 +173,15 @@ def _get_best_onboarding_record(user_id: str):
     Prefers canonical document id == user_id; otherwise best legacy record by recency.
     """
     canonical_ref = db.collection('onboarding').document(user_id)
-    canonical_doc = canonical_ref.get()
+    canonical_doc = canonical_ref.get(timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS)
     if canonical_doc.exists:
         return canonical_ref, (canonical_doc.to_dict() or {})
 
     docs = list(
-        db.collection('onboarding').where('user_id', '==', user_id).stream()
+        db.collection('onboarding')
+        .where('user_id', '==', user_id)
+        .limit(5)
+        .stream(timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS)
     )
     if not docs:
         return canonical_ref, {}
@@ -206,16 +211,49 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
     Returns:
         credentials.Certificate object
     """
+    def _normalize_credential_dict(cred_dict: dict) -> dict:
+        """Normalize service account fields commonly mangled in env vars."""
+        normalized = dict(cred_dict)
+        private_key = normalized.get('private_key')
+        if isinstance(private_key, str) and private_key:
+            pk = private_key.strip()
+            # Remove accidental wrapping quotes from env editors.
+            if (pk.startswith('"') and pk.endswith('"')) or (
+                pk.startswith("'") and pk.endswith("'")
+            ):
+                pk = pk[1:-1]
+            # Convert escaped newlines to real newlines.
+            pk = pk.replace('\\r\\n', '\n').replace('\\n', '\n')
+            # Ensure header/footer start on their own lines.
+            pk = pk.replace(
+                "-----BEGIN PRIVATE KEY----- ",
+                "-----BEGIN PRIVATE KEY-----\n",
+            ).replace(
+                " -----END PRIVATE KEY-----",
+                "\n-----END PRIVATE KEY-----",
+            )
+            normalized['private_key'] = pk
+        return normalized
+
     json_env_var = f"{env_var_name}_JSON"
-    json_str = os.environ.get(json_env_var)
-    if json_str:
-        if not json_str.strip():
-            error_log(f"{json_env_var} is set but EMPTY (only whitespace). Please set a valid JSON value.")
-            json_str = None
-        else:
-            debug_log(f"Checking for {json_env_var}: SET (length: {len(json_str)} chars)")
-    else:
+    literal_json_env_var = env_var_name
+    json_str = None
+    json_source_var = None
+    for candidate_var in (json_env_var, literal_json_env_var):
+        candidate_value = os.environ.get(candidate_var)
+        if candidate_value is None:
+            continue
+        if not candidate_value.strip():
+            error_log(f"{candidate_var} is set but EMPTY (only whitespace). Please set a valid JSON value.")
+            continue
+        json_str = candidate_value
+        json_source_var = candidate_var
+        debug_log(f"Checking for {candidate_var}: SET (length: {len(candidate_value)} chars)")
+        break
+
+    if not json_str:
         debug_log(f"Checking for {json_env_var}: NOT SET")
+        debug_log(f"Checking for {literal_json_env_var}: NOT SET")
         possible_vars = [
             json_env_var.upper(),
             json_env_var.lower(),
@@ -224,9 +262,13 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
             f"{env_var_name}_CREDENTIALS_JSON",
         ]
         for possible_var in possible_vars:
-            if possible_var != json_env_var and possible_var in os.environ:
-                debug_log(f"Found similar variable '{possible_var}' but looking for '{json_env_var}'")
-    if json_str:
+            if possible_var not in (json_env_var, literal_json_env_var) and possible_var in os.environ:
+                debug_log(
+                    f"Found similar variable '{possible_var}' but looking for "
+                    f"'{json_env_var}' or '{literal_json_env_var}'"
+                )
+
+    if json_str and json_source_var:
         try:
             json_str = json_str.strip()
             # Remove surrounding quotes if present
@@ -237,7 +279,7 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
             # Check for common formatting issues
             if json_str.startswith('"') and not json_str.startswith('{"'):
                 error_msg = (
-                    f"Invalid format in {json_env_var}. The value appears to have extra quotes.\n"
+                    f"Invalid format in {json_source_var}. The value appears to have extra quotes.\n"
                     f"Current format starts with: {json_str[:50]}...\n"
                     f"Expected format: {{\"type\":\"service_account\",...}}\n"
                     f"Solution: Remove surrounding quotes from the environment variable in Render."
@@ -247,9 +289,9 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
             # Additional check for malformed JSON that starts with quotes but not proper JSON
             if json_str.startswith('"') and '\n' in json_str:
                 error_msg = (
-                    f"Invalid format in {json_env_var}. The JSON appears to be quoted with newlines.\n"
+                    f"Invalid format in {json_source_var}. The JSON appears to be quoted with newlines.\n"
                     f"This usually happens when copying multi-line JSON into Render's environment variable field.\n"
-                    f"Solution: Use base64 encoding or ensure the JSON is on a single line without extra quotes.\n"
+                    f"Solution: Ensure the JSON is valid and without extra quotes.\n"
                     f"First 100 chars: {json_str[:100]}..."
                 )
                 raise ValueError(error_msg)
@@ -257,38 +299,46 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
             # Check if it looks like base64 (starts with base64 characters)
             import re
             if re.match(r'^[A-Za-z0-9+/]+={0,2}$', json_str.strip()) and len(json_str.strip()) > 50:
-                debug_log(f"{json_env_var} appears to be base64 encoded, attempting decode...")
+                debug_log(f"{json_source_var} appears to be base64 encoded, attempting decode...")
                 try:
                     json_str = base64.b64decode(json_str).decode('utf-8')
-                    debug_log(f"Successfully base64 decoded {json_env_var}")
+                    debug_log(f"Successfully base64 decoded {json_source_var}")
                 except Exception as decode_error:
-                    debug_log(f"Base64 decode failed for {json_env_var}: {decode_error}")
+                    debug_log(f"Base64 decode failed for {json_source_var}: {decode_error}")
                     # Continue with original string
             
-            debug_log(f"{json_env_var} value length: {len(json_str)} characters")
-            debug_log(f"{json_env_var} starts with: {json_str[:50]}...")
-            debug_log(f"{json_env_var} ends with: ...{json_str[-50:]}")
+            debug_log(f"{json_source_var} value length: {len(json_str)} characters")
+            debug_log(f"{json_source_var} starts with: {json_str[:50]}...")
+            debug_log(f"{json_source_var} ends with: ...{json_str[-50:]}")
             try:
                 cred_dict = json.loads(json_str)
                 required_fields = ['type', 'project_id', 'private_key', 'client_email']
                 missing_fields = [field for field in required_fields if field not in cred_dict]
                 if missing_fields:
                     raise ValueError(f"Missing required Firebase credential fields: {missing_fields}")
-                debug_log(f"Successfully loaded credentials from {json_env_var} (direct JSON)")
+                cred_dict = _normalize_credential_dict(cred_dict)
+                info_log(
+                    f"Using {json_source_var} as credential source for {env_var_name}"
+                )
+                debug_log(f"Successfully loaded credentials from {json_source_var} (direct JSON)")
                 return credentials.Certificate(cred_dict)
             except json.JSONDecodeError as e:
-                error_log(f"JSON decode error for {json_env_var}: {str(e)}")
+                error_log(f"JSON decode error for {json_source_var}: {str(e)}")
                 error_log(f"Error at position {e.pos if hasattr(e, 'pos') else 'unknown'}")
-                debug_log(f"Direct JSON parse failed for {json_env_var}, trying base64 decode...")
+                debug_log(f"Direct JSON parse failed for {json_source_var}, trying base64 decode...")
                 try:
                     json_str = base64.b64decode(json_str).decode('utf-8')
                     cred_dict = json.loads(json_str)
-                    debug_log(f"Successfully loaded credentials from {json_env_var} (base64 decoded)")
+                    cred_dict = _normalize_credential_dict(cred_dict)
+                    info_log(
+                        f"Using {json_source_var} as credential source for {env_var_name}"
+                    )
+                    debug_log(f"Successfully loaded credentials from {json_source_var} (base64 decoded)")
                     return credentials.Certificate(cred_dict)
                 except Exception as decode_error:
-                    error_log(f"Base64 decode failed for {json_env_var}: {decode_error}")
+                    error_log(f"Base64 decode failed for {json_source_var}: {decode_error}")
                     error_msg = (
-                        f"Invalid JSON format in {json_env_var}.\n"
+                        f"Invalid JSON format in {json_source_var}.\n"
                         f"JSON Parse Error: {str(e)}\n"
                         f"Make sure you copied the ENTIRE JSON content from your Firebase service account file.\n"
                         f"The value should start with '{{\"type\":\"service_account\"' and end with '}}'.\n"
@@ -299,13 +349,13 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
             except ValueError:
                 raise
             except Exception as e:
-                error_log(f"Unexpected error parsing {json_env_var}: {type(e).__name__}: {str(e)}")
+                error_log(f"Unexpected error parsing {json_source_var}: {type(e).__name__}: {str(e)}")
                 raise
         except (ValueError, json.JSONDecodeError) as e:
-            error_log(f"Failed to parse credentials from {json_env_var}: {e}")
+            error_log(f"Failed to parse credentials from {json_source_var}: {e}")
             raise
         except Exception as e:
-            error_log(f"Failed to load credentials from {json_env_var}: {e}")
+            error_log(f"Failed to load credentials from {json_source_var}: {e}")
     path_env_var = f"{env_var_name}_PATH"
     file_path = os.environ.get(path_env_var)
     debug_log(f"Checking for {path_env_var}: {'SET' if file_path else 'NOT SET'}")
@@ -355,13 +405,41 @@ def load_firebase_credentials(env_var_name: str, default_path: str):
 # Initialize PDH Firebase (optional)
 pdh_db = None
 try:
-    pdh_cred = load_firebase_credentials('PDH_FIREBASE_CREDENTIALS', 'pdh-fe6eb-firebase-adminsdk-fbsvc-6fbc402974.json')
+    pdh_cred = load_firebase_credentials('PDH_FIREBASE_CREDENTIALS', 'pdh-v2-firebase-adminsdk-fbsvc-24b03c7996.json')
     pdh_app = initialize_app(pdh_cred, name='pdhApp')
-    pdh_db = firestore.client(app=pdh_app)
+    candidate_pdh_db = firestore.client(app=pdh_app)
+    # Validate PDH credentials once up front; if invalid, disable PDH sync paths.
+    candidate_pdh_db.collection('_health').limit(1).get()
+    pdh_db = candidate_pdh_db
     info_log("PDH Firebase credentials loaded successfully")
 except Exception as e:
     error_log(f"Failed to initialize PDH Firebase (continuing without it): {e}")
     info_log("Backend will continue without PDH Firebase functionality")
+
+
+def _run_with_pdh_db(action_label: str, operation: Callable[[Any], None]) -> bool:
+    """Run a PDH operation and disable PDH after first auth failure."""
+    global pdh_db
+    if pdh_db is None:
+        return False
+    try:
+        operation(pdh_db)
+        return True
+    except Exception as e:
+        msg = str(e).lower()
+        auth_failure = (
+            e.__class__.__name__ == "RefreshError"
+            or "invalid_grant" in msg
+            or "invalid jwt signature" in msg
+        )
+        if auth_failure:
+            error_log(
+                f"PDH auth failed during {action_label}; disabling PDH sync for this process: {e}"
+            )
+            pdh_db = None
+        else:
+            error_log(f"PDH operation failed during {action_label}: {e}")
+        return False
 
 from fastapi import Body
 class UserRegister(BaseModel):
@@ -412,7 +490,7 @@ class UserUpdate(BaseModel):
 class NameBody(BaseModel):
     name: str
 try:
-    main_cred = load_firebase_credentials('FIREBASE_CREDENTIALS', 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-d20003b368.json')
+    main_cred = load_firebase_credentials('FIREBASE_CREDENTIALS', 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json')
     initialize_app(main_cred)
     db = firestore.client()
     info_log("Main Firebase credentials loaded successfully")
@@ -443,11 +521,15 @@ async def startup_warmup():
     except Exception as e:
         error_log(f"Startup warm-up failed: {e}")
 cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
+PRIMARY_FRONTEND_URL = os.environ.get(
+    'FRONTEND_URL',
+    'https://khono-buzz-central-hub-web.onrender.com',
+).rstrip('/')
 PRODUCTION_BACKEND_URLS = [
     'https://khonobuzz-central-hub.onrender.com',
 ]
 PRODUCTION_FRONTEND_URLS = [
-    'https://khono-buzz-central-hub-web.onrender.com',
+    PRIMARY_FRONTEND_URL,
     'https://khonobuzz-web-app-llfi.onrender.com',
     'https://khonology-buzz-build.onrender.com',
 ]
@@ -492,10 +574,9 @@ else:
     info_log(
         f"CORS configured with {len(cors_origins)} origins from CORS_ORIGINS env var",
     )
-# Allow localhost with any port (prod and dev) so Flutter web dev works.
-# Also allow any Render subdomain so frontends deployed at custom URLs work.
-RENDER_ORIGIN_REGEX = r"https://[a-z0-9-]+\.onrender\.com"
-cors_origin_regex = "|".join([LOCALHOST_ORIGIN_REGEX, RENDER_ORIGIN_REGEX])
+# In production, pin CORS to explicit origins only.
+# In development, still allow localhost origins with arbitrary ports.
+cors_origin_regex = None if is_production else LOCALHOST_ORIGIN_REGEX
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -524,6 +605,14 @@ async def log_requests(request, call_next):
         info_log(
             f"← {request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)"
         )
+    return response
+
+
+@app.middleware("http")
+async def enforce_cors_headers(request, call_next):
+    """Ensure CORS headers are present for every cross-origin response."""
+    response = await call_next(request)
+    response.headers.update(_cors_headers_for_request(request))
     return response
 @app.get("/")
 async def root():
@@ -560,7 +649,9 @@ def _cors_headers_for_request(request: Request) -> dict:
 
     if allow_origin:
         return {
-            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Origin": (
+                PRIMARY_FRONTEND_URL if is_production else origin
+            ),
             "Access-Control-Allow-Credentials": "true",
             "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
             "Access-Control-Allow-Headers": "*",
@@ -772,10 +863,13 @@ async def pdh_sync_user(data: dict):
                     print(f"[DEBUG] Token generated during PDH sync for user_id: {uid} with roles: {roles}")
                 except Exception as token_error:
                     print(f"[ERROR] Failed to generate token during PDH sync: {token_error}")
-        if pdh_db:
-            pdh_db.collection('users').document(uid).set(user_data, merge=True)
-            pdh_db.collection('onboarding').document(uid).set(onboarding_data, merge=True)
-        else:
+        if not _run_with_pdh_db(
+            "pdh_sync_user",
+            lambda pdh: (
+                pdh.collection('users').document(uid).set(user_data, merge=True),
+                pdh.collection('onboarding').document(uid).set(onboarding_data, merge=True),
+            ),
+        ):
             print("[WARNING] PDH Firebase not initialized, skipping sync")
         sync_sso_user_login(uid, user_data, onboarding_data)
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH sync successful"})
@@ -797,10 +891,12 @@ async def pdh_update_user(uid: str, data: dict):
         elif user_fields and 'moduleAccessRole' in user_fields:
             should_regenerate_token = True
             new_module_access_role = user_fields.get('moduleAccessRole', '')
-        if pdh_db and user_fields:
-            pdh_db.collection('users').document(uid).set(user_fields, merge=True)
+        if user_fields and _run_with_pdh_db(
+            "pdh_update_user.users",
+            lambda pdh: pdh.collection('users').document(uid).set(user_fields, merge=True),
+        ):
             user_email = user_fields.get('email', '')
-        if pdh_db and onboarding_fields:
+        if onboarding_fields:
             if not user_email:
                 user_email = onboarding_fields.get('email', '')
             if user_email and not onboarding_fields.get('email'):
@@ -829,8 +925,10 @@ async def pdh_update_user(uid: str, data: dict):
                     print(f"[DEBUG] Token regenerated during PDH update for user_id: {uid} with roles: {roles}")
                 except Exception as token_error:
                     print(f"[ERROR] Failed to regenerate token during PDH update: {token_error}")
-            if pdh_db:
-                pdh_db.collection('onboarding').document(uid).set(onboarding_fields, merge=True)
+            _run_with_pdh_db(
+                "pdh_update_user.onboarding",
+                lambda pdh: pdh.collection('onboarding').document(uid).set(onboarding_fields, merge=True),
+            )
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH update successful"})
     except Exception as e:
         print(f"[ERROR] During PDH update: {e}")
@@ -1127,8 +1225,9 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
                     {'user_id': user_id, **token_update_payload},
                     merge=True,
                 )
-                if pdh_db:
-                    pdh_db.collection('onboarding').document(user_id).set(
+                _run_with_pdh_db(
+                    "admin_update_user_profile.token_sync",
+                    lambda pdh: pdh.collection('onboarding').document(user_id).set(
                         {
                             'email': normalized_email,
                             'token': regenerated_token,
@@ -1138,7 +1237,8 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
                             'updated_at': datetime.utcnow(),
                         },
                         merge=True,
-                    )
+                    ),
+                )
             except Exception as token_error:
                 print(f"[ERROR] admin_update_user_profile token refresh failed: {token_error}")
 
@@ -1458,19 +1558,20 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
                     onboarding_ref.set(update_data, merge=True)
                     print(f"[DEBUG] Token regenerated and updated in main onboarding collection for user_id: {user_id}")
                     # Sync new token to PDH
-                    if pdh_db:
-                        try:
-                            pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
-                            pdh_onboarding_ref.set({
+                    if _run_with_pdh_db(
+                        "update_user.token_sync",
+                        lambda pdh: pdh.collection('onboarding').document(user_id).set(
+                            {
                                 'email': user_email,
                                 'token': encrypted_token,
                                 'fullName': full_name,
                                 'token_updated_at': datetime.utcnow(),
                                 'updated_at': datetime.utcnow(),
-                            }, merge=True)
-                            print(f"[DEBUG] New token synced to PDH onboarding collection for user_id: {user_id}")
-                        except Exception as pdh_sync_error:
-                            print(f"[ERROR] Failed to sync new token to PDH: {pdh_sync_error}")
+                            },
+                            merge=True,
+                        ),
+                    ):
+                        print(f"[DEBUG] New token synced to PDH onboarding collection for user_id: {user_id}")
                     else:
                         print("[WARNING] PDH Firebase not initialized, skipping token sync")
                 except Exception as token_error:
@@ -1542,34 +1643,20 @@ async def delete_user(user_id: str):
         if onboarding_doc.exists:
             onboarding_doc_ref.delete()
             print(f"[DEBUG] Deleted user {user_id} from onboarding collection (by document ID)")
-        if pdh_db:
-            try:
-                pdh_user_ref = pdh_db.collection('users').document(user_id)
-                pdh_user_doc = pdh_user_ref.get()
-                if pdh_user_doc.exists:
-                    pdh_user_ref.delete()
-                    print(f"[DEBUG] Deleted user {user_id} from PDH users collection")
-            except Exception as pdh_error:
-                print(f"[WARNING] Failed to delete from PDH users collection: {pdh_error}")
-        if pdh_db:
-            try:
-                pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
-                pdh_onboarding_doc = pdh_onboarding_ref.get()
-                if pdh_onboarding_doc.exists:
-                    pdh_onboarding_ref.delete()
-                    print(f"[DEBUG] Deleted user {user_id} from PDH onboarding collection")
-                pdh_onboarding_query = (
-                    pdh_db.collection('onboarding')
-                    .where('user_id', '==', user_id)
-                    .limit(1)
-                    .stream()
-                )
-                for pdh_onboarding_doc in pdh_onboarding_query:
-                    pdh_onboarding_doc.reference.delete()
-                    print(f"[DEBUG] Deleted user {user_id} from PDH onboarding collection (by query)")
-                    break
-            except Exception as pdh_error:
-                print(f"[WARNING] Failed to delete from PDH onboarding collection: {pdh_error}")
+        _run_with_pdh_db(
+            "delete_user.pdh_cleanup",
+            lambda pdh: (
+                (lambda ref: (ref.delete() if ref.get().exists else None))(pdh.collection('users').document(user_id)),
+                (lambda ref: (ref.delete() if ref.get().exists else None))(pdh.collection('onboarding').document(user_id)),
+                next(
+                    (
+                        (doc.reference.delete(), doc)[1]
+                        for doc in pdh.collection('onboarding').where('user_id', '==', user_id).limit(1).stream()
+                    ),
+                    None,
+                ),
+            ),
+        )
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
@@ -1582,16 +1669,23 @@ async def delete_user(user_id: str):
 
 @app.get("/api/departments")
 async def list_departments():
-    """Return all department names from Firestore collection."""
+    """Return all department names from both Firestore collections."""
     try:
-        docs = db.collection("departments").stream()
         names = []
-        for doc in docs:
-            data = doc.to_dict() or {}
-            n = (data.get("name") or "").strip()
-            if n and n not in names:
-                names.append(n)
-        names.sort(key=str.lower)
+        for collection_name in ("departments", "department"):
+            docs = list(db.collection(collection_name).stream())
+            docs.sort(
+                key=lambda doc: (
+                    _coerce_datetime((doc.to_dict() or {}).get("created_at"))
+                    or datetime.min
+                ),
+                reverse=True,
+            )
+            for doc in docs:
+                data = doc.to_dict() or {}
+                n = (data.get("name") or "").strip()
+                if n and n not in names:
+                    names.append(n)
         return JSONResponse(status_code=200, content={"departments": names})
     except Exception as e:
         print(f"[ERROR] list_departments: {e}")
@@ -1600,7 +1694,7 @@ async def list_departments():
 
 @app.post("/api/departments")
 async def create_department(body: NameBody):
-    """Add a new department; store in Firestore collection. Returns updated list."""
+    """Add a new department to canonical collection. Returns merged updated list."""
     try:
         name = (body.name or "").strip()
         if not name:
@@ -1610,15 +1704,22 @@ async def create_department(body: NameBody):
         if next(existing, None) is not None:
             pass
         else:
-            coll.add({"name": name})
-        docs = coll.stream()
+            coll.add({"name": name, "created_at": datetime.utcnow()})
         names = []
-        for doc in docs:
-            data = doc.to_dict() or {}
-            n = (data.get("name") or "").strip()
-            if n and n not in names:
-                names.append(n)
-        names.sort(key=str.lower)
+        for collection_name in ("departments", "department"):
+            docs = list(db.collection(collection_name).stream())
+            docs.sort(
+                key=lambda doc: (
+                    _coerce_datetime((doc.to_dict() or {}).get("created_at"))
+                    or datetime.min
+                ),
+                reverse=True,
+            )
+            for doc in docs:
+                data = doc.to_dict() or {}
+                n = (data.get("name") or "").strip()
+                if n and n not in names:
+                    names.append(n)
         return JSONResponse(status_code=201, content={"departments": names})
     except HTTPException:
         raise
@@ -1629,19 +1730,87 @@ async def create_department(body: NameBody):
 
 @app.get("/api/designations")
 async def list_designations():
-    """Return all designation names from Firestore collection."""
+    """Return all designation names with newest created options first."""
     try:
-        docs = db.collection("designations").stream()
         names = []
-        for doc in docs:
+        for collection_name in ("designations", "designation"):
+            docs = list(db.collection(collection_name).stream())
+            docs.sort(
+                key=lambda doc: (
+                    _coerce_datetime((doc.to_dict() or {}).get("created_at"))
+                    or datetime.min
+                ),
+                reverse=True,
+            )
+            for doc in docs:
+                data = doc.to_dict() or {}
+                n = (data.get("name") or "").strip()
+                if n and n not in names:
+                    names.append(n)
+        return JSONResponse(status_code=200, content={"designations": names})
+    except Exception as e:
+        print(f"[ERROR] list_designations: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/entities")
+async def list_entities():
+    """Return all entity names from entities collection plus assigned users."""
+    try:
+        names = []
+
+        # Canonical entity options collection.
+        for doc in db.collection("entities").stream():
             data = doc.to_dict() or {}
             n = (data.get("name") or "").strip()
             if n and n not in names:
                 names.append(n)
+
+        # Include already-assigned entity values so legacy data stays selectable.
+        for doc in db.collection("users").stream():
+            data = doc.to_dict() or {}
+            n = (data.get("entity") or "").strip()
+            if n and n not in names:
+                names.append(n)
+
         names.sort(key=str.lower)
-        return JSONResponse(status_code=200, content={"designations": names})
+        return JSONResponse(status_code=200, content={"entities": names})
     except Exception as e:
-        print(f"[ERROR] list_designations: {e}")
+        print(f"[ERROR] list_entities: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/api/entities")
+async def create_entity(body: NameBody):
+    """Add a new entity in canonical entities collection. Returns updated list."""
+    try:
+        name = (body.name or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="name is required")
+
+        coll = db.collection("entities")
+        existing = coll.where("name", "==", name).limit(1).stream()
+        if next(existing, None) is None:
+            coll.add({"name": name})
+
+        names = []
+        for doc in coll.stream():
+            data = doc.to_dict() or {}
+            n = (data.get("name") or "").strip()
+            if n and n not in names:
+                names.append(n)
+        for doc in db.collection("users").stream():
+            data = doc.to_dict() or {}
+            n = (data.get("entity") or "").strip()
+            if n and n not in names:
+                names.append(n)
+
+        names.sort(key=str.lower)
+        return JSONResponse(status_code=201, content={"entities": names})
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] create_entity: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -1657,15 +1826,22 @@ async def create_designation(body: NameBody):
         if next(existing, None) is not None:
             pass
         else:
-            coll.add({"name": name})
-        docs = coll.stream()
+            coll.add({"name": name, "created_at": datetime.utcnow()})
         names = []
-        for doc in docs:
-            data = doc.to_dict() or {}
-            n = (data.get("name") or "").strip()
-            if n and n not in names:
-                names.append(n)
-        names.sort(key=str.lower)
+        for collection_name in ("designations", "designation"):
+            docs = list(db.collection(collection_name).stream())
+            docs.sort(
+                key=lambda doc: (
+                    _coerce_datetime((doc.to_dict() or {}).get("created_at"))
+                    or datetime.min
+                ),
+                reverse=True,
+            )
+            for doc in docs:
+                data = doc.to_dict() or {}
+                n = (data.get("name") or "").strip()
+                if n and n not in names:
+                    names.append(n)
         return JSONResponse(status_code=201, content={"designations": names})
     except HTTPException:
         raise
@@ -1790,7 +1966,10 @@ async def login_user(user_login: UserLogin, request: Request):
         else:
             try:
                 query = users_ref.where('email', '==', normalized_email).limit(1)
-                users = query.get()
+                users = await asyncio.wait_for(
+                    asyncio.to_thread(query.get, timeout=LOGIN_QUERY_TIMEOUT_SECONDS),
+                    timeout=LOGIN_QUERY_TIMEOUT_SECONDS + 1.0,
+                )
                 if users:
                     user_doc = users[0]
                     doc_data = user_doc.to_dict()
@@ -1805,23 +1984,17 @@ async def login_user(user_login: UserLogin, request: Request):
                         "expires_at": now + LOGIN_CACHE_TTL_SECONDS,
                     }
                     debug_log(f"Login cache populated for {normalized_email}")
-                else:
-                    # Case-insensitive fallback: user may be stored with mixed case
-                    for doc in users_ref.stream():
-                        doc_data = doc.to_dict() or {}
-                        doc_email = (doc_data.get('email') or '').strip()
-                        if doc_email.lower() == normalized_email:
-                            user_data = doc_data
-                            user_id = doc.id
-                            stored_email = doc_email
-                            USER_CACHE[cache_key] = {
-                                "user_data": user_data,
-                                "user_id": user_id,
-                                "stored_email": stored_email,
-                                "expires_at": now + LOGIN_CACHE_TTL_SECONDS,
-                            }
-                            debug_log(f"Login cache populated (case-insensitive) for {normalized_email}")
-                            break
+            except asyncio.TimeoutError:
+                user_lookup_end = time.time()
+                if not is_special_session:
+                    error_log(
+                        f"Firestore user lookup timed out for {normalized_email} "
+                        f"after {LOGIN_QUERY_TIMEOUT_SECONDS:.1f}s"
+                    )
+                return JSONResponse(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    content={"error": "Login service temporarily unavailable. Please try again."}
+                )
             except Exception as query_error:
                 user_lookup_end = time.time()
                 if not is_special_session:
@@ -1858,10 +2031,18 @@ async def login_user(user_login: UserLogin, request: Request):
         module_access_role = ""
         onboarding_lookup_start = time.time()
         try:
-            onboarding_ref, onboarding_data = _get_best_onboarding_record(user_id)
+            onboarding_ref, onboarding_data = await asyncio.wait_for(
+                asyncio.to_thread(_get_best_onboarding_record, user_id),
+                timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS + 1.0,
+            )
             module_access_role = (
                 onboarding_data.get('moduleAccessRole', '')
                 or user_data.get('moduleAccessRole', '')
+            )
+        except asyncio.TimeoutError:
+            error_log(
+                f"Onboarding lookup timed out for user {user_id} "
+                f"after {ONBOARDING_QUERY_TIMEOUT_SECONDS:.1f}s"
             )
         except Exception as onboarding_query_error:
             error_log(f"Failed to query onboarding collection: {onboarding_query_error}")
@@ -1935,28 +2116,29 @@ async def login_user(user_login: UserLogin, request: Request):
                 onboarding_ref.set(update_data, merge=True)
             except Exception:
                 pass
-            if pdh_db:
-                try:
-                    pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
-                    pdh_data = {
-                        'email': user_data['email'],
-                        'token': encrypted_token,
-                        'fullName': full_name,
-                        'token_updated_at': datetime.utcnow(),
-                        'themePreference': resolve_theme_preference(
-                            user_data,
-                            onboarding_data,
-                        ),
-                    }
-                    if not is_special_session:
-                        pdh_data['updated_at'] = datetime.utcnow()
-                    pdh_onboarding_ref.set(pdh_data, merge=True)
-                except Exception:
-                    pass
+            pdh_data = {
+                'email': user_data['email'],
+                'token': encrypted_token,
+                'fullName': full_name,
+                'token_updated_at': datetime.utcnow(),
+                'themePreference': resolve_theme_preference(
+                    user_data,
+                    onboarding_data,
+                ),
+            }
+            if not is_special_session:
+                pdh_data['updated_at'] = datetime.utcnow()
+            _run_with_pdh_db(
+                "login_user.token_sync",
+                lambda pdh: pdh.collection('onboarding').document(user_id).set(pdh_data, merge=True),
+            )
         if not is_special_session:
             try:
                 if onboarding_ref is None:
-                    onboarding_ref, onboarding_info = _get_best_onboarding_record(user_id)
+                    onboarding_ref, onboarding_info = await asyncio.wait_for(
+                        asyncio.to_thread(_get_best_onboarding_record, user_id),
+                        timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS + 1.0,
+                    )
                 else:
                     onboarding_info = onboarding_data or {}
                 existing_login_count = _safe_int(
@@ -1979,8 +2161,9 @@ async def login_user(user_login: UserLogin, request: Request):
                         tracking_payload,
                         merge=True,
                     )
-                if pdh_db:
-                    pdh_db.collection('onboarding').document(user_id).set(
+                _run_with_pdh_db(
+                    "login_user.signin_tracking",
+                    lambda pdh: pdh.collection('onboarding').document(user_id).set(
                         {
                             'email': user_data.get('email', ''),
                             'lastSignInAt': last_sign_in_at,
@@ -1988,7 +2171,8 @@ async def login_user(user_login: UserLogin, request: Request):
                             'updated_at': datetime.utcnow(),
                         },
                         merge=True,
-                    )
+                    ),
+                )
             except Exception as onboarding_signin_error:
                 error_log(
                     f"Failed to update onboarding login tracking for {normalized_email}: {onboarding_signin_error}"
@@ -2131,20 +2315,21 @@ async def get_user_token(
                     }
                     db.collection('onboarding').add(onboarding_data)
                     print(f"[DEBUG] Created onboarding document with token for user_id: {user_id}")
-                if pdh_db:
-                    try:
-                        pdh_onboarding_ref = pdh_db.collection('onboarding').document(user_id)
-                        pdh_onboarding_ref.set({
+                if _run_with_pdh_db(
+                    "get_user_token.sync",
+                    lambda pdh: pdh.collection('onboarding').document(user_id).set(
+                        {
                             'email': user_data['email'],
                             'token': encrypted_token,
                             'fullName': full_name,
                             'token_updated_at': datetime.utcnow(),
                             'updated_at': datetime.utcnow(),
                             'themePreference': token_theme,
-                        }, merge=True)
-                        print(f"[DEBUG] Token synced to PDH onboarding collection for user_id: {user_id}")
-                    except Exception as pdh_sync_error:
-                        print(f"[ERROR] Failed to sync token to PDH: {pdh_sync_error}")
+                        },
+                        merge=True,
+                    ),
+                ):
+                    print(f"[DEBUG] Token synced to PDH onboarding collection for user_id: {user_id}")
         except Exception as token_error:
             print(f"[ERROR] Failed to generate token: {token_error}")
             return JSONResponse(status_code=500, content={"error": "Failed to generate token"})

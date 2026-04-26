@@ -1,7 +1,9 @@
 import 'dart:ui';
 import 'dart:math' as math;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -11,6 +13,7 @@ import '../theme/app_backgrounds.dart';
 import '../providers/theme_mode_provider.dart';
 import '../theme/app_text_colors.dart';
 import '../theme/app_themes.dart';
+import '../config/api_config.dart';
 import '../widgets/animations/loading_button.dart';
 import '../widgets/version_control_widget.dart';
 import 'lobby_screen.dart';
@@ -41,16 +44,17 @@ class OnboardingScreenState extends State<OnboardingScreen>
   late AnimationController _blinkController;
   late Animation<double> _blinkAnimation;
 
-  final List<String> _departments = const [
+  static const List<String> _fallbackDepartments = [
     'Management',
     'Operations',
     'Finance',
     'HR',
     'Sales',
   ];
+  final List<String> _departments = List<String>.from(_fallbackDepartments);
   String? _selectedDepartment;
 
-  final List<String> _designations = const [
+  static const List<String> _fallbackDesignations = [
     'Director',
     'Developer',
     'Support Analyst',
@@ -68,6 +72,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
     'HR',
     'Junior Analyst',
   ];
+  final List<String> _designations = List<String>.from(_fallbackDesignations);
   String? _selectedDesignation;
 
   @override
@@ -90,6 +95,107 @@ class OnboardingScreenState extends State<OnboardingScreen>
         _discsOpacity = 1.0;
       });
     });
+    unawaited(_loadDepartmentAndDesignationOptions());
+  }
+
+  Future<void> _loadDepartmentAndDesignationOptions() async {
+    try {
+      final headers = {'Content-Type': 'application/json'};
+      final departmentsResponse = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/api/departments'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 12));
+      final designationsResponse = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/api/designations'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 12));
+
+      if (!mounted) return;
+
+      final List<String> loadedDepartments = _extractStringList(
+        departmentsResponse.statusCode == 200 ? departmentsResponse.body : null,
+        key: 'departments',
+      );
+      final List<String> loadedDesignations = _extractStringList(
+        designationsResponse.statusCode == 200 ? designationsResponse.body : null,
+        key: 'designations',
+      );
+
+      setState(() {
+        _departments
+          ..clear()
+          ..addAll(_mergeWithFallbackBottom(loadedDepartments, _fallbackDepartments));
+        _designations
+          ..clear()
+          ..addAll(_mergeWithFallbackBottom(loadedDesignations, _fallbackDesignations));
+        if (_selectedDepartment != null &&
+            !_departments.contains(_selectedDepartment)) {
+          _selectedDepartment = null;
+        }
+        if (_selectedDesignation != null &&
+            !_designations.contains(_selectedDesignation)) {
+          _selectedDesignation = null;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _departments
+          ..clear()
+          ..addAll(_fallbackDepartments);
+        _designations
+          ..clear()
+          ..addAll(_fallbackDesignations);
+      });
+    }
+  }
+
+  List<String> _extractStringList(String? responseBody, {required String key}) {
+    if (responseBody == null || responseBody.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(responseBody);
+      if (decoded is! Map<String, dynamic>) return const [];
+      final values = decoded[key];
+      if (values is! List) return const [];
+      final cleaned = values
+          .whereType<String>()
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList();
+      return cleaned;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  List<String> _mergeWithFallbackBottom(
+    List<String> dbOptions,
+    List<String> fallbackOptions,
+  ) {
+    final seen = <String>{};
+    final merged = <String>[];
+    for (final option in dbOptions) {
+      final value = option.trim();
+      if (value.isEmpty) continue;
+      final key = value.toLowerCase();
+      if (seen.add(key)) {
+        merged.add(value);
+      }
+    }
+    for (final option in fallbackOptions) {
+      final value = option.trim();
+      if (value.isEmpty) continue;
+      final key = value.toLowerCase();
+      if (seen.add(key)) {
+        merged.add(value);
+      }
+    }
+    return merged;
   }
 
   @override
@@ -101,6 +207,156 @@ class OnboardingScreenState extends State<OnboardingScreen>
     _audioPlayer.dispose();
 
     super.dispose();
+  }
+
+  Future<String?> _showSearchableOptionsDialog({
+    required String title,
+    required List<String> options,
+  }) async {
+    final searchController = TextEditingController();
+    String query = '';
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
+        final dialogBg = isDark ? const Color(0xFF3D3F40) : Colors.white;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final normalizedQuery = query.trim().toLowerCase();
+            final filtered = options
+                .where(
+                  (opt) => opt.toLowerCase().contains(normalizedQuery),
+                )
+                .toList();
+            return AlertDialog(
+              backgroundColor: dialogBg,
+              title: Text(
+                title,
+                style: TextStyle(
+                  color: appTextColor(dialogContext),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: searchController,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          query = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search $title',
+                        hintStyle: TextStyle(
+                          color: appTextColor(dialogContext).withValues(alpha: 0.7),
+                          fontFamily: 'Poppins',
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: appTextColor(dialogContext),
+                        ),
+                        filled: true,
+                        fillColor: dialogBg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      style: TextStyle(
+                        color: appTextColor(dialogContext),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (filtered.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'No results found',
+                          style: TextStyle(
+                            color: appTextColor(dialogContext),
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: ((filtered.length < 10 ? filtered.length : 10) * 48)
+                              .toDouble(),
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final option = filtered[index];
+                            return ListTile(
+                              dense: true,
+                              title: Text(
+                                option,
+                                style: TextStyle(
+                                  color: appTextColor(dialogContext),
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              onTap: () => Navigator.of(dialogContext).pop(option),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    searchController.dispose();
+    return selected;
+  }
+
+  Widget _buildSearchableSelectField({
+    required String placeholder,
+    required String? valueText,
+    required Color widgetBg,
+    required Color hintColor,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        decoration: BoxDecoration(
+          color: widgetBg,
+          borderRadius: BorderRadius.circular(25.0),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                (valueText == null || valueText.isEmpty) ? placeholder : valueText,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: (valueText == null || valueText.isEmpty)
+                      ? hintColor
+                      : appTextColor(context),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_drop_down, color: appTextColor(context)),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -202,69 +458,22 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                                 ),
                                               ),
                                               const SizedBox(height: 8),
-                                              DropdownButtonFormField<String>(
-                                                initialValue:
-                                                    _selectedDepartment,
-                                                dropdownColor: widgetBg,
-                                                style: TextStyle(
-                                                  color: appTextColor(context),
-                                                  fontFamily: 'Poppins',
-                                                ),
-                                                decoration: InputDecoration(
-                                                  filled: true,
-                                                  fillColor: widgetBg,
-                                                  border: OutlineInputBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          25.0,
-                                                        ),
-                                                    borderSide: BorderSide.none,
-                                                  ),
-                                                  contentPadding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 16.0,
-                                                        vertical: 12.0,
-                                                      ),
-                                                ),
-                                                hint: Text(
-                                                  'Select Department',
-                                                  style: TextStyle(
-                                                    color: hintColor,
-                                                    fontFamily: 'Poppins',
-                                                  ),
-                                                ),
-                                                items: _departments.map((
-                                                  String department,
-                                                ) {
-                                                  return DropdownMenuItem<
-                                                    String
-                                                  >(
-                                                    value: department,
-                                                    child: Text(
-                                                      department,
-                                                      style: TextStyle(
-                                                        color:
-                                                            appTextColor(context),
-                                                        fontFamily:
-                                                            'Poppins',
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                      ),
-                                                    ),
-                                                  );
-                                                }).toList(),
-                                                onChanged: (String? newValue) {
+                                              _buildSearchableSelectField(
+                                                placeholder: 'Select Department',
+                                                valueText: _selectedDepartment,
+                                                widgetBg: widgetBg,
+                                                hintColor: hintColor,
+                                                onTap: () async {
+                                                  SoundSystem.playButtonClick();
+                                                  final selected =
+                                                      await _showSearchableOptionsDialog(
+                                                        title: 'Department',
+                                                        options: _departments,
+                                                      );
+                                                  if (selected == null) return;
                                                   setState(() {
-                                                    _selectedDepartment =
-                                                        newValue;
+                                                    _selectedDepartment = selected;
                                                   });
-                                                },
-                                                validator: (value) {
-                                                  if (value == null ||
-                                                      value.isEmpty) {
-                                                    return 'Please select a department';
-                                                  }
-                                                  return null;
                                                 },
                                               ),
                                             ],
@@ -324,69 +533,22 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                                 ),
                                               ),
                                               const SizedBox(height: 8),
-                                              DropdownButtonFormField<String>(
-                                                initialValue:
-                                                    _selectedDepartment,
-                                                dropdownColor: widgetBg,
-                                                style: TextStyle(
-                                                  color: appTextColor(context),
-                                                  fontFamily: 'Poppins',
-                                                ),
-                                                decoration: InputDecoration(
-                                                  filled: true,
-                                                  fillColor: widgetBg,
-                                                  border: OutlineInputBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          25.0,
-                                                        ),
-                                                    borderSide: BorderSide.none,
-                                                  ),
-                                                  contentPadding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 16.0,
-                                                        vertical: 12.0,
-                                                      ),
-                                                ),
-                                                hint: Text(
-                                                  'Select Department',
-                                                  style: TextStyle(
-                                                    color: hintColor,
-                                                    fontFamily: 'Poppins',
-                                                  ),
-                                                ),
-                                                items: _departments.map((
-                                                  String department,
-                                                ) {
-                                                  return DropdownMenuItem<
-                                                    String
-                                                  >(
-                                                    value: department,
-                                                    child: Text(
-                                                      department,
-                                                      style: TextStyle(
-                                                        color:
-                                                            appTextColor(context),
-                                                        fontFamily:
-                                                            'Poppins',
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                      ),
-                                                    ),
-                                                  );
-                                                }).toList(),
-                                                onChanged: (String? newValue) {
+                                              _buildSearchableSelectField(
+                                                placeholder: 'Select Department',
+                                                valueText: _selectedDepartment,
+                                                widgetBg: widgetBg,
+                                                hintColor: hintColor,
+                                                onTap: () async {
+                                                  SoundSystem.playButtonClick();
+                                                  final selected =
+                                                      await _showSearchableOptionsDialog(
+                                                        title: 'Department',
+                                                        options: _departments,
+                                                      );
+                                                  if (selected == null) return;
                                                   setState(() {
-                                                    _selectedDepartment =
-                                                        newValue;
+                                                    _selectedDepartment = selected;
                                                   });
-                                                },
-                                                validator: (value) {
-                                                  if (value == null ||
-                                                      value.isEmpty) {
-                                                    return 'Please select a department';
-                                                  }
-                                                  return null;
                                                 },
                                               ),
                                             ],
@@ -424,60 +586,22 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                     ),
                                   ),
                                   const SizedBox(height: 8),
-                                  DropdownButtonFormField<String>(
-                                    initialValue: _selectedDesignation,
-                                    dropdownColor: widgetBg,
-                                    style: TextStyle(
-                                      color: appTextColor(context),
-                                      fontFamily: 'Poppins',
-                                    ),
-                                    decoration: InputDecoration(
-                                      filled: true,
-                                      fillColor: widgetBg,
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(
-                                          25.0,
-                                        ),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 16.0,
-                                            vertical: 12.0,
-                                          ),
-                                    ),
-                                    hint: Text(
-                                      'Select Designation',
-                                      style: TextStyle(
-                                        color: hintColor,
-                                        fontFamily: 'Poppins',
-                                      ),
-                                    ),
-                                    items: _designations.map((
-                                      String designation,
-                                    ) {
-                                      return DropdownMenuItem<String>(
-                                        value: designation,
-                                        child: Text(
-                                          designation,
-                                          style: TextStyle(
-                                            color: appTextColor(context),
-                                            fontFamily: 'Poppins',
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      );
-                                    }).toList(),
-                                    onChanged: (String? newValue) {
+                                  _buildSearchableSelectField(
+                                    placeholder: 'Select Designation',
+                                    valueText: _selectedDesignation,
+                                    widgetBg: widgetBg,
+                                    hintColor: hintColor,
+                                    onTap: () async {
+                                      SoundSystem.playButtonClick();
+                                      final selected =
+                                          await _showSearchableOptionsDialog(
+                                            title: 'Designation',
+                                            options: _designations,
+                                          );
+                                      if (selected == null) return;
                                       setState(() {
-                                        _selectedDesignation = newValue;
+                                        _selectedDesignation = selected;
                                       });
-                                    },
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'Please select a designation';
-                                      }
-                                      return null;
                                     },
                                   ),
                                 ],
@@ -734,10 +858,9 @@ class OnboardingScreenState extends State<OnboardingScreen>
               ),
             ),
             Positioned(
-              left: 0,
-              right: 0,
-              bottom: 76,
-              child: Center(
+              left: 16,
+              bottom: 16,
+              child: SafeArea(
                 child: VersionControlWidget(
                   textColor: isLight ? Colors.black54 : Colors.white70,
                   hoverColor: isLight ? Colors.black : Colors.white,
