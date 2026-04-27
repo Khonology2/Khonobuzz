@@ -5,6 +5,18 @@ import 'package:http/http.dart' as http;
 import '../models/admin_alert.dart';
 import '../config/api_config.dart';
 
+class AdminAlertApiException implements Exception {
+  final int statusCode;
+  final String body;
+
+  const AdminAlertApiException(this.statusCode, this.body);
+
+  bool get isRateLimited => statusCode == 429;
+
+  @override
+  String toString() => 'AdminAlertApiException($statusCode): $body';
+}
+
 class AdminAlertService {
   static Future<void> publishAdminChange({
     required String actorEmail,
@@ -13,6 +25,8 @@ class AdminAlertService {
     required String area,
     Map<String, dynamic> details = const {},
     List<String> targetRoles = const ['admin', 'staff'],
+    bool requiresAck = false,
+    String effectiveDateIso = '',
   }) async {
     final normalizedRoles = targetRoles
         .map((e) => e.trim().toLowerCase())
@@ -30,11 +44,14 @@ class AdminAlertService {
         'area': area.trim(),
         'details': details,
         'targetRoles': normalizedRoles,
+        'requiresAck': requiresAck,
+        'effectiveDateIso': effectiveDateIso.trim(),
       }),
     );
     if (response.statusCode != 201 && response.statusCode != 200) {
-      throw Exception(
-        'Failed to publish admin alert: ${response.statusCode} ${response.body}',
+      throw AdminAlertApiException(
+        response.statusCode,
+        response.body,
       );
     }
   }
@@ -55,8 +72,9 @@ class AdminAlertService {
       ),
     );
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to fetch admin alerts: ${response.statusCode} ${response.body}',
+      throw AdminAlertApiException(
+        response.statusCode,
+        response.body,
       );
     }
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -80,8 +98,51 @@ class AdminAlertService {
       }),
     );
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to clear alerts: ${response.statusCode} ${response.body}',
+      throw AdminAlertApiException(
+        response.statusCode,
+        response.body,
+      );
+    }
+  }
+
+  static Future<void> dismissAlertForUser({
+    required String role,
+    required String userEmail,
+    required String alertId,
+  }) async {
+    final response = await http.post(
+      Uri.parse('${ApiConfig.adminNotificationsEndpoint}/dismiss'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'role': role.trim().toLowerCase(),
+        'userEmail': userEmail.trim().toLowerCase(),
+        'alertId': alertId.trim(),
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw AdminAlertApiException(
+        response.statusCode,
+        response.body,
+      );
+    }
+  }
+
+  static Future<void> acknowledgeAlert({
+    required String userEmail,
+    required String alertId,
+  }) async {
+    final response = await http.post(
+      Uri.parse('${ApiConfig.adminNotificationsEndpoint}/ack'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'userEmail': userEmail.trim().toLowerCase(),
+        'alertId': alertId.trim(),
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw AdminAlertApiException(
+        response.statusCode,
+        response.body,
       );
     }
   }

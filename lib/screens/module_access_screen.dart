@@ -71,6 +71,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     required String title,
     required String message,
     Map<String, dynamic> details = const {},
+    bool requiresAck = false,
   }) async {
     final authProvider = context.read<AuthProvider>();
     if ((authProvider.userRole ?? '').toLowerCase() != 'admin') {
@@ -87,6 +88,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         message: message,
         area: 'module_access',
         details: details,
+        requiresAck: requiresAck,
       );
     } catch (e) {
       debugPrint('[ModuleAccess] alert publish failed: $e');
@@ -889,7 +891,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           'userName': user.name,
           'moduleAccess': updatedModuleAccess ?? '',
           'moduleAccessRole': updatedModuleAccessRole ?? '',
+          'approvedBy': adminEmail,
+          'effectiveDateIso': DateTime.now().toUtc().toIso8601String(),
         },
+        requiresAck: true,
       );
     } catch (e) {
       if (mounted) {

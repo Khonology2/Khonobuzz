@@ -498,11 +498,24 @@ class AdminNotificationCreate(BaseModel):
     area: str = "general"
     details: Dict[str, Any] = {}
     targetRoles: Optional[list[str]] = None
+    requiresAck: bool = False
+    effectiveDateIso: str = ""
 
 
 class AdminNotificationClear(BaseModel):
     role: str
     userEmail: str
+
+
+class AdminNotificationDismiss(BaseModel):
+    role: str
+    userEmail: str
+    alertId: str
+
+
+class AdminNotificationAcknowledge(BaseModel):
+    userEmail: str
+    alertId: str
 try:
     main_cred = load_firebase_credentials('FIREBASE_CREDENTIALS', 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json')
     initialize_app(main_cred)
@@ -1461,7 +1474,10 @@ async def list_users():
         users_data = [payload for _, payload in users_with_sort_keys]
         return JSONResponse(status_code=status.HTTP_200_OK, content={'users': users_data})
     except Exception as e:
-        print(f"[ERROR] During users fetch: {e}")
+        msg = str(e)
+        print(f"[ERROR] During users fetch: {msg}")
+        if "quota exceeded" in msg.lower() or msg.strip().startswith("429"):
+            return JSONResponse(status_code=429, content={"error": "Quota exceeded"})
         return JSONResponse(status_code=500, content={"error": str(e)})
 @app.patch("/api/users/{user_id}")
 async def update_user(user_id: str, request: Request, user_update: UserUpdate = Body(...)):
@@ -1628,6 +1644,9 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
         }
         return JSONResponse(status_code=status.HTTP_200_OK, content={'message': 'User updated successfully', 'user': user_payload})
     except Exception as e:
+        msg = str(e)
+        if "quota exceeded" in msg.lower() or msg.strip().startswith("429"):
+            return JSONResponse(status_code=429, content={"error": "Quota exceeded"})
         return JSONResponse(status_code=500, content={"error": str(e)})
 @app.delete("/api/users/{user_id}")
 async def delete_user(user_id: str):
@@ -1852,14 +1871,20 @@ async def create_admin_notification(payload: AdminNotificationCreate):
             normalized_roles = ["admin", "staff"]
 
         now = datetime.utcnow()
+        details_payload = payload.details or {}
+        if "targetCount" not in details_payload:
+            details_payload["targetCount"] = len(normalized_roles)
         doc = {
             "actorEmail": actor_email,
             "actorRole": "admin",
             "title": title,
             "message": message,
             "area": area,
-            "details": payload.details or {},
+            "details": details_payload,
             "targetRoles": normalized_roles,
+            "requiresAck": bool(getattr(payload, "requiresAck", False)),
+            "effectiveDateIso": (getattr(payload, "effectiveDateIso", "") or "").strip(),
+            "acknowledgedByEmails": [],
             "createdAt": firestore.SERVER_TIMESTAMP,
             "createdAtIso": now.isoformat() + "Z",
         }
@@ -1904,11 +1929,13 @@ async def list_admin_notifications(
         docs = list(query.stream())
 
         cleared_after = None
+        dismissed_ids = set()
         if normalized_email:
             state_doc = db.collection("admin_notification_state").document(normalized_email).get()
             if state_doc.exists:
                 state = state_doc.to_dict() or {}
                 cleared_after = _coerce_datetime(state.get("clearedAtIso"))
+                dismissed_ids = set(state.get("dismissedIds", []) or [])
 
         alerts = []
         for doc in docs:
@@ -1928,6 +1955,9 @@ async def list_admin_notifications(
                     "area": data.get("area", "general"),
                     "details": data.get("details", {}),
                     "targetRoles": data.get("targetRoles", []),
+                    "requiresAck": bool(data.get("requiresAck", False)),
+                    "effectiveDateIso": (data.get("effectiveDateIso", "") or "").strip(),
+                    "acknowledgedByEmails": data.get("acknowledgedByEmails", []) or [],
                     "createdAtIso": created_at_iso,
                 }
             )
@@ -1942,13 +1972,26 @@ async def list_admin_notifications(
                 for item in alerts
                 if (_coerce_datetime(item.get("createdAtIso")) or datetime.min) > cleared_after
             ]
+        alerts = [item for item in alerts if item.get("id") not in dismissed_ids]
+
+        for item in alerts:
+            acked_emails = [
+                (e or "").strip().lower() for e in item.get("acknowledgedByEmails", [])
+            ]
+            item["acknowledged"] = normalized_email in acked_emails if normalized_email else False
+            item["acknowledgedCount"] = len(acked_emails)
+            item["targetCount"] = int(item.get("details", {}).get("targetCount", 0))
+            item.pop("acknowledgedByEmails", None)
         alerts = alerts[:limit]
 
         return JSONResponse(status_code=200, content={"alerts": alerts})
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] list_admin_notifications: {e}")
+        msg = str(e)
+        print(f"[ERROR] list_admin_notifications: {msg}")
+        if "quota exceeded" in msg.lower() or msg.strip().startswith("429"):
+            return JSONResponse(status_code=429, content={"error": "Quota exceeded"})
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -1969,6 +2012,7 @@ async def clear_admin_notifications(payload: AdminNotificationClear):
                 "userEmail": normalized_email,
                 "clearedAtIso": now_iso,
                 "updatedAtIso": now_iso,
+                "dismissedIds": [],
             },
             merge=True,
         )
@@ -1977,6 +2021,51 @@ async def clear_admin_notifications(payload: AdminNotificationClear):
         raise
     except Exception as e:
         print(f"[ERROR] clear_admin_notifications: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/api/admin/notifications/dismiss")
+async def dismiss_admin_notification(payload: AdminNotificationDismiss):
+    try:
+        normalized_email = (payload.userEmail or "").strip().lower()
+        alert_id = (payload.alertId or "").strip()
+        if not normalized_email or not alert_id:
+            raise HTTPException(status_code=400, detail="userEmail and alertId are required")
+        db.collection("admin_notification_state").document(normalized_email).set(
+            {
+                "dismissedIds": firestore.ArrayUnion([alert_id]),
+                "updatedAtIso": datetime.utcnow().isoformat() + "Z",
+            },
+            merge=True,
+        )
+        return JSONResponse(status_code=200, content={"message": "Alert dismissed"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] dismiss_admin_notification: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/api/admin/notifications/ack")
+async def acknowledge_admin_notification(payload: AdminNotificationAcknowledge):
+    try:
+        normalized_email = (payload.userEmail or "").strip().lower()
+        alert_id = (payload.alertId or "").strip()
+        if not normalized_email or not alert_id:
+            raise HTTPException(status_code=400, detail="userEmail and alertId are required")
+        ref = db.collection("admin_notifications").document(alert_id)
+        ref.set(
+            {
+                "acknowledgedByEmails": firestore.ArrayUnion([normalized_email]),
+                "updatedAtIso": datetime.utcnow().isoformat() + "Z",
+            },
+            merge=True,
+        )
+        return JSONResponse(status_code=200, content={"message": "Alert acknowledged"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] acknowledge_admin_notification: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 

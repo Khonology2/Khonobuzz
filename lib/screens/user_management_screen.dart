@@ -47,6 +47,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     required String title,
     required String message,
     Map<String, dynamic> details = const {},
+    bool requiresAck = false,
   }) async {
     final authProvider = context.read<AuthProvider>();
     if ((authProvider.userRole ?? '').toLowerCase() != 'admin') {
@@ -63,6 +64,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         message: message,
         area: 'user_management',
         details: details,
+        requiresAck: requiresAck,
       );
     } catch (e) {
       debugPrint('[UserManagement] alert publish failed: $e');
@@ -445,6 +447,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     String userId,
     String newRole,
     String newStatus, {
+    String? oldRole,
+    String? oldStatus,
     required String firstName,
     required String lastName,
     required String department,
@@ -500,14 +504,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         );
       }
       await _publishAdminAlert(
-        title: 'User management updated',
+        title: 'Role/permission change feed',
         message:
-            '$firstName $lastName updated to role "$newRole" and status "$newStatus".',
+            '$firstName $lastName role changed from "${oldRole ?? newRole}" to "$newRole"; status from "${oldStatus ?? newStatus}" to "$newStatus".',
         details: {
           'userId': userId,
           'userName': '$firstName $lastName',
+          'oldRole': oldRole ?? newRole,
           'role': newRole,
+          'oldStatus': oldStatus ?? newStatus,
           'status': newStatus,
+          'approvedBy': adminEmail,
+          'effectiveDateIso': DateTime.now().toUtc().toIso8601String(),
           'department': department,
           'designation': designation,
           'entity': entity ?? '',
@@ -1651,6 +1659,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               user.id,
                               newValue,
                               user.status,
+                              oldRole: selectedRole,
+                              oldStatus: user.status,
                               firstName: user.firstName,
                               lastName: user.lastName,
                               department: user.department,
@@ -1739,6 +1749,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               user.id,
                               user.role,
                               newValue,
+                              oldRole: user.role,
+                              oldStatus: selectedStatusLocal,
                               firstName: user.firstName,
                               lastName: user.lastName,
                               department: user.department,
@@ -2036,6 +2048,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         user.id,
                         user.role,
                         user.status,
+                        oldRole: user.role,
+                        oldStatus: user.status,
                         firstName: user.firstName,
                         lastName: user.lastName,
                         department: selectedDepartmentLocal,
@@ -3333,6 +3347,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           user.id,
                           role,
                           status,
+                          oldRole: user.role,
+                          oldStatus: user.status,
                           firstName: user.firstName,
                           lastName: user.lastName,
                           department: bulkDepartment ?? user.department,

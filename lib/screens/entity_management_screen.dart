@@ -47,6 +47,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     required String title,
     required String message,
     Map<String, dynamic> details = const {},
+    bool requiresAck = false,
   }) async {
     final authProvider = context.read<AuthProvider>();
     if ((authProvider.userRole ?? '').toLowerCase() != 'admin') {
@@ -63,6 +64,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         message: message,
         area: 'entity_management',
         details: details,
+        requiresAck: requiresAck,
       );
     } catch (e) {
       debugPrint('[EntityManagement] alert publish failed: $e');

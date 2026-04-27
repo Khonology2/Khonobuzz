@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../providers/admin_alert_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
+import '../services/admin_alert_service.dart';
 import '../theme/app_backgrounds.dart';
 import '../theme/app_text_colors.dart';
 
@@ -25,6 +26,95 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   String _formatAlertTimestamp(DateTime timestamp) {
     return DateFormat('EEE, dd MMM yyyy • hh:mm a').format(timestamp.toLocal());
+  }
+
+  Future<void> _showAnnouncementDialog() async {
+    final titleController = TextEditingController();
+    final messageController = TextEditingController();
+    bool requiresAck = true;
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              backgroundColor: Theme.of(context).brightness == Brightness.dark
+                  ? _notificationsDarkWidgetBg
+                  : Colors.white.withValues(alpha: 0.40),
+              title: Text(
+                'Send announcement',
+                style: TextStyle(
+                  color: appTextColor(context),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(labelText: 'Title'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: messageController,
+                    maxLines: 4,
+                    decoration: const InputDecoration(labelText: 'Message'),
+                  ),
+                  SwitchListTile(
+                    value: requiresAck,
+                    onChanged: (v) => setStateDialog(() => requiresAck = v),
+                    title: Text(
+                      'Require acknowledgment',
+                      style: TextStyle(
+                        color: appTextColor(context),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final authProvider = context.read<AuthProvider>();
+                    final actor = (authProvider.userEmail ?? '').trim();
+                    final title = titleController.text.trim();
+                    final message = messageController.text.trim();
+                    if (actor.isEmpty || title.isEmpty || message.isEmpty) {
+                      Navigator.of(ctx).pop(false);
+                      return;
+                    }
+                    await AdminAlertService.publishAdminChange(
+                      actorEmail: actor,
+                      title: title,
+                      message: message,
+                      area: 'announcement',
+                      targetRoles: const ['staff', 'admin'],
+                      requiresAck: requiresAck,
+                      effectiveDateIso: DateTime.now().toUtc().toIso8601String(),
+                    );
+                    Navigator.of(ctx).pop(true);
+                  },
+                  child: const Text('Send'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (created == true && mounted) {
+      await context.read<AdminAlertProvider>().start(
+        context.read<AuthProvider>().userRole ?? '',
+        userEmail: context.read<AuthProvider>().userEmail ?? '',
+      );
+    }
   }
 
   @override
@@ -65,6 +155,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold),
         ),
         actions: [
+          if (role == 'admin')
+            IconButton(
+              onPressed: _showAnnouncementDialog,
+              icon: const Icon(Icons.campaign),
+              tooltip: 'Send announcement',
+            ),
           TextButton(
             onPressed: () async {
               await alertsProvider.clearAllAlerts();
@@ -169,6 +265,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             fontSize: 13,
                           ),
                         ),
+                        if (alert.requiresAck && role == 'admin') ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Acknowledged: ${alert.acknowledgedCount}/${alert.targetCount}',
+                            style: TextStyle(
+                              color: appTextColor(context).withValues(alpha: 0.78),
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         Text(
                           _formatAlertTimestamp(alert.createdAt),
@@ -186,6 +294,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             fontFamily: 'Poppins',
                             fontSize: 11,
                           ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            if (alert.requiresAck &&
+                                role == 'staff' &&
+                                !alert.acknowledged)
+                              ElevatedButton(
+                                onPressed: () async {
+                                  await alertsProvider.acknowledgeAlert(alert.id);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFC10D00),
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text(
+                                  'Acknowledge',
+                                  style: TextStyle(fontFamily: 'Poppins'),
+                                ),
+                              ),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: () async {
+                                await alertsProvider.dismissAlert(alert.id);
+                              },
+                              icon: const Icon(Icons.delete_outline, size: 18),
+                              label: const Text('Dismiss'),
+                            ),
+                          ],
                         ),
                       ],
                     ),
