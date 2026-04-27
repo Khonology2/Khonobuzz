@@ -107,8 +107,14 @@ CACHE_KEY_PREFIX = (os.environ.get('CACHE_KEY_PREFIX', 'khonobuzz') or 'khonobuz
 REDIS_URL = (os.environ.get('REDIS_URL', '') or '').strip()
 REDIS_CONNECT_TIMEOUT_SECONDS = float(os.environ.get('REDIS_CONNECT_TIMEOUT_SECONDS', '0.6'))
 REDIS_SOCKET_TIMEOUT_SECONDS = float(os.environ.get('REDIS_SOCKET_TIMEOUT_SECONDS', '0.6'))
+REDIS_FAILURE_THRESHOLD = int(os.environ.get('REDIS_FAILURE_THRESHOLD', '3'))
+REDIS_FAILURE_COOLDOWN_SECONDS = int(os.environ.get('REDIS_FAILURE_COOLDOWN_SECONDS', '60'))
 _REDIS_CLIENT: Optional[Redis] = None
 _REDIS_AVAILABLE = False
+_REDIS_STATE: Dict[str, Any] = {
+    "consecutive_failures": 0,
+    "disabled_until": 0.0,
+}
 
 # Firestore circuit breaker for quota-protection.
 FIRESTORE_BREAKER_FAILURE_THRESHOLD = int(
@@ -169,6 +175,7 @@ def _cache_delete(cache_key: str) -> None:
     try:
         redis_client.delete(_redis_full_key(cache_key))
     except Exception as exc:
+        _redis_record_failure(exc)
         debug_log(f"Redis cache delete failed for {cache_key}: {exc}")
 
 
@@ -183,9 +190,34 @@ def _redis_full_key(cache_key: str) -> str:
     return f"{CACHE_KEY_PREFIX}:cache:{cache_key}"
 
 
+def _redis_is_temporarily_disabled() -> bool:
+    return time.time() < float(_REDIS_STATE.get("disabled_until", 0.0))
+
+
+def _redis_record_success() -> None:
+    _REDIS_STATE["consecutive_failures"] = 0
+    _REDIS_STATE["disabled_until"] = 0.0
+
+
+def _redis_record_failure(exc: Exception) -> None:
+    global _REDIS_CLIENT, _REDIS_AVAILABLE
+    _REDIS_CLIENT = None
+    _REDIS_AVAILABLE = False
+    failures = int(_REDIS_STATE.get("consecutive_failures", 0)) + 1
+    _REDIS_STATE["consecutive_failures"] = failures
+    if failures >= REDIS_FAILURE_THRESHOLD:
+        _REDIS_STATE["disabled_until"] = time.time() + REDIS_FAILURE_COOLDOWN_SECONDS
+        debug_log(
+            f"Redis temporarily disabled for {REDIS_FAILURE_COOLDOWN_SECONDS}s "
+            f"after {failures} failures: {exc}"
+        )
+
+
 def _get_redis_client() -> Optional[Redis]:
     global _REDIS_CLIENT, _REDIS_AVAILABLE
     if not REDIS_URL:
+        return None
+    if _redis_is_temporarily_disabled():
         return None
     if _REDIS_CLIENT is not None:
         return _REDIS_CLIENT
@@ -198,10 +230,10 @@ def _get_redis_client() -> Optional[Redis]:
         )
         _REDIS_CLIENT.ping()
         _REDIS_AVAILABLE = True
+        _redis_record_success()
         info_log("Redis cache connected")
     except Exception as exc:
-        _REDIS_CLIENT = None
-        _REDIS_AVAILABLE = False
+        _redis_record_failure(exc)
         error_log(f"Redis unavailable, using in-memory cache only: {exc}")
     return _REDIS_CLIENT
 
@@ -219,6 +251,7 @@ def _redis_get_json(cache_key: str, fresh_only: bool) -> Optional[Any]:
             return None
         return payload.get("data")
     except Exception as exc:
+        _redis_record_failure(exc)
         debug_log(f"Redis cache get failed for {cache_key}: {exc}")
         return None
 
@@ -240,6 +273,7 @@ def _redis_set_json(cache_key: str, data: Any, ttl_seconds: int) -> None:
             json.dumps(payload, ensure_ascii=True),
         )
     except Exception as exc:
+        _redis_record_failure(exc)
         debug_log(f"Redis cache set failed for {cache_key}: {exc}")
 
 
@@ -254,6 +288,7 @@ def _redis_delete_prefix(prefix: str) -> None:
         for key in redis_client.scan_iter(match=pattern):
             redis_client.delete(key)
     except Exception as exc:
+        _redis_record_failure(exc)
         debug_log(f"Redis cache prefix delete failed for {prefix}: {exc}")
 
 
