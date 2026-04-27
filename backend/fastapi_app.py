@@ -19,6 +19,7 @@ from fastapi import HTTPException
 from typing import Optional, Dict, Any, Callable
 from pathlib import Path
 import jwt
+from redis import Redis
 try:
     from .token_utils import (
         generate_and_encrypt_token,
@@ -95,6 +96,183 @@ _VERSION_JSON_CACHE: Dict[str, Any] = {
     "mtime": None,
     "data": None,
 }
+
+# Hot endpoint caches (in-memory) to reduce Firestore pressure.
+USERS_CACHE_TTL_SECONDS = int(os.environ.get('USERS_CACHE_TTL_SECONDS', '45'))
+ADMIN_NOTIFICATIONS_CACHE_TTL_SECONDS = int(
+    os.environ.get('ADMIN_NOTIFICATIONS_CACHE_TTL_SECONDS', '30')
+)
+HOT_ENDPOINT_CACHE: Dict[str, Dict[str, Any]] = {}
+CACHE_KEY_PREFIX = (os.environ.get('CACHE_KEY_PREFIX', 'khonobuzz') or 'khonobuzz').strip()
+REDIS_URL = (os.environ.get('REDIS_URL', '') or '').strip()
+REDIS_CONNECT_TIMEOUT_SECONDS = float(os.environ.get('REDIS_CONNECT_TIMEOUT_SECONDS', '0.6'))
+REDIS_SOCKET_TIMEOUT_SECONDS = float(os.environ.get('REDIS_SOCKET_TIMEOUT_SECONDS', '0.6'))
+_REDIS_CLIENT: Optional[Redis] = None
+_REDIS_AVAILABLE = False
+
+# Firestore circuit breaker for quota-protection.
+FIRESTORE_BREAKER_FAILURE_THRESHOLD = int(
+    os.environ.get('FIRESTORE_BREAKER_FAILURE_THRESHOLD', '3')
+)
+FIRESTORE_BREAKER_OPEN_SECONDS = int(
+    os.environ.get('FIRESTORE_BREAKER_OPEN_SECONDS', '120')
+)
+FIRESTORE_BREAKER_STATE: Dict[str, Any] = {
+    "consecutive_failures": 0,
+    "open_until": 0.0,
+}
+
+
+def _is_quota_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "quota exceeded" in msg or msg.strip().startswith("429")
+
+
+def _cache_get(cache_key: str) -> Optional[Any]:
+    redis_value = _redis_get_json(cache_key, fresh_only=True)
+    if redis_value is not None:
+        return redis_value
+    entry = HOT_ENDPOINT_CACHE.get(cache_key)
+    if not entry:
+        return None
+    if entry.get("expires_at", 0) <= time.time():
+        return None
+    return entry.get("data")
+
+
+def _cache_get_any(cache_key: str) -> Optional[Any]:
+    redis_value = _redis_get_json(cache_key, fresh_only=False)
+    if redis_value is not None:
+        return redis_value
+    entry = HOT_ENDPOINT_CACHE.get(cache_key)
+    if not entry:
+        return None
+    return entry.get("data")
+
+
+def _cache_set(cache_key: str, data: Any, ttl_seconds: int) -> None:
+    _redis_set_json(cache_key, data, ttl_seconds)
+    HOT_ENDPOINT_CACHE[cache_key] = {
+        "data": data,
+        "expires_at": time.time() + max(1, ttl_seconds),
+        "updated_at": time.time(),
+    }
+
+
+def _cache_delete(cache_key: str) -> None:
+    HOT_ENDPOINT_CACHE.pop(cache_key, None)
+    if not _REDIS_AVAILABLE:
+        return
+    redis_client = _get_redis_client()
+    if redis_client is None:
+        return
+    try:
+        redis_client.delete(_redis_full_key(cache_key))
+    except Exception as exc:
+        debug_log(f"Redis cache delete failed for {cache_key}: {exc}")
+
+
+def _cache_delete_prefix(prefix: str) -> None:
+    for key in list(HOT_ENDPOINT_CACHE.keys()):
+        if key.startswith(prefix):
+            HOT_ENDPOINT_CACHE.pop(key, None)
+    _redis_delete_prefix(prefix)
+
+
+def _redis_full_key(cache_key: str) -> str:
+    return f"{CACHE_KEY_PREFIX}:cache:{cache_key}"
+
+
+def _get_redis_client() -> Optional[Redis]:
+    global _REDIS_CLIENT, _REDIS_AVAILABLE
+    if not REDIS_URL:
+        return None
+    if _REDIS_CLIENT is not None:
+        return _REDIS_CLIENT
+    try:
+        _REDIS_CLIENT = Redis.from_url(
+            REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=REDIS_CONNECT_TIMEOUT_SECONDS,
+            socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+        )
+        _REDIS_CLIENT.ping()
+        _REDIS_AVAILABLE = True
+        info_log("Redis cache connected")
+    except Exception as exc:
+        _REDIS_CLIENT = None
+        _REDIS_AVAILABLE = False
+        error_log(f"Redis unavailable, using in-memory cache only: {exc}")
+    return _REDIS_CLIENT
+
+
+def _redis_get_json(cache_key: str, fresh_only: bool) -> Optional[Any]:
+    redis_client = _get_redis_client()
+    if redis_client is None:
+        return None
+    try:
+        payload_raw = redis_client.get(_redis_full_key(cache_key))
+        if not payload_raw:
+            return None
+        payload = json.loads(payload_raw)
+        if fresh_only and float(payload.get("expires_at", 0.0)) <= time.time():
+            return None
+        return payload.get("data")
+    except Exception as exc:
+        debug_log(f"Redis cache get failed for {cache_key}: {exc}")
+        return None
+
+
+def _redis_set_json(cache_key: str, data: Any, ttl_seconds: int) -> None:
+    redis_client = _get_redis_client()
+    if redis_client is None:
+        return
+    try:
+        payload = {
+            "data": data,
+            "expires_at": time.time() + max(1, ttl_seconds),
+            "updated_at": time.time(),
+        }
+        # Keep stale payload around longer so stale fallback still works.
+        redis_client.setex(
+            _redis_full_key(cache_key),
+            max(30, ttl_seconds * 4),
+            json.dumps(payload, ensure_ascii=True),
+        )
+    except Exception as exc:
+        debug_log(f"Redis cache set failed for {cache_key}: {exc}")
+
+
+def _redis_delete_prefix(prefix: str) -> None:
+    if not _REDIS_AVAILABLE:
+        return
+    redis_client = _get_redis_client()
+    if redis_client is None:
+        return
+    pattern = f"{_redis_full_key(prefix)}*"
+    try:
+        for key in redis_client.scan_iter(match=pattern):
+            redis_client.delete(key)
+    except Exception as exc:
+        debug_log(f"Redis cache prefix delete failed for {prefix}: {exc}")
+
+
+def _firestore_breaker_is_open() -> bool:
+    return time.time() < float(FIRESTORE_BREAKER_STATE.get("open_until", 0.0))
+
+
+def _firestore_breaker_record_success() -> None:
+    FIRESTORE_BREAKER_STATE["consecutive_failures"] = 0
+    FIRESTORE_BREAKER_STATE["open_until"] = 0.0
+
+
+def _firestore_breaker_record_failure(exc: Exception) -> None:
+    if not _is_quota_error(exc):
+        return
+    failures = int(FIRESTORE_BREAKER_STATE.get("consecutive_failures", 0)) + 1
+    FIRESTORE_BREAKER_STATE["consecutive_failures"] = failures
+    if failures >= FIRESTORE_BREAKER_FAILURE_THRESHOLD:
+        FIRESTORE_BREAKER_STATE["open_until"] = time.time() + FIRESTORE_BREAKER_OPEN_SECONDS
 
 def derive_module_access_from_role(module_access: Optional[str], module_access_role: Optional[str]) -> Optional[str]:
     if module_access and module_access.strip():
@@ -533,11 +711,16 @@ app = FastAPI(
 async def startup_warmup():
     start = time.time()
     try:
+        _get_redis_client()
+        if _firestore_breaker_is_open():
+            info_log("Startup warm-up skipped: Firestore circuit breaker is open")
+            return
         # Keep startup non-blocking: Firestore can be slow on cold starts.
         await asyncio.wait_for(
             asyncio.to_thread(lambda: db.collection('users').limit(1).get()),
             timeout=6.0,
         )
+        _firestore_breaker_record_success()
         info_log(
             f"Startup warm-up Firestore users took {time.time() - start:.3f} seconds",
         )
@@ -546,6 +729,7 @@ async def startup_warmup():
             "Startup warm-up timed out after 6s; continuing startup without blocking",
         )
     except Exception as e:
+        _firestore_breaker_record_failure(e)
         error_log(f"Startup warm-up failed: {e}")
 cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
 PRIMARY_FRONTEND_URL = os.environ.get(
@@ -1406,6 +1590,15 @@ async def register_user(user: UserRegister):
         return JSONResponse(status_code=500, content={"error": str(e)})
 @app.get("/api/users")
 async def list_users():
+    cache_key = "users:list"
+    fresh_cache = _cache_get(cache_key)
+    if fresh_cache is not None:
+        return JSONResponse(status_code=status.HTTP_200_OK, content={'users': fresh_cache})
+    if _firestore_breaker_is_open():
+        stale_cache = _cache_get_any(cache_key)
+        if stale_cache is not None:
+            return JSONResponse(status_code=status.HTTP_200_OK, content={'users': stale_cache})
+        return JSONResponse(status_code=429, content={"error": "Firestore temporarily throttled"})
     try:
         users_query = db.collection('users').stream()
         users_with_sort_keys = []
@@ -1472,11 +1665,17 @@ async def list_users():
             users_with_sort_keys.append((sort_key, user_payload))
         users_with_sort_keys.sort(key=lambda item: item[0] or datetime.min, reverse=True)
         users_data = [payload for _, payload in users_with_sort_keys]
+        _firestore_breaker_record_success()
+        _cache_set(cache_key, users_data, USERS_CACHE_TTL_SECONDS)
         return JSONResponse(status_code=status.HTTP_200_OK, content={'users': users_data})
     except Exception as e:
+        _firestore_breaker_record_failure(e)
         msg = str(e)
         print(f"[ERROR] During users fetch: {msg}")
-        if "quota exceeded" in msg.lower() or msg.strip().startswith("429"):
+        if _is_quota_error(e):
+            stale_cache = _cache_get_any(cache_key)
+            if stale_cache is not None:
+                return JSONResponse(status_code=status.HTTP_200_OK, content={'users': stale_cache})
             return JSONResponse(status_code=429, content={"error": "Quota exceeded"})
         return JSONResponse(status_code=500, content={"error": str(e)})
 @app.patch("/api/users/{user_id}")
@@ -1642,6 +1841,7 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
             'lastSignInAt': last_sign_in_str,
             'loginCount': login_count,
         }
+        _cache_delete("users:list")
         return JSONResponse(status_code=status.HTTP_200_OK, content={'message': 'User updated successfully', 'user': user_payload})
     except Exception as e:
         msg = str(e)
@@ -1691,6 +1891,7 @@ async def delete_user(user_id: str):
             ),
         )
 
+        _cache_delete("users:list")
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={"message": f"User {user_id} deleted successfully"}
@@ -1890,6 +2091,7 @@ async def create_admin_notification(payload: AdminNotificationCreate):
         }
         ref = db.collection("admin_notifications").document()
         ref.set(doc)
+        _cache_delete_prefix("admin_notifications:")
         return JSONResponse(
             status_code=201,
             content={
@@ -1911,9 +2113,19 @@ async def list_admin_notifications(
     userEmail: str = Query(""),
     limit: int = Query(30, ge=1, le=200),
 ):
+    normalized_role = (role or "").strip().lower()
+    normalized_email = (userEmail or "").strip().lower()
+    cache_limit = min(limit, 60)
+    cache_key = f"admin_notifications:{normalized_role}:{normalized_email}:{cache_limit}"
+    fresh_cache = _cache_get(cache_key)
+    if fresh_cache is not None:
+        return JSONResponse(status_code=200, content={"alerts": fresh_cache[:limit]})
+    if _firestore_breaker_is_open():
+        stale_cache = _cache_get_any(cache_key)
+        if stale_cache is not None:
+            return JSONResponse(status_code=200, content={"alerts": stale_cache[:limit]})
+        return JSONResponse(status_code=429, content={"error": "Firestore temporarily throttled"})
     try:
-        normalized_role = (role or "").strip().lower()
-        normalized_email = (userEmail or "").strip().lower()
         if not normalized_role:
             raise HTTPException(status_code=400, detail="role is required")
         if normalized_role == "staff":
@@ -1982,15 +2194,21 @@ async def list_admin_notifications(
             item["acknowledgedCount"] = len(acked_emails)
             item["targetCount"] = int(item.get("details", {}).get("targetCount", 0))
             item.pop("acknowledgedByEmails", None)
+        _firestore_breaker_record_success()
+        _cache_set(cache_key, alerts, ADMIN_NOTIFICATIONS_CACHE_TTL_SECONDS)
         alerts = alerts[:limit]
 
         return JSONResponse(status_code=200, content={"alerts": alerts})
     except HTTPException:
         raise
     except Exception as e:
+        _firestore_breaker_record_failure(e)
         msg = str(e)
         print(f"[ERROR] list_admin_notifications: {msg}")
-        if "quota exceeded" in msg.lower() or msg.strip().startswith("429"):
+        if _is_quota_error(e):
+            stale_cache = _cache_get_any(cache_key)
+            if stale_cache is not None:
+                return JSONResponse(status_code=200, content={"alerts": stale_cache[:limit]})
             return JSONResponse(status_code=429, content={"error": "Quota exceeded"})
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -2016,6 +2234,7 @@ async def clear_admin_notifications(payload: AdminNotificationClear):
             },
             merge=True,
         )
+        _cache_delete_prefix("admin_notifications:")
         return JSONResponse(status_code=200, content={"message": "Alerts cleared"})
     except HTTPException:
         raise
@@ -2038,6 +2257,7 @@ async def dismiss_admin_notification(payload: AdminNotificationDismiss):
             },
             merge=True,
         )
+        _cache_delete_prefix("admin_notifications:")
         return JSONResponse(status_code=200, content={"message": "Alert dismissed"})
     except HTTPException:
         raise
@@ -2061,6 +2281,7 @@ async def acknowledge_admin_notification(payload: AdminNotificationAcknowledge):
             },
             merge=True,
         )
+        _cache_delete_prefix("admin_notifications:")
         return JSONResponse(status_code=200, content={"message": "Alert acknowledged"})
     except HTTPException:
         raise
