@@ -489,6 +489,20 @@ class UserUpdate(BaseModel):
 
 class NameBody(BaseModel):
     name: str
+
+
+class AdminNotificationCreate(BaseModel):
+    actorEmail: str
+    title: str
+    message: str
+    area: str = "general"
+    details: Dict[str, Any] = {}
+    targetRoles: Optional[list[str]] = None
+
+
+class AdminNotificationClear(BaseModel):
+    role: str
+    userEmail: str
 try:
     main_cred = load_firebase_credentials('FIREBASE_CREDENTIALS', 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json')
     initialize_app(main_cred)
@@ -1811,6 +1825,158 @@ async def create_entity(body: NameBody):
         raise
     except Exception as e:
         print(f"[ERROR] create_entity: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/api/admin/notifications")
+async def create_admin_notification(payload: AdminNotificationCreate):
+    try:
+        actor_email = (payload.actorEmail or "").strip().lower()
+        title = (payload.title or "").strip()
+        message = (payload.message or "").strip()
+        area = (payload.area or "general").strip()
+        target_roles = payload.targetRoles or ["admin", "staff"]
+        normalized_roles = sorted(
+            {
+                str(role).strip().lower()
+                for role in target_roles
+                if str(role).strip()
+            }
+        )
+        if not actor_email or not title or not message:
+            raise HTTPException(
+                status_code=400,
+                detail="actorEmail, title and message are required",
+            )
+        if not normalized_roles:
+            normalized_roles = ["admin", "staff"]
+
+        now = datetime.utcnow()
+        doc = {
+            "actorEmail": actor_email,
+            "actorRole": "admin",
+            "title": title,
+            "message": message,
+            "area": area,
+            "details": payload.details or {},
+            "targetRoles": normalized_roles,
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            "createdAtIso": now.isoformat() + "Z",
+        }
+        ref = db.collection("admin_notifications").document()
+        ref.set(doc)
+        return JSONResponse(
+            status_code=201,
+            content={
+                "message": "Notification created",
+                "id": ref.id,
+                "createdAtIso": doc["createdAtIso"],
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] create_admin_notification: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/admin/notifications")
+async def list_admin_notifications(
+    role: str = Query(...),
+    userEmail: str = Query(""),
+    limit: int = Query(30, ge=1, le=200),
+):
+    try:
+        normalized_role = (role or "").strip().lower()
+        normalized_email = (userEmail or "").strip().lower()
+        if not normalized_role:
+            raise HTTPException(status_code=400, detail="role is required")
+        if normalized_role == "staff":
+            limit = min(limit, 30)
+
+        # Avoid composite-index requirement from array_contains + order_by by
+        # querying role matches first, then sorting in memory.
+        query = db.collection("admin_notifications").where(
+            "targetRoles",
+            "array_contains",
+            normalized_role,
+        )
+        docs = list(query.stream())
+
+        cleared_after = None
+        if normalized_email:
+            state_doc = db.collection("admin_notification_state").document(normalized_email).get()
+            if state_doc.exists:
+                state = state_doc.to_dict() or {}
+                cleared_after = _coerce_datetime(state.get("clearedAtIso"))
+
+        alerts = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            created_at = _coerce_datetime(data.get("createdAt"))
+            created_at_iso = data.get("createdAtIso")
+            if not created_at_iso:
+                created_at_iso = (
+                    created_at.isoformat() + "Z" if created_at else datetime.utcnow().isoformat() + "Z"
+                )
+            alerts.append(
+                {
+                    "id": doc.id,
+                    "actorEmail": data.get("actorEmail", ""),
+                    "title": data.get("title", "Admin update"),
+                    "message": data.get("message", ""),
+                    "area": data.get("area", "general"),
+                    "details": data.get("details", {}),
+                    "targetRoles": data.get("targetRoles", []),
+                    "createdAtIso": created_at_iso,
+                }
+            )
+
+        alerts.sort(
+            key=lambda item: _coerce_datetime(item.get("createdAtIso")) or datetime.min,
+            reverse=True,
+        )
+        if cleared_after is not None:
+            alerts = [
+                item
+                for item in alerts
+                if (_coerce_datetime(item.get("createdAtIso")) or datetime.min) > cleared_after
+            ]
+        alerts = alerts[:limit]
+
+        return JSONResponse(status_code=200, content={"alerts": alerts})
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] list_admin_notifications: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/api/admin/notifications/clear")
+async def clear_admin_notifications(payload: AdminNotificationClear):
+    try:
+        normalized_role = (payload.role or "").strip().lower()
+        normalized_email = (payload.userEmail or "").strip().lower()
+        if not normalized_role or not normalized_email:
+            raise HTTPException(
+                status_code=400,
+                detail="role and userEmail are required",
+            )
+        now_iso = datetime.utcnow().isoformat() + "Z"
+        db.collection("admin_notification_state").document(normalized_email).set(
+            {
+                "role": normalized_role,
+                "userEmail": normalized_email,
+                "clearedAtIso": now_iso,
+                "updatedAtIso": now_iso,
+            },
+            merge=True,
+        )
+        return JSONResponse(status_code=200, content={"message": "Alerts cleared"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] clear_admin_notifications: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 

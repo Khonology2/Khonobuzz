@@ -17,6 +17,7 @@ import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/sound_system.dart';
+import '../services/admin_alert_service.dart';
 import '../theme/app_backgrounds.dart';
 import '../theme/app_text_colors.dart';
 
@@ -42,6 +43,32 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Timer? _debounceTimer;
   String _searchQuery = '';
 
+  Future<void> _publishAdminAlert({
+    required String title,
+    required String message,
+    Map<String, dynamic> details = const {},
+  }) async {
+    final authProvider = context.read<AuthProvider>();
+    if ((authProvider.userRole ?? '').toLowerCase() != 'admin') {
+      return;
+    }
+    final actorEmail = (authProvider.userEmail ?? '').trim();
+    if (actorEmail.isEmpty) {
+      return;
+    }
+    try {
+      await AdminAlertService.publishAdminChange(
+        actorEmail: actorEmail,
+        title: title,
+        message: message,
+        area: 'user_management',
+        details: details,
+      );
+    } catch (e) {
+      debugPrint('[UserManagement] alert publish failed: $e');
+    }
+  }
+
   String? expandedUserId;
   String? _hoveredUserId;
   bool _isSelectionMode = false;
@@ -64,7 +91,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   List<String> get _availableDepartments {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final users = userProvider.users;
-    final deptOrder = _departments.where((d) => d.isNotEmpty).toList();
+    final deptOrder = _departments
+        .where((d) => d.isNotEmpty)
+        .fold<List<String>>(<String>[], (acc, value) {
+          if (!acc.contains(value)) acc.add(value);
+          return acc;
+        });
     if (users.isEmpty) return List<String>.from(deptOrder);
     final fromUsers = users
         .map((user) => user.department)
@@ -78,7 +110,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   List<String> get _availableDesignations {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final users = userProvider.users;
-    final desigOrder = _designations.where((d) => d.isNotEmpty).toList();
+    final desigOrder = _designations
+        .where((d) => d.isNotEmpty)
+        .fold<List<String>>(<String>[], (acc, value) {
+          if (!acc.contains(value)) acc.add(value);
+          return acc;
+        });
     if (users.isEmpty) return List<String>.from(desigOrder);
     final fromUsers = users
         .map((user) => user.designation)
@@ -114,7 +151,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     'Pending': Colors.orange.shade500,
   };
 
-  final List<String> userRoles = ['Staff', 'Manager', 'Admin'];
+  final List<String> userRoles = ['Staff', 'Admin'];
 
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -209,8 +246,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Future<void> _showAddDepartmentDialog({String? initialSelectForUser}) async {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color dialogBg = isDark
-        ? userMgmtDarkWidgetBg
-        : Colors.white.withValues(alpha: 0.40);
+        ? const Color(0xFF3D3F40)
+        : Colors.white;
     final controller = TextEditingController();
     final result = await showDialog<String>(
       context: context,
@@ -287,8 +324,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Future<void> _showAddDesignationDialog({String? initialSelectForUser}) async {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color dialogBg = isDark
-        ? userMgmtDarkWidgetBg
-        : Colors.white.withValues(alpha: 0.40);
+        ? const Color(0xFF3D3F40)
+        : Colors.white;
     final controller = TextEditingController();
     final result = await showDialog<String>(
       context: context,
@@ -462,6 +499,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
         );
       }
+      await _publishAdminAlert(
+        title: 'User management updated',
+        message:
+            '$firstName $lastName updated to role "$newRole" and status "$newStatus".',
+        details: {
+          'userId': userId,
+          'userName': '$firstName $lastName',
+          'role': newRole,
+          'status': newStatus,
+          'department': department,
+          'designation': designation,
+          'entity': entity ?? '',
+        },
+      );
 
       final adminField = adminEmail.isNotEmpty
           ? {
@@ -1736,9 +1787,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: DropdownButton<String>(
-                        value: selectedDepartmentLocal.isEmpty
-                            ? null
-                            : selectedDepartmentLocal,
+                        value: selectedDepartmentLocal.isNotEmpty &&
+                                _availableDepartments.contains(
+                                  selectedDepartmentLocal,
+                                )
+                            ? selectedDepartmentLocal
+                            : null,
                         hint: Text(
                           'Select department',
                           style: TextStyle(
@@ -1812,7 +1866,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: DropdownButton<String>(
-                        value: selectedDesignationLocal.isNotEmpty
+                        value: selectedDesignationLocal.isNotEmpty &&
+                                _availableDesignations.contains(
+                                  selectedDesignationLocal,
+                                )
                             ? selectedDesignationLocal
                             : null,
                         hint: Text(
@@ -2097,6 +2154,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
         );
       }
+      await _publishAdminAlert(
+        title: 'Manager assignment updated',
+        message: 'Manager for ${user.name} changed to $managerFullName.',
+        details: {
+          'userId': user.id,
+          'userName': user.name,
+          'manager': managerFullName,
+        },
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -2114,8 +2180,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color dialogBg = isDark
-        ? userMgmtDarkWidgetBg
-        : Colors.white.withValues(alpha: 0.40);
+        ? const Color(0xFF3D3F40)
+        : Colors.white;
 
     final TextEditingController searchController = TextEditingController();
     ManagedUser? selectedManager;
@@ -2293,8 +2359,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           builder: (context, setDialogState) {
             final bool isDark = Theme.of(context).brightness == Brightness.dark;
             final Color dialogBg = isDark
-                ? userMgmtDarkWidgetBg
-                : Colors.white.withValues(alpha: 0.40);
+                ? const Color(0xFF3D3F40)
+                : Colors.white;
             return AlertDialog(
               backgroundColor: dialogBg,
               title: Text(
@@ -2643,6 +2709,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
         await userProvider.fetchUsers(forceRefresh: true);
       }
+
+      await _publishAdminAlert(
+        title: 'New users added',
+        message: '$successCount user(s) were added from User Management.',
+        details: {
+          'successCount': successCount,
+          'failureCount': failureCount,
+          'skippedCount': skippedCount,
+          'successEmails': successEmails,
+        },
+      );
     }
 
     return {
@@ -2670,8 +2747,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (BuildContext context) {
         final bool isDark = Theme.of(context).brightness == Brightness.dark;
         final Color dialogBg = isDark
-            ? userMgmtDarkWidgetBg
-            : Colors.white.withValues(alpha: 0.40);
+            ? const Color(0xFF3D3F40)
+            : Colors.white;
         return AlertDialog(
           backgroundColor: dialogBg,
           title: Text(
@@ -3022,8 +3099,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           builder: (context, setDialogState) {
             final bool isDark = Theme.of(context).brightness == Brightness.dark;
             final Color dialogBg = isDark
-                ? userMgmtDarkWidgetBg
-                : Colors.white.withValues(alpha: 0.40);
+                ? const Color(0xFF3D3F40)
+                : Colors.white;
             return AlertDialog(
               backgroundColor: dialogBg,
               title: Text(
@@ -3312,8 +3389,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (BuildContext context) {
         final bool isDark = Theme.of(context).brightness == Brightness.dark;
         final Color dialogBg = isDark
-            ? userMgmtDarkWidgetBg
-            : Colors.white.withValues(alpha: 0.40);
+            ? const Color(0xFF3D3F40)
+            : Colors.white;
         return AlertDialog(
           backgroundColor: dialogBg,
           title: Text(
@@ -3445,6 +3522,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ? (failureCount > 0 ? Colors.orange : Colors.green)
               : Colors.red,
         ),
+      );
+    }
+
+    if (successfullyDeletedUserIds.isNotEmpty) {
+      await _publishAdminAlert(
+        title: 'Users deleted',
+        message:
+            '${successfullyDeletedUserIds.length} user(s) deleted by admin.',
+        details: {
+          'deletedUserIds': successfullyDeletedUserIds,
+          'failedCount': failureCount,
+        },
       );
     }
   }

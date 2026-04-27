@@ -14,6 +14,7 @@ import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/sound_system.dart';
+import '../services/admin_alert_service.dart';
 import '../theme/app_backgrounds.dart';
 import '../providers/theme_mode_provider.dart';
 import '../theme/app_text_colors.dart';
@@ -31,7 +32,6 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<String> _entityOptions = ['Khonology Internal'];
   static const String _notAssignedValue = 'Not Assigned';
-  static const Color _popupDarkBg = Color(0xFF3D3F40);
   static final Color entityDarkWidgetBg = Color.alphaBlend(
     Colors.white.withValues(alpha: 0.10),
     const Color(0xFF3D3F40).withValues(alpha: 0.40),
@@ -42,6 +42,32 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   String? _hoveredUserId;
   Timer? _debounceTimer;
   String _searchQuery = '';
+
+  Future<void> _publishAdminAlert({
+    required String title,
+    required String message,
+    Map<String, dynamic> details = const {},
+  }) async {
+    final authProvider = context.read<AuthProvider>();
+    if ((authProvider.userRole ?? '').toLowerCase() != 'admin') {
+      return;
+    }
+    final actorEmail = (authProvider.userEmail ?? '').trim();
+    if (actorEmail.isEmpty) {
+      return;
+    }
+    try {
+      await AdminAlertService.publishAdminChange(
+        actorEmail: actorEmail,
+        title: title,
+        message: message,
+        area: 'entity_management',
+        details: details,
+      );
+    } catch (e) {
+      debugPrint('[EntityManagement] alert publish failed: $e');
+    }
+  }
 
   Map<String, Color> get userStatusColors => {
     'Active': Colors.green.shade600,
@@ -158,7 +184,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   Future<void> _showAddEntityDialog() async {
     final controller = TextEditingController();
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color dialogBg = isDark ? _popupDarkBg : Colors.white;
+    final Color dialogBg = isDark
+        ? const Color(0xFF3D3F40)
+        : Colors.white;
     final result = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
@@ -239,6 +267,11 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           ),
           backgroundColor: const Color(0xFFC10D00),
         ),
+      );
+      await _publishAdminAlert(
+        title: 'Entity list updated',
+        message: 'New entity "$entityName" was added.',
+        details: {'entity': entityName},
       );
     } catch (_) {
       if (!mounted) return;
@@ -369,6 +402,16 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           ),
         );
       }
+      await _publishAdminAlert(
+        title: 'User entity updated',
+        message:
+            'Entity for ${user.name} changed to ${updatedEntity ?? 'Not Assigned'}.',
+        details: {
+          'userId': user.id,
+          'userName': user.name,
+          'entity': updatedEntity ?? '',
+        },
+      );
     } catch (e) {
       if (mounted) {
         SoundSystem.playError();
@@ -863,7 +906,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     final Color panelBg = isDark
         ? entityDarkWidgetBg
         : Colors.white.withValues(alpha: 0.40);
-    final Color popupBg = isDark ? _popupDarkBg : Colors.white;
+    final Color popupBg = isDark
+        ? const Color(0xFF3D3F40)
+        : Colors.white;
     final Color dividerColor = appTextColor(context).withValues(
       alpha: isDark ? 0.22 : 0.30,
     );

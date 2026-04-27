@@ -112,6 +112,13 @@ flutter:
     - assets/sounds/Successful_1.wav
     - assets/sounds/clapass.wav
     - assets/sounds/LoginPass.wav
+    - assets/images/siderbar/1.png
+    - assets/images/siderbar/2.png
+    - assets/images/siderbar/3.png
+    - assets/images/siderbar/4.png
+    - assets/images/siderbar/5.png
+    - assets/images/siderbar/6.png
+    - assets/images/siderbar/7.png
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

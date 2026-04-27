@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +13,7 @@ import 'screens/auth_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/onboarding_alert_screen.dart';
 import 'providers/auth_provider.dart';
+import 'providers/admin_alert_provider.dart';
 import 'providers/theme_mode_provider.dart';
 import 'providers/user_provider.dart';
 import 'theme/app_themes.dart';
@@ -18,6 +21,7 @@ import 'services/sound_system.dart';
 import 'services/version_service.dart';
 import 'screens/admin_profile_screen.dart';
 import 'screens/staff_profile_screen.dart';
+import 'screens/notifications_screen.dart';
 import 'widgets/side_menu.dart';
 import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
 import 'firebase_options.dart'; // Import generated Firebase options
@@ -128,6 +132,7 @@ class MyApp extends StatelessWidget {
         providers: [
           ChangeNotifierProvider(create: (_) => AuthProvider()),
           ChangeNotifierProvider(create: (_) => UserProvider()),
+          ChangeNotifierProvider(create: (_) => AdminAlertProvider()),
           ChangeNotifierProxyProvider<AuthProvider, ThemeModeProvider>(
             create: (_) => ThemeModeProvider(initialMode: initialThemeMode),
             update: (_, authProvider, themeProvider) {
@@ -214,9 +219,14 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen>
+    with SingleTickerProviderStateMixin {
   int _selectedIndex = 3; // Initialize to Modules screen (index 3)
   bool _isAlertPanelOpen = false;
+  AdminAlertProvider? _adminAlertProvider;
+  Timer? _staffBellShakeTimer;
+  late final AnimationController _bellShakeController;
+  late final Animation<double> _bellShakeAnimation;
 
   // Check if current user is Admin
   bool _isAdmin() {
@@ -243,6 +253,27 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
+    _bellShakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _bellShakeAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: -0.12), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -0.12, end: 0.12), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 0.12, end: -0.08), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -0.08, end: 0.08), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 0.08, end: 0.0), weight: 1),
+    ]).animate(
+      CurvedAnimation(parent: _bellShakeController, curve: Curves.easeInOut),
+    );
+    _staffBellShakeTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted) return;
+      final role = (context.read<AuthProvider>().userRole ?? '').toLowerCase();
+      final unread = context.read<AdminAlertProvider>().unreadCount;
+      if (role == 'staff' && unread > 0 && !_bellShakeController.isAnimating) {
+        _bellShakeController.forward(from: 0);
+      }
+    });
     // Both Staff and Admin users should ALWAYS land on Modules screen (index 3) on login
     // Ignore widget.initialIndex and always use Modules screen (index 3) to prevent
     // old stored screen indices from interfering with login redirects
@@ -268,7 +299,39 @@ class _MainScreenState extends State<MainScreen> {
           userProvider.refreshUsersInBackground();
         }
       }
+
+      final alertsProvider = context.read<AdminAlertProvider>();
+      _adminAlertProvider = alertsProvider;
+      alertsProvider.addListener(_onAdminAlertUpdate);
+      alertsProvider.start(
+        authProvider.userRole ?? '',
+        userEmail: authProvider.userEmail ?? '',
+      );
     });
+  }
+
+  @override
+  void dispose() {
+    _staffBellShakeTimer?.cancel();
+    _bellShakeController.dispose();
+    _adminAlertProvider?.removeListener(_onAdminAlertUpdate);
+    _adminAlertProvider?.stop();
+    super.dispose();
+  }
+
+  void _onAdminAlertUpdate() {
+    if (!mounted || _adminAlertProvider == null) {
+      return;
+    }
+    // Do not show bottom toasts; notifications are viewed in Notifications screen.
+    _adminAlertProvider!.takeNewAlerts();
+  }
+
+  Future<void> _openNotificationsScreen() async {
+    SoundSystem.playButtonClick();
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+    );
   }
 
   // Remove the getter since we now have persistent screens
@@ -308,6 +371,10 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final userProvider = context.watch<UserProvider>();
+    final adminAlertProvider = context.watch<AdminAlertProvider>();
+    final unreadAlerts = adminAlertProvider.unreadCount;
+    final role = (context.watch<AuthProvider>().userRole ?? '').toLowerCase();
+    final isStaff = role == 'staff';
     final users = userProvider.users;
 
     final pendingUsers = users
@@ -365,10 +432,78 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ],
           ),
+          Positioned(
+            top: 16,
+            right: 16,
+            child: SafeArea(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _openNotificationsScreen,
+                  borderRadius: BorderRadius.circular(22),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Center(
+                          child: AnimatedBuilder(
+                            animation: _bellShakeAnimation,
+                            builder: (context, child) {
+                              return Transform.rotate(
+                                angle: isStaff ? _bellShakeAnimation.value : 0.0,
+                                child: child,
+                              );
+                            },
+                            child: Image.asset(
+                              'assets/images/siderbar/7.png',
+                              width: 70,
+                              height: 70,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                        if (unreadAlerts > 0)
+                          Positioned(
+                            top: -4,
+                            right: -4,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFFC10D00)),
+                              ),
+                              child: Text(
+                                unreadAlerts > 99 ? '99+' : '$unreadAlerts',
+                                style: const TextStyle(
+                                  color: Color(0xFFC10D00),
+                                  fontSize: 10,
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
           if (hasOnboardingAlerts)
             Positioned(
               top: 16,
-              right: 16,
+              right: 72,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [

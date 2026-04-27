@@ -83,8 +83,17 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentImageUrl != widget.currentImageUrl ||
         oldWidget.currentPublicId != widget.currentPublicId) {
+      final prevUrl = _imageUrl;
+      final prevId = _publicId;
       _resolveImageFromProps();
-      if (mounted) setState(() {});
+      if (!mounted || (prevUrl == _imageUrl && prevId == _publicId)) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
     }
   }
 
@@ -94,7 +103,14 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
     final prevUrl = _imageUrl;
     final prevId = _publicId;
     _resolveImageFromProps();
-    if (mounted && (prevUrl != _imageUrl || prevId != _publicId)) setState(() {});
+    if (!mounted || (prevUrl == _imageUrl && prevId == _publicId)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   Future<void> _showImageOptions() async {
