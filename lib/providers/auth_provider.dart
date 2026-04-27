@@ -1045,7 +1045,7 @@ class AuthProvider extends ChangeNotifier {
     }
     try {
       final response = await http
-          .get(Uri.parse(ApiConfig.usersEndpoint))
+          .get(Uri.parse(ApiConfig.userByEmailEndpoint(_userEmail!)))
           .timeout(
             const Duration(seconds: 15),
             onTimeout: () {
@@ -1065,19 +1065,10 @@ class AuthProvider extends ChangeNotifier {
       }
 
       final usersData = json.decode(response.body) as Map<String, dynamic>;
-      final users = usersData['users'] as List<dynamic>? ?? [];
-
-      Map<String, dynamic>? foundUser;
-      for (final u in users) {
-        if (u is Map<String, dynamic> &&
-            u['email']?.toString().toLowerCase() == _userEmail!.toLowerCase()) {
-          foundUser = u;
-          break;
-        }
-      }
+      final foundUser = usersData['user'] as Map<String, dynamic>?;
 
       if (foundUser == null) {
-        debugPrint('[AuthProvider] refreshModuleAccess: user not in API list');
+        debugPrint('[AuthProvider] refreshModuleAccess: user payload missing');
         if (!preserveStateOnFailure) {
           _userModuleAccess = null;
           notifyListeners();

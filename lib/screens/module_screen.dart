@@ -41,7 +41,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       // Pick up module changes from admins without logging out (matches admin refresh cadence).
-      _moduleAccessPollTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      _moduleAccessPollTimer = Timer.periodic(const Duration(minutes: 3), (_) {
         if (!mounted) return;
         context.read<AuthProvider>().refreshModuleAccessFromServer();
       });
