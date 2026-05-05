@@ -175,6 +175,43 @@ def parse_module_access_role_to_arw_roles(module_access_role: str) -> list:
             if role_suffix:
                 result.append(f"ARW - {role_suffix}")
     return result
+
+
+def _parse_module_role_with_prefix(module_access_role: str, module_prefix: str) -> list:
+    """Extract role suffixes by prefix and return normalized single-role list."""
+    if not module_access_role or not isinstance(module_access_role, str):
+        return []
+    result = []
+    for part in module_access_role.split(','):
+        part = part.strip()
+        if part.startswith(module_prefix):
+            role_suffix = part[len(module_prefix):].strip()
+            if role_suffix:
+                result.append(role_suffix)
+    return result
+
+
+def parse_module_access_role_to_skills_heatmap_roles(module_access_role: str) -> list:
+    """
+    Extract Skills Heatmap role from moduleAccessRole and map to Skills Heatmap - X format.
+    """
+    role_suffixes = _parse_module_role_with_prefix(
+        module_access_role,
+        "Skills Heatmap - ",
+    )
+    return [f"Skills Heatmap - {role}" for role in role_suffixes]
+
+
+def parse_module_access_role_to_deliverables_roles(module_access_role: str) -> list:
+    """
+    Extract Deliverables role from moduleAccessRole and map to
+    Deliverables & Sprint Sign-Off Hub - X format.
+    """
+    role_suffixes = _parse_module_role_with_prefix(
+        module_access_role,
+        "Deliverables & Sprint Sign-Off Hub - ",
+    )
+    return [f"Deliverables & Sprint Sign-Off Hub - {role}" for role in role_suffixes]
 def generate_and_encrypt_token(
     user_id: str,
     email: str,

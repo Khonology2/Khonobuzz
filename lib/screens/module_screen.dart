@@ -1032,6 +1032,67 @@ Future<void> _launchUrlFromContext(
       debugPrint(
         '[ModuleLaunch] Using latest skills heatmap token with role: $selectedRole',
       );
+    } else if (moduleKey == 'deliverable_sprint') {
+      String? selectedRole;
+      try {
+        final roleSource = latestModuleAccessRole;
+        if (roleSource != null && roleSource.isNotEmpty) {
+          final parts = roleSource.split(',');
+          for (final part in parts) {
+            final trimmedPart = part.trim();
+            if (trimmedPart.startsWith('Deliverables & Sprint Sign-Off Hub - ')) {
+              selectedRole = trimmedPart
+                  .replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '')
+                  .trim();
+              break;
+            }
+          }
+        }
+        if ((selectedRole == null || selectedRole.isEmpty) &&
+            userProvider.users.isNotEmpty) {
+          final currentUser = userProvider.users.firstWhere(
+            (u) => u.email.toLowerCase() == email.toLowerCase(),
+            orElse: () => throw StateError('Current user not found'),
+          );
+          final localRole = currentUser.moduleAccessRole;
+          if (localRole != null && localRole.isNotEmpty) {
+            final parts = localRole.split(',');
+            for (final part in parts) {
+              final trimmedPart = part.trim();
+              if (trimmedPart.startsWith('Deliverables & Sprint Sign-Off Hub - ')) {
+                selectedRole = trimmedPart
+                    .replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '')
+                    .trim();
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[ModuleLaunch] Error getting deliverables role: $e');
+      }
+      selectedRole = (selectedRole == null || selectedRole.isEmpty)
+          ? 'Team member'
+          : selectedRole;
+
+      final String deliverablesCacheKey =
+          '$moduleKey:$email:$selectedRole:$theme';
+      final fresh = await fetchLatestToken(
+        tokenEndpoint: ApiConfig.authTokenEndpoint(
+          email,
+          module: 'deliverable_sprint',
+          role: selectedRole,
+          theme: theme,
+        ),
+      );
+      if (fresh == null || fresh.isEmpty) {
+        return;
+      }
+      token = fresh;
+      _moduleLaunchTokenCache[deliverablesCacheKey] = fresh;
+      debugPrint(
+        '[ModuleLaunch] Using latest deliverables token with role: $selectedRole',
+      );
     } else {
       final fresh = await fetchLatestToken(
         tokenEndpoint: ApiConfig.authTokenEndpoint(email, theme: theme),

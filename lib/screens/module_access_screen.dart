@@ -42,8 +42,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     'Finance',
   ];
   final List<String> _moduleRoleOptionsDeliverables = [
-    'System admin',
-    'Client',
+    'System Admin',
+    'Delivery Manager',
+    'Client Reviewer',
     'Team member',
   ];
   final List<String> _moduleRoleOptionsSkillsHeatmap = [

@@ -25,6 +25,8 @@ try:
         generate_and_encrypt_token,
         parse_module_access_role_to_roles,
         parse_module_access_role_to_arw_roles,
+        parse_module_access_role_to_skills_heatmap_roles,
+        parse_module_access_role_to_deliverables_roles,
         verify_token,
     )
 except ImportError:
@@ -32,6 +34,8 @@ except ImportError:
         generate_and_encrypt_token,
         parse_module_access_role_to_roles,
         parse_module_access_role_to_arw_roles,
+        parse_module_access_role_to_skills_heatmap_roles,
+        parse_module_access_role_to_deliverables_roles,
         verify_token,
     )
 try:
@@ -2754,6 +2758,7 @@ async def login_user(user_login: UserLogin, request: Request):
 async def get_user_token(
     email: str = Query(..., description="User email address"),
     module: Optional[str] = Query(None, description="Target app: 'recruitment' or 'arw' for ARW token with roles like ARW - Admin, ARW - Hiring Manager"),
+    role: Optional[str] = Query(None, description="Module-specific role override for token generation"),
     theme: Optional[str] = Query(None, description="Theme override: 'light' or 'dark'"),
 ):
     """
@@ -2777,10 +2782,32 @@ async def get_user_token(
         module_access_role = ""
         onboarding_doc_ref = onboarding_ref
         module_access_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
-        is_arw = module and module.strip().lower() in ("recruitment", "arw")
+        normalized_module = (module or "").strip().lower()
+        is_arw = normalized_module in ("recruitment", "arw")
+        is_skills_heatmap = normalized_module in ("skills_heatmap", "skills-heatmap", "skills")
+        is_deliverables = normalized_module in (
+            "deliverable_sprint",
+            "deliverables",
+            "deliverables_signoff",
+            "deliverables_sign_off",
+            "sprint_signoff",
+            "sprint_sign_off",
+        )
         if is_arw:
             roles = parse_module_access_role_to_arw_roles(module_access_role)
             print(f"[DEBUG] Generating ARW token for user_id: {user_id} with roles: {roles}")
+        elif is_skills_heatmap:
+            if role and role.strip():
+                roles = [f"Skills Heatmap - {role.strip()}"]
+            else:
+                roles = parse_module_access_role_to_skills_heatmap_roles(module_access_role)
+            print(f"[DEBUG] Generating skills heatmap token for user_id: {user_id} with roles: {roles}")
+        elif is_deliverables:
+            if role and role.strip():
+                roles = [f"Deliverables & Sprint Sign-Off Hub - {role.strip()}"]
+            else:
+                roles = parse_module_access_role_to_deliverables_roles(module_access_role)
+            print(f"[DEBUG] Generating deliverables token for user_id: {user_id} with roles: {roles}")
         else:
             roles = parse_module_access_role_to_roles(module_access_role)
             print(f"[DEBUG] Generating fresh token for user_id: {user_id} with roles: {roles}")
