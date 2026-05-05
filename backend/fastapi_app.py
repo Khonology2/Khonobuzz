@@ -1213,6 +1213,11 @@ async def onboarding_update_user(uid: str, data: dict):
             payload['created_at'] = datetime.utcnow()
             db.collection('onboarding').add(payload)
 
+        # Keep external app user stores in sync for onboarding-driven user changes.
+        user_doc = db.collection('users').document(uid).get()
+        user_data = user_doc.to_dict() if user_doc.exists else {}
+        sync_sso_user_login(uid, user_data, payload)
+
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={"message": "Onboarding update successful"},
