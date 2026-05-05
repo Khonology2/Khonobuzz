@@ -1018,7 +1018,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 isExpanded: true,
                               dropdownColor:
                                   Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
+                                      ? const Color(0xFF3D3F40)
                                       : Colors.white,
                                 icon: Icon(
                                   Icons.arrow_drop_down,
@@ -1124,7 +1124,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 isExpanded: true,
                               dropdownColor:
                                   Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
+                                      ? const Color(0xFF3D3F40)
                                       : Colors.white,
                                 icon: Icon(
                                   Icons.arrow_drop_down,
@@ -1234,7 +1234,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 isExpanded: true,
                               dropdownColor:
                                   Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
+                                      ? const Color(0xFF3D3F40)
                                       : Colors.white,
                                 icon: Icon(
                                   Icons.arrow_drop_down,
@@ -1343,7 +1343,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 isExpanded: true,
                               dropdownColor:
                                   Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
+                                      ? const Color(0xFF3D3F40)
                                       : Colors.white,
                                 icon: Icon(
                                   Icons.arrow_drop_down,
@@ -1453,7 +1453,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                   dropdownColor:
                                       Theme.of(context).brightness ==
                                               Brightness.dark
-                                          ? moduleAccessDarkWidgetBg
+                                          ? const Color(0xFF3D3F40)
                                           : Colors.white,
                                   icon: Icon(
                                     Icons.arrow_drop_down,
@@ -2358,6 +2358,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     final Color widgetBg = isDark
         ? moduleAccessDarkWidgetBg
         : Colors.white.withValues(alpha: 0.40);
+    final Color popupBg = isDark ? const Color(0xFF3D3F40) : Colors.white;
     final Color dividerColor = appTextColor(context).withValues(
       alpha: isDark ? 0.22 : 0.30,
     );
@@ -2673,7 +2674,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           ? selectedModuleRole
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: widgetBg,
+                      dropdownColor: popupBg,
                       icon: Icon(
                         Icons.arrow_drop_down,
                         color: appTextColor(context),
@@ -2800,7 +2801,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedSkillsHeatmapRole)
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: widgetBg,
+                      dropdownColor: popupBg,
                       icon: Icon(
                         Icons.arrow_drop_down,
                         color: appTextColor(context),
@@ -2929,7 +2930,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedRecruitmentRole)
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: widgetBg,
+                      dropdownColor: popupBg,
                       icon: Icon(
                         Icons.arrow_drop_down,
                         color: appTextColor(context),
@@ -3057,7 +3058,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedDeliverablesRole)
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: widgetBg,
+                      dropdownColor: popupBg,
                       icon: Icon(
                         Icons.arrow_drop_down,
                         color: appTextColor(context),
@@ -3185,7 +3186,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedSOWBuilderRole)
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: widgetBg,
+                      dropdownColor: popupBg,
                       icon: Icon(
                         Icons.arrow_drop_down,
                         color: appTextColor(context),

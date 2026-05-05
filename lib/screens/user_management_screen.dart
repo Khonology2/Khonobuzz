@@ -1577,6 +1577,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final Color panelBg = isDark
         ? userMgmtDarkWidgetBg
         : Colors.white.withValues(alpha: 0.40);
+    final Color popupBg = isDark ? _filterPopupDarkBg : Colors.white;
     final Color dividerColor = appTextColor(context).withValues(
       alpha: isDark ? 0.22 : 0.30,
     );
@@ -1631,7 +1632,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             fontFamily: 'Poppins',
                           ),
                         ),
-                        dropdownColor: panelBg,
+                        dropdownColor: popupBg,
                         style: TextStyle(
                           color: appTextColor(context),
                           fontFamily: 'Poppins',
@@ -1720,7 +1721,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             fontFamily: 'Poppins',
                           ),
                         ),
-                        dropdownColor: panelBg,
+                        dropdownColor: popupBg,
                         style: TextStyle(
                           color: appTextColor(context),
                           fontFamily: 'Poppins',
@@ -1812,7 +1813,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             fontFamily: 'Poppins',
                           ),
                         ),
-                        dropdownColor: panelBg,
+                        dropdownColor: popupBg,
                         style: TextStyle(
                           color: appTextColor(context),
                           fontFamily: 'Poppins',
@@ -1891,7 +1892,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             fontFamily: 'Poppins',
                           ),
                         ),
-                        dropdownColor: panelBg,
+                        dropdownColor: popupBg,
                         style: TextStyle(
                           color: appTextColor(context),
                           fontFamily: 'Poppins',
