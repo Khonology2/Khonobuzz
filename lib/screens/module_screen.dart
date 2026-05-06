@@ -31,16 +31,26 @@ class ModuleScreen extends StatefulWidget {
 class _ModuleScreenState extends State<ModuleScreen> {
   bool _isLoadingModuleAccess = false;
   final ScrollController _scrollController = ScrollController();
+  Timer? _moduleAccessPollTimer;
 
   @override
   void initState() {
     super.initState();
 
     _loadModuleAccess();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Pick up module changes from admins without logging out (matches admin refresh cadence).
+      _moduleAccessPollTimer = Timer.periodic(const Duration(minutes: 3), (_) {
+        if (!mounted) return;
+        context.read<AuthProvider>().refreshModuleAccessFromServer();
+      });
+    });
   }
 
   @override
   void dispose() {
+    _moduleAccessPollTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -301,8 +311,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Workflow',
                                   ],
                                   buttonText: 'LAUNCH',
-                                  url:
-                                      'https://recruitment-web-59qy.onrender.com/',
+                                  url: 'https://recruitment-web-59qy.onrender.com/',
                                   moduleKey: 'recruitment',
                                 ),
                               );
@@ -1023,6 +1032,67 @@ Future<void> _launchUrlFromContext(
       debugPrint(
         '[ModuleLaunch] Using latest skills heatmap token with role: $selectedRole',
       );
+    } else if (moduleKey == 'deliverable_sprint') {
+      String? selectedRole;
+      try {
+        final roleSource = latestModuleAccessRole;
+        if (roleSource != null && roleSource.isNotEmpty) {
+          final parts = roleSource.split(',');
+          for (final part in parts) {
+            final trimmedPart = part.trim();
+            if (trimmedPart.startsWith('Deliverables & Sprint Sign-Off Hub - ')) {
+              selectedRole = trimmedPart
+                  .replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '')
+                  .trim();
+              break;
+            }
+          }
+        }
+        if ((selectedRole == null || selectedRole.isEmpty) &&
+            userProvider.users.isNotEmpty) {
+          final currentUser = userProvider.users.firstWhere(
+            (u) => u.email.toLowerCase() == email.toLowerCase(),
+            orElse: () => throw StateError('Current user not found'),
+          );
+          final localRole = currentUser.moduleAccessRole;
+          if (localRole != null && localRole.isNotEmpty) {
+            final parts = localRole.split(',');
+            for (final part in parts) {
+              final trimmedPart = part.trim();
+              if (trimmedPart.startsWith('Deliverables & Sprint Sign-Off Hub - ')) {
+                selectedRole = trimmedPart
+                    .replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '')
+                    .trim();
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[ModuleLaunch] Error getting deliverables role: $e');
+      }
+      selectedRole = (selectedRole == null || selectedRole.isEmpty)
+          ? 'Team member'
+          : selectedRole;
+
+      final String deliverablesCacheKey =
+          '$moduleKey:$email:$selectedRole:$theme';
+      final fresh = await fetchLatestToken(
+        tokenEndpoint: ApiConfig.authTokenEndpoint(
+          email,
+          module: 'deliverable_sprint',
+          role: selectedRole,
+          theme: theme,
+        ),
+      );
+      if (fresh == null || fresh.isEmpty) {
+        return;
+      }
+      token = fresh;
+      _moduleLaunchTokenCache[deliverablesCacheKey] = fresh;
+      debugPrint(
+        '[ModuleLaunch] Using latest deliverables token with role: $selectedRole',
+      );
     } else {
       final fresh = await fetchLatestToken(
         tokenEndpoint: ApiConfig.authTokenEndpoint(email, theme: theme),
@@ -1034,10 +1104,27 @@ Future<void> _launchUrlFromContext(
       _moduleLaunchTokenCache[cacheKey] = fresh;
     }
 
-    Uri uri = Uri.parse(secureUrl);
-    final existingParams = Map<String, String>.from(uri.queryParameters);
-    existingParams['token'] = token;
-    uri = uri.replace(queryParameters: existingParams);
+    final Uri uri;
+    if (moduleKey == 'recruitment') {
+      // Hash-router SPA: .../#/splash?token=... (not /splash?token=... on the server path)
+      final base = Uri.parse(secureUrl);
+      final fragmentPath = Uri(
+        path: '/splash',
+        queryParameters: <String, String>{'token': token},
+      );
+      uri = Uri(
+        scheme: base.scheme,
+        host: base.host,
+        path: '/',
+        fragment: fragmentPath.toString(),
+      );
+    } else {
+      var built = Uri.parse(secureUrl);
+      final existingParams = Map<String, String>.from(built.queryParameters);
+      existingParams['token'] = token;
+      built = built.replace(queryParameters: existingParams);
+      uri = built;
+    }
 
     debugPrint('[ModuleLaunch] Launching URL for $moduleKey: $uri');
 

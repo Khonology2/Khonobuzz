@@ -8,6 +8,7 @@ import '../theme/app_themes.dart';
 import 'auth_screen.dart';
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart';
 import 'package:video_player/video_player.dart';
+import '../widgets/version_control_widget.dart';
 
 class LobbyScreen extends StatefulWidget {
   final FlutterAadOauth? oauth;
@@ -350,6 +351,16 @@ class LobbyScreenState extends State<LobbyScreen> {
                     ],
                   ),
                 ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 16,
+            bottom: 16,
+            child: SafeArea(
+              child: VersionControlWidget(
+                textColor: isDark ? Colors.white70 : Colors.black54,
+                hoverColor: isDark ? Colors.white : Colors.black,
               ),
             ),
           ),

@@ -1,3 +1,5 @@
+// ignore_for_file: unused_import
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -12,6 +14,7 @@ import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/sound_system.dart';
+import '../services/admin_alert_service.dart';
 import '../theme/app_backgrounds.dart';
 import '../providers/theme_mode_provider.dart';
 import '../theme/app_text_colors.dart';
@@ -39,8 +42,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     'Finance',
   ];
   final List<String> _moduleRoleOptionsDeliverables = [
-    'System admin',
-    'Client',
+    'System Admin',
+    'Delivery Manager',
+    'Client Reviewer',
     'Team member',
   ];
   final List<String> _moduleRoleOptionsSkillsHeatmap = [
@@ -63,6 +67,34 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   final Set<String> _selectedUserIds = <String>{};
 
   String _sortOption = 'name';
+
+  Future<void> _publishAdminAlert({
+    required String title,
+    required String message,
+    Map<String, dynamic> details = const {},
+    bool requiresAck = false,
+  }) async {
+    final authProvider = context.read<AuthProvider>();
+    if ((authProvider.userRole ?? '').toLowerCase() != 'admin') {
+      return;
+    }
+    final actorEmail = (authProvider.userEmail ?? '').trim();
+    if (actorEmail.isEmpty) {
+      return;
+    }
+    try {
+      await AdminAlertService.publishAdminChange(
+        actorEmail: actorEmail,
+        title: title,
+        message: message,
+        area: 'module_access',
+        details: details,
+        requiresAck: requiresAck,
+      );
+    } catch (e) {
+      debugPrint('[ModuleAccess] alert publish failed: $e');
+    }
+  }
 
   DateTime _lastSignInSortKey(ManagedUser user) {
     return user.lastSignInAt ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -466,6 +498,65 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     user.moduleAccess = accessList.isEmpty ? null : accessList.join(',');
   }
 
+  Map<String, String> _parseModuleRoleMap(String? moduleAccessRole) {
+    final result = <String, String>{};
+    final raw = (moduleAccessRole ?? '').trim();
+    if (raw.isEmpty) {
+      return result;
+    }
+    for (final part in raw.split(', ')) {
+      final seg = part.trim();
+      if (seg.isEmpty) continue;
+      if (seg.startsWith('PDH - ')) {
+        result['Personal Development Hub'] =
+            seg.replaceFirst('PDH - ', '').trim();
+      } else if (seg == 'PDH') {
+        result['Personal Development Hub'] = 'Assigned';
+      } else if (seg.startsWith('Skills Heatmap - ')) {
+        result['Resource & Capacity Skills Heatmap'] =
+            seg.replaceFirst('Skills Heatmap - ', '').trim();
+      } else if (seg.startsWith('Automated Recruitment Workflow - ')) {
+        result['Automated Recruitment Workflow'] =
+            seg.replaceFirst('Automated Recruitment Workflow - ', '').trim();
+      } else if (seg == 'Automated Recruitment Workflow') {
+        result['Automated Recruitment Workflow'] = 'Assigned';
+      } else if (seg.startsWith('Proposal & SOW Builder - ')) {
+        result['Proposal & SOW Builder'] =
+            seg.replaceFirst('Proposal & SOW Builder - ', '').trim();
+      } else if (seg == 'Proposal & SOW Builder') {
+        result['Proposal & SOW Builder'] = 'Assigned';
+      } else if (seg.startsWith('Deliverables & Sprint Sign-Off Hub - ')) {
+        result['Deliverables & Sprint Sign-Off Hub'] =
+            seg.replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '').trim();
+      } else if (seg == 'Deliverables & Sprint Sign-Off Hub') {
+        result['Deliverables & Sprint Sign-Off Hub'] = 'Assigned';
+      }
+    }
+    return result;
+  }
+
+  List<String> _buildModuleChangeSummary({
+    required Map<String, String> before,
+    required Map<String, String> after,
+  }) {
+    const modules = <String>[
+      'Personal Development Hub',
+      'Resource & Capacity Skills Heatmap',
+      'Automated Recruitment Workflow',
+      'Proposal & SOW Builder',
+      'Deliverables & Sprint Sign-Off Hub',
+    ];
+    final changes = <String>[];
+    for (final module in modules) {
+      final oldRole = before[module] ?? 'Not assigned';
+      final newRole = after[module] ?? 'Not assigned';
+      if (oldRole != newRole) {
+        changes.add('$module role changed from "$oldRole" to "$newRole"');
+      }
+    }
+    return changes;
+  }
+
   Future<void> _updateUserModuleAccess(
     ManagedUser user,
     bool pdhSelected,
@@ -480,6 +571,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     String? newSkillsHeatmapRole,
   ) async {
     final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
+    final beforeRoleMap = _parseModuleRoleMap(user.moduleAccessRole);
     setState(() {
       _updatingUserId = user.id;
     });
@@ -782,6 +874,29 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           ),
         );
       }
+      await _publishAdminAlert(
+        title: 'Module access updated',
+        message: (() {
+          final afterRoleMap = _parseModuleRoleMap(updatedModuleAccessRole);
+          final changes = _buildModuleChangeSummary(
+            before: beforeRoleMap,
+            after: afterRoleMap,
+          );
+          if (changes.isEmpty) {
+            return 'Module access for ${user.name} was updated.';
+          }
+          return changes.join('; ');
+        })(),
+        details: {
+          'userId': user.id,
+          'userName': user.name,
+          'moduleAccess': updatedModuleAccess ?? '',
+          'moduleAccessRole': updatedModuleAccessRole ?? '',
+          'approvedBy': adminEmail,
+          'effectiveDateIso': DateTime.now().toUtc().toIso8601String(),
+        },
+        requiresAck: true,
+      );
     } catch (e) {
       if (mounted) {
         SoundSystem.playError();
@@ -823,10 +938,12 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
         return StatefulBuilder(
           builder: (context, setStateDialog) {
+            final bool isDark = Theme.of(context).brightness == Brightness.dark;
+            final Color dialogBg = isDark
+                ? const Color(0xFF3D3F40)
+                : Colors.white;
             return AlertDialog(
-              backgroundColor: Theme.of(context).brightness == Brightness.dark
-                  ? moduleAccessDarkWidgetBg
-                  : Colors.white,
+              backgroundColor: dialogBg,
               title: Text(
                 'Update Module Access',
                 style: TextStyle(
@@ -902,7 +1019,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 isExpanded: true,
                               dropdownColor:
                                   Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
+                                      ? const Color(0xFF3D3F40)
                                       : Colors.white,
                                 icon: Icon(
                                   Icons.arrow_drop_down,
@@ -1008,7 +1125,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 isExpanded: true,
                               dropdownColor:
                                   Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
+                                      ? const Color(0xFF3D3F40)
                                       : Colors.white,
                                 icon: Icon(
                                   Icons.arrow_drop_down,
@@ -1118,7 +1235,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 isExpanded: true,
                               dropdownColor:
                                   Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
+                                      ? const Color(0xFF3D3F40)
                                       : Colors.white,
                                 icon: Icon(
                                   Icons.arrow_drop_down,
@@ -1227,7 +1344,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 isExpanded: true,
                               dropdownColor:
                                   Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
+                                      ? const Color(0xFF3D3F40)
                                       : Colors.white,
                                 icon: Icon(
                                   Icons.arrow_drop_down,
@@ -1337,7 +1454,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                   dropdownColor:
                                       Theme.of(context).brightness ==
                                               Brightness.dark
-                                          ? moduleAccessDarkWidgetBg
+                                          ? const Color(0xFF3D3F40)
                                           : Colors.white,
                                   icon: Icon(
                                     Icons.arrow_drop_down,
@@ -1624,32 +1741,6 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: SafeArea(
-              child: Consumer<ThemeModeProvider>(
-                builder: (context, themeMode, _) {
-                  return FloatingActionButton(
-                    mini: true,
-                    shape: const CircleBorder(),
-                    heroTag: 'module_access_theme_toggle_fab',
-                    onPressed: () {
-                      SoundSystem.playButtonClick();
-                      themeMode.toggle();
-                    },
-                    backgroundColor: AppThemes.light.primaryColor,
-                    child: Icon(
-                      themeMode.isLight
-                          ? Icons.dark_mode_rounded
-                          : Icons.light_mode_rounded,
-                      color: appTextColor(context),
-                    ),
-                  );
-                },
               ),
             ),
           ),
@@ -2268,6 +2359,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     final Color widgetBg = isDark
         ? moduleAccessDarkWidgetBg
         : Colors.white.withValues(alpha: 0.40);
+    final Color popupBg = isDark ? const Color(0xFF3D3F40) : Colors.white;
     final Color dividerColor = appTextColor(context).withValues(
       alpha: isDark ? 0.22 : 0.30,
     );
@@ -2583,7 +2675,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           ? selectedModuleRole
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: widgetBg,
+                      dropdownColor: popupBg,
                       icon: Icon(
                         Icons.arrow_drop_down,
                         color: appTextColor(context),
@@ -2710,7 +2802,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedSkillsHeatmapRole)
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: widgetBg,
+                      dropdownColor: popupBg,
                       icon: Icon(
                         Icons.arrow_drop_down,
                         color: appTextColor(context),
@@ -2839,7 +2931,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedRecruitmentRole)
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: widgetBg,
+                      dropdownColor: popupBg,
                       icon: Icon(
                         Icons.arrow_drop_down,
                         color: appTextColor(context),
@@ -2967,7 +3059,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedDeliverablesRole)
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: widgetBg,
+                      dropdownColor: popupBg,
                       icon: Icon(
                         Icons.arrow_drop_down,
                         color: appTextColor(context),
@@ -3095,7 +3187,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedSOWBuilderRole)
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: widgetBg,
+                      dropdownColor: popupBg,
                       icon: Icon(
                         Icons.arrow_drop_down,
                         color: appTextColor(context),
@@ -3185,7 +3277,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFC10D00),
-                foregroundColor: appTextColor(context),
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),
@@ -3196,7 +3288,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(appTextColor(context)),
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
                   : Text(

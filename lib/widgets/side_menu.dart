@@ -65,16 +65,18 @@ class _MenuItemWidgetState extends State<MenuItemWidget> {
         ? widget.selectedIconPath
         : widget.unselectedIconPath;
 
-    return Semantics(
-      label: widget.title,
-      button: true,
-      child: KeyedSubtree(
-        key: widget.itemKey,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _isHovering = true),
-          onExit: (_) => setState(() => _isHovering = false),
-          child: AnimatedContainer(
+    return SizedBox(
+      width: double.infinity,
+      child: Semantics(
+        label: widget.title,
+        button: true,
+        child: KeyedSubtree(
+          key: widget.itemKey,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => setState(() => _isHovering = true),
+            onExit: (_) => setState(() => _isHovering = false),
+            child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             margin: EdgeInsets.zero,
             decoration: BoxDecoration(
@@ -159,6 +161,7 @@ class _MenuItemWidgetState extends State<MenuItemWidget> {
                 },
               ),
             ),
+            ),
           ),
         ),
       ),
@@ -232,6 +235,7 @@ class _LogoutMenuItemState extends State<_LogoutMenuItem> {
 
     double fontSize = isMobile ? 14.0 : (isTablet ? 15.0 : 16.0);
     final TextStyle logoutTextStyle = TextStyle(
+      fontFamily: 'Poppins',
       color: _isHovering ? hoverText : normalText,
       fontSize: fontSize,
       fontWeight: FontWeight.bold,
@@ -287,10 +291,9 @@ class _LogoutMenuItemState extends State<_LogoutMenuItem> {
                       child: Center(
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
-                          child: Icon(
-                            Icons.logout,
-                            color: _isHovering ? hoverIcon : normalIcon,
-                            size: iconIconSize,
+                          child: Image.asset(
+                            'assets/images/siderbar/6.png',
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
@@ -301,7 +304,7 @@ class _LogoutMenuItemState extends State<_LogoutMenuItem> {
                         child: AnimatedDefaultTextStyle(
                           duration: const Duration(milliseconds: 200),
                           style: logoutTextStyle,
-                          child: const Text(
+                          child: Text(
                             'Logout',
                             softWrap: true,
                             maxLines: 2,
@@ -407,9 +410,9 @@ class _SideMenuState extends State<SideMenu> {
                     if (_isAdmin)
                       MenuItemWidget(
                         unselectedIconPath:
-                            'assets/images/HR_Team_Management/Management_White_Badge_Red.png',
+                            'assets/images/siderbar/1.png',
                         selectedIconPath:
-                            'assets/images/HR_Team_Management/red_Management_Red_Badge_White.png',
+                            'assets/images/siderbar/1.png',
                         title: 'User Management',
                         isSelected: widget.selectedIndex == 0,
                         isExpanded: true,
@@ -418,9 +421,9 @@ class _SideMenuState extends State<SideMenu> {
                     if (_isAdmin)
                       MenuItemWidget(
                         unselectedIconPath:
-                            'assets/images/Task_Management/Task_White Badge_Red.png',
+                            'assets/images/siderbar/2.png',
                         selectedIconPath:
-                            'assets/images/Task_Management/Task_Red Badge_White.png',
+                            'assets/images/siderbar/2.png',
                         title: 'Entity Management',
                         isSelected: widget.selectedIndex == 1,
                         isExpanded: true,
@@ -429,9 +432,9 @@ class _SideMenuState extends State<SideMenu> {
                     if (_isAdmin)
                       MenuItemWidget(
                         unselectedIconPath:
-                            'assets/images/Concentration_Key_Focus/Concentration_Key_Focus_White_Badge_Red.png',
+                            'assets/images/siderbar/3.png',
                         selectedIconPath:
-                            'assets/images/Concentration_Key_Focus/Concentration_Key_Focus_Red_Badge_White.png',
+                            'assets/images/siderbar/3.png',
                         title: 'Module Access',
                         isSelected: widget.selectedIndex == 2,
                         isExpanded: true,
@@ -440,9 +443,9 @@ class _SideMenuState extends State<SideMenu> {
                     MenuItemWidget(
                       itemKey: const ValueKey('e2e_nav_modules'),
                       unselectedIconPath:
-                          'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
+                          'assets/images/siderbar/4.png',
                       selectedIconPath:
-                          'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
+                          'assets/images/siderbar/4.png',
                       title: 'Modules',
                       isSelected: widget.selectedIndex == 3,
                       isExpanded: true,
@@ -459,9 +462,9 @@ class _SideMenuState extends State<SideMenu> {
                 child: MenuItemWidget(
                   itemKey: const ValueKey('e2e_nav_profile'),
                   unselectedIconPath:
-                      'assets/images/HR_Team_Management/Management_White_Badge_Red.png',
+                      'assets/images/siderbar/5.png',
                   selectedIconPath:
-                      'assets/images/HR_Team_Management/red_Management_Red_Badge_White.png',
+                      'assets/images/siderbar/5.png',
                   title: 'Profile',
                   isSelected: widget.selectedIndex == 4,
                   isExpanded: true,

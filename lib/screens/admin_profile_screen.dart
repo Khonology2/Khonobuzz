@@ -74,6 +74,7 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
   Timer? _debounceTimer;
   String? _phoneError;
   String? _emailError;
+  bool _isHydratingProfile = false;
 
   bool _validateFields() {
     final phone = _phoneController.text.trim();
@@ -137,6 +138,9 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
   }
 
   void _onFieldChanged() {
+    if (_isHydratingProfile) {
+      return;
+    }
     if (_validateFields()) {
       if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
       _debounceTimer = Timer(const Duration(seconds: 1), () {
@@ -240,6 +244,7 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
       }
 
       if (mounted) {
+        _isHydratingProfile = true;
         setState(() {
           _firstNameController.text = firstName;
           _surnameController.text = lastName;
@@ -254,6 +259,7 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
           _userEntity = entity.isEmpty ? 'Not assigned' : entity;
           _userModuleAccess = moduleAccess.isNotEmpty ? moduleAccess : (authProvider.userModuleAccess ?? 'None');
         });
+        _isHydratingProfile = false;
       }
 
       final themePref = (userMap['themePreference'] as String?)?.toLowerCase();

@@ -13,7 +13,8 @@ name: deploy-check
 on:
   push:
     branches:
-      - khono-v4  # This is the branch we want to deploy to Render. It should match the branch in the Render dashboard. 
+      - khono_v4
+      - khono-v4
       - main
   workflow_dispatch:
 
@@ -30,16 +31,28 @@ jobs:
     name: Flutter CI, web build, Render deploy
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve deploy branch eligibility
+        id: branch
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+          if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "khono_v4" ] || [ "$BRANCH" = "khono-v4" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Sync branch (avoid stale checkout vs other bots)
-        if: github.ref == 'refs/heads/main'
+        if: steps.branch.outputs.deploy == 'true'
         run: |
-          git fetch origin main
-          git pull origin main --rebase
+          BRANCH="${{ steps.branch.outputs.name }}"
+          git fetch origin "$BRANCH"
+          git pull origin "$BRANCH" --rebase
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -57,15 +70,15 @@ jobs:
         run: flutter test
 
       - name: Build web (for Render — not built on Render)
-        if: github.ref == 'refs/heads/main'
+        if: steps.branch.outputs.deploy == 'true'
         run: flutter build web --release --base-href /
 
       - name: Disable service worker in web bundle (avoid stale cached JS after deploy)
-        if: github.ref == 'refs/heads/main'
+        if: steps.branch.outputs.deploy == 'true'
         run: python3 tool/strip_web_service_worker.py
 
       - name: Stamp build with source commit (forces deploy when HEAD changes)
-        if: github.ref == 'refs/heads/main'
+        if: steps.branch.outputs.deploy == 'true'
         run: |
           mkdir -p build/web
           SOURCE_SHA=$(git rev-parse HEAD)
@@ -74,8 +87,9 @@ jobs:
             "$SOURCE_SHA" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > build/web/.ci-build-meta.json
 
       - name: Commit and push build/web
-        if: github.ref == 'refs/heads/main'
+        if: steps.branch.outputs.deploy == 'true'
         run: |
+          BRANCH="${{ steps.branch.outputs.name }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add build/web
@@ -83,23 +97,23 @@ jobs:
             echo "No build/web changes to commit"
           else
             git commit -m "chore: update Flutter web build [skip ci]"
-            git fetch origin main
-            if ! git pull origin main --rebase; then
-              echo "::error::Rebase failed (conflicts with origin/main). Resolve on branch and re-run workflow."
+            git fetch origin "$BRANCH"
+            if ! git pull origin "$BRANCH" --rebase; then
+              echo "::error::Rebase failed (conflicts with origin/$BRANCH). Resolve on branch and re-run workflow."
               exit 1
             fi
-            if ! git push origin main; then
-              git pull origin main --rebase
-              git push origin main
+            if ! git push origin "$BRANCH"; then
+              git pull origin "$BRANCH" --rebase
+              git push origin "$BRANCH"
             fi
           fi
 
       - name: Wait for GitHub default branch tip (Render clones latest)
-        if: github.ref == 'refs/heads/main'
+        if: steps.branch.outputs.deploy == 'true'
         run: sleep 20
 
       - name: Trigger Render deploy hook
-        if: github.ref == 'refs/heads/main'
+        if: steps.branch.outputs.deploy == 'true'
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
@@ -111,9 +125,9 @@ jobs:
           echo "Render deploy hook invoked successfully."
 
       - name: Deploy summary
-        if: ${{ always() && github.ref == 'refs/heads/main' }}
+        if: ${{ always() && steps.branch.outputs.deploy == 'true' }}
         run: |
           echo "## deploy-check summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Branch built:** main at commit \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Branch built:** ${{ steps.branch.outputs.name }} at commit \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **build/web** includes \`.ci-source-commit\` (open \`https://<your-site>/.ci-source-commit\` after deploy to verify live SHA)." >> "$GITHUB_STEP_SUMMARY"
           echo "- Render: use **only** deploy hook after this workflow, or turn off auto-deploy on push so you never publish a commit before the bot updates \`build/web\`." >> "$GITHUB_STEP_SUMMARY"
