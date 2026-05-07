@@ -2492,6 +2492,13 @@ async def login_user(user_login: UserLogin, request: Request):
                     asyncio.to_thread(query.get, timeout=LOGIN_QUERY_TIMEOUT_SECONDS),
                     timeout=LOGIN_QUERY_TIMEOUT_SECONDS + 1.0,
                 )
+                # Fallback for legacy records where email was stored with mixed case.
+                if not users:
+                    raw_query = users_ref.where('email', '==', email_input).limit(1)
+                    users = await asyncio.wait_for(
+                        asyncio.to_thread(raw_query.get, timeout=LOGIN_QUERY_TIMEOUT_SECONDS),
+                        timeout=LOGIN_QUERY_TIMEOUT_SECONDS + 1.0,
+                    )
                 if users:
                     user_doc = users[0]
                     doc_data = user_doc.to_dict()

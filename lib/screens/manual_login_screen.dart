@@ -405,8 +405,11 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                             );
                             if (!mounted) return;
                             if (success) {
-                              await themeModeProvider.applyThemePreference(
-                                authProvider.userThemePreference,
+                              final selectedTheme = themeModeProvider.isLight
+                                  ? 'light'
+                                  : 'dark';
+                              await authProvider.syncThemePreferenceAndRefreshToken(
+                                selectedTheme,
                               );
                               await _prefetchUsersAndNavigate(
                                 // ignore: use_build_context_synchronously
@@ -417,10 +420,24 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                               );
                             } else {
                               await _playErrorSound();
+                              final status = (authProvider.lastLoginStatus ?? '')
+                                  .trim()
+                                  .toLowerCase();
+                              final errorMsg =
+                                  authProvider.lastLoginError?.trim();
+                              if (status == 'pending') {
+                                _showValidationError(
+                                  'Access Pending',
+                                  'Your account is still pending approval. Please contact admin for access.',
+                                );
+                              } else {
                               _showValidationError(
                                 'Login Failed',
-                                'Login failed. Please check your email or try again later.',
+                                (errorMsg != null && errorMsg.isNotEmpty)
+                                    ? errorMsg
+                                    : 'Login failed. Please check your email or try again later.',
                               );
+                              }
                             }
                           } catch (e) {
                             if (!mounted) return;
@@ -682,8 +699,9 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
 
         if (!mounted) return;
         if (success) {
-          await themeModeProvider.applyThemePreference(
-            authProvider.userThemePreference,
+          final selectedTheme = themeModeProvider.isLight ? 'light' : 'dark';
+          await authProvider.syncThemePreferenceAndRefreshToken(
+            selectedTheme,
           );
           await _prefetchUsersAndNavigate(
             // ignore: use_build_context_synchronously
