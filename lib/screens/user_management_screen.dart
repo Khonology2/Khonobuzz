@@ -32,7 +32,8 @@ const String _kAddNewDepartment = '__add_new_department__';
 const String _kAddNewDesignation = '__add_new_designation__';
 const String _kAllFilterOption = '__all_filter_option__';
 
-class _UserManagementScreenState extends State<UserManagementScreen> {
+class _UserManagementScreenState extends State<UserManagementScreen>
+    with WidgetsBindingObserver {
   static const Color _filterPopupDarkBg = Color(0xFF3D3F40);
   static final Color userMgmtDarkWidgetBg = Color.alphaBlend(
     Colors.white.withValues(alpha: 0.10),
@@ -195,6 +196,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     _debounceTimer?.cancel();
     _searchController.dispose();
     _scrollController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -208,9 +210,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     if (userProvider.hasCachedData) {
       userProvider.refreshUsersInBackground();
     }
+    WidgetsBinding.instance.addObserver(this);
     _searchController.addListener(_onSearchChanged);
     _fetchDepartments();
     _fetchDesignations();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Ensure the screen reflects the newest backend tracking values
+      // (lastSignInAt/loginCount), even if this screen was already open.
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      userProvider.fetchUsers(forceRefresh: true);
+    }
   }
 
   Future<void> _fetchDepartments() async {
