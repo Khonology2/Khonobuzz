@@ -45,11 +45,11 @@ jobs:
       - name: Get latest commit info
         id: commit
         run: |
-          MSG="${{ github.event.head_commit.message }}"
-          if [ -z "$MSG" ]; then
-            MSG=$(git log -1 --pretty=format:"%s")
-          fi
-          echo "Commit message: $MSG"
+          # Always read from git to avoid shell injection/newline parsing issues
+          # from github.event.head_commit.message interpolation.
+          MSG=$(git log -1 --pretty=%B)
+          SUBJECT=$(git log -1 --pretty=format:%s)
+          echo "Commit subject: $SUBJECT"
           echo "Branch: ${{ github.ref_name }}"
           if echo "$MSG" | grep -q '\[skip ci\]'; then
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -70,7 +70,7 @@ jobs:
           else
             echo "skip_weekend=false" >> $GITHUB_OUTPUT
           fi
-          TRIMMED=$(echo "$MSG" | sed 's/^[[:space:]]*//')
+          TRIMMED=$(echo "$SUBJECT" | sed 's/^[[:space:]]*//')
           if echo "$TRIMMED" | grep -Eqi '^(Feature|feat)([[:space:]]*[-:]|:)'; then
             echo "starts_with_feature=true" >> $GITHUB_OUTPUT
           else
