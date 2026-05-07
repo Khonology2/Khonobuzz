@@ -222,6 +222,7 @@ jobs:
             V=$(jq -r '.version' assets/data/version.json)
             git commit -m "chore: sync version.json ($V) [skip ci]"
             git push
+          fi
 
   generate-daily-commits:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -271,6 +272,7 @@ jobs:
           else
             git commit -m "Update daily commits data [${{ steps.gen.outputs.today }}] [skip ci]"
             git push
+          fi
 
   version-api:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
