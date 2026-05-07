@@ -1,96 +1,14 @@
-# Monitors version consistency. Version in version.json: YYYY.MM.<W><D><n> (W=week, D=day, n=commits).
-# Does not change version; version only updates on push via version-control.yml.
-
-name: Version Control Monitor
+# Schedule + behavior merged into deploy-check.yml (scheduled-maintenance job for cron; monitor steps on push).
+# Keep file for documentation or local copy; push triggers removed to avoid duplicates.
+name: Version Control Monitor (standalone)
 
 on:
-  push:
-    branches:
-      - khono_v4
-      - khono-v4
-      - main
-  schedule:
-    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
-  monitor-version:
+  noop:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Read version from version.json
-        id: version
-        run: |
-          if [ -f "assets/data/version.json" ]; then
-            V=$(jq -r '.version' assets/data/version.json)
-            COUNT=$(jq -r '.commit_count_since_feature' assets/data/version.json)
-            FEATURE=$(jq -r '.last_feature_commit' assets/data/version.json)
-            FDATE=$(jq -r '.feature_date' assets/data/version.json)
-            echo "version=$V" >> $GITHUB_OUTPUT
-            echo "commit_count=$COUNT" >> $GITHUB_OUTPUT
-            echo "last_feature=$FEATURE" >> $GITHUB_OUTPUT
-            echo "feature_date=$FDATE" >> $GITHUB_OUTPUT
-          else
-            echo "version=not_found" >> $GITHUB_OUTPUT
-            echo "commit_count=0" >> $GITHUB_OUTPUT
-            echo "last_feature=" >> $GITHUB_OUTPUT
-            echo "feature_date=" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Git info
-        id: git_info
-        run: |
-          echo "latest_commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "latest_commit_date=$(git log -1 --format='%ci')" >> $GITHUB_OUTPUT
-
-      - name: Consistency check
-        id: check
-        run: |
-          V="${{ steps.version.outputs.version }}"
-          C="${{ steps.version.outputs.commit_count }}"
-          echo "version=$V" >> $GITHUB_OUTPUT
-          echo "commit_count=$C" >> $GITHUB_OUTPUT
-          if [ "$V" = "not_found" ] || [ -z "$V" ]; then
-            echo "consistent=false" >> $GITHUB_OUTPUT
-            echo "status=version.json missing" >> $GITHUB_OUTPUT
-          else
-            echo "consistent=true" >> $GITHUB_OUTPUT
-            echo "status=OK" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create version report
-        run: |
-          cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## Version Control Monitor
-          - **Version**: ${{ steps.version.outputs.version }}
-          - **Commits since feature**: ${{ steps.version.outputs.commit_count }}
-          - **Latest feature**: ${{ steps.version.outputs.last_feature }}
-          - **Feature date**: ${{ steps.version.outputs.feature_date }}
-          - **Status**: ${{ steps.check.outputs.status }}
-          - **Latest commit**: ${{ steps.git_info.outputs.latest_commit }}
-          EOF
-          cat > version-report.md << MDEOF
-          # Version Control Monitor Report
-          - Version: ${{ steps.version.outputs.version }}
-          - Commits since feature: ${{ steps.version.outputs.commit_count }}
-          - Latest feature: ${{ steps.version.outputs.last_feature }}
-          - Feature date: ${{ steps.version.outputs.feature_date }}
-          - Status: ${{ steps.check.outputs.status }}
-          - Latest commit: ${{ steps.git_info.outputs.latest_commit }}
-          MDEOF
-
-      - name: Upload report artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: version-monitor-report
-          path: version-report.md
-          retention-days: 7
-        continue-on-error: true
+      - run: |
+          echo "Hourly/daily schedules are in deploy-check.yml; use deploy-check for pushes."
+          exit 0

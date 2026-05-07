@@ -1,72 +1,11 @@
-# Legacy/supplemental version update. Primary version is managed by version-control.yml on push.
-# This workflow can sync version.json with current state (e.g. after manual edits) or be disabled.
-# Version format: YYYY.MM.<W><D><n> (W=week, D=day of week, n=commits); only updates on push.
-
-name: Auto Version Control Update
+# Merged into deploy-check.yml as job auto-version-update.
+name: Auto Version Control Update (standalone)
 
 on:
-  push:
-    branches:
-      - khono_v4
-      - khono-v4
-      - main
   workflow_dispatch:
-    inputs:
-      force_update:
-        description: 'Force version sync from version.json'
-        required: false
-        default: false
-        type: boolean
 
 jobs:
-  update-version:
+  noop:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Ensure version.json exists
-        run: |
-          if [ ! -f "assets/data/version.json" ]; then
-            mkdir -p assets/data
-            jq -n \
-              --arg version "2026.03.BA1" \
-              --arg last_feature_commit "feature: initial" \
-              --arg feature_date "$(date -u +%Y-%m-%d)" \
-              --argjson commit_count_since_feature 1 \
-              '{version: $version, last_feature_commit: $last_feature_commit, feature_date: $feature_date, commit_count_since_feature: $commit_count_since_feature}' \
-              > assets/data/version.json
-            cp assets/data/version.json version.json
-          fi
-
-      - name: Sync root version.json from assets
-        run: |
-          if [ -f "assets/data/version.json" ]; then
-            cp assets/data/version.json version.json
-          fi
-
-      - name: Commit if changed
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add assets/data/version.json version.json 2>/dev/null || true
-          if git diff --staged --quiet; then
-            echo "No version file changes"
-          else
-            V=$(jq -r '.version' assets/data/version.json)
-            git commit -m "chore: sync version.json ($V) [skip ci]"
-            git push
-          fi
-
-      - name: Summary
-        run: |
-          if [ -f "assets/data/version.json" ]; then
-            echo "## Version" >> $GITHUB_STEP_SUMMARY
-            jq . assets/data/version.json >> $GITHUB_STEP_SUMMARY
-          fi
+      - run: echo "Use deploy-check workflow for push pipelines." && exit 0
