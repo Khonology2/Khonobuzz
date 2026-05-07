@@ -110722,7 +110722,7 @@ s=t.p
 g=A.b([],s)
 if(n)g.push(b.Cd(d,h,a,"pdh",A.b(["Personal","Development","Hub"],t.s),"https://personal-development-hub.onrender.com"))
 if(m){if(g.length!==0)g.push(B.p1)
-g.push(b.Cd(d,h,a,"skills_heatmap",A.b(["Resource","Capacity &","Skills heatmap"],t.s),"https://resource-capacity-hczd.onrender.com"))}if(k){if(g.length!==0)g.push(B.p1)
+g.push(b.Cd(d,h,a,"skills_heatmap",A.b(["Resource","Capacity &","Skills heatmap"],t.s),"https://resource-capacity.netlify.app/"))}if(k){if(g.length!==0)g.push(B.p1)
 g.push(b.Cd(d,h,a,"recruitment",A.b(["Automated","Recruitment","Workflow"],t.s),"https://recruitment-web-59qy.onrender.com/"))}f=A.b([],s)
 if(j)f.push(b.Cd(d,h,a,"sow_builder",A.b(["Proposal &","SOW Builder"],t.s),"https://lukens-ivdu.onrender.com"))
 if(i){if(f.length!==0)f.push(B.p1)
