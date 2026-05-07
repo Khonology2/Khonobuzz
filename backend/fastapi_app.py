@@ -27,6 +27,7 @@ try:
         parse_module_access_role_to_arw_roles,
         parse_module_access_role_to_skills_heatmap_roles,
         parse_module_access_role_to_deliverables_roles,
+        parse_module_access_role_to_sow_builder_roles,
         verify_token,
     )
 except ImportError:
@@ -36,6 +37,7 @@ except ImportError:
         parse_module_access_role_to_arw_roles,
         parse_module_access_role_to_skills_heatmap_roles,
         parse_module_access_role_to_deliverables_roles,
+        parse_module_access_role_to_sow_builder_roles,
         verify_token,
     )
 try:
@@ -2598,22 +2600,25 @@ async def login_user(user_login: UserLogin, request: Request):
         except Exception:
             pass
         token_gen_end = time.time()
-        if not is_special_session:
+        # Always update login tracking, including "special" admin sessions,
+        # so User Management displays the latest lastSignInAt/loginCount.
+        try:
+            current_user_login_count = user_data.get('loginCount', 0)
             try:
-                current_user_login_count = user_data.get('loginCount', 0)
-                try:
-                    current_user_login_count = int(current_user_login_count)
-                except Exception:
-                    current_user_login_count = 0
-                db.collection('users').document(user_id).update({
-                    'lastSignInAt': last_sign_in_at,
-                    'loginCount': current_user_login_count + 1,
-                    'updated_at': datetime.utcnow(),
-                })
-                user_data['lastSignInAt'] = last_sign_in_at
-                user_data['loginCount'] = current_user_login_count + 1
-            except Exception as sign_in_error:
-                error_log(f"Failed to update login tracking for {normalized_email}: {sign_in_error}")
+                current_user_login_count = int(current_user_login_count)
+            except Exception:
+                current_user_login_count = 0
+            db.collection('users').document(user_id).update({
+                'lastSignInAt': last_sign_in_at,
+                'loginCount': current_user_login_count + 1,
+                'updated_at': datetime.utcnow(),
+            })
+            user_data['lastSignInAt'] = last_sign_in_at
+            user_data['loginCount'] = current_user_login_count + 1
+        except Exception as sign_in_error:
+            error_log(
+                f"Failed to update login tracking for {normalized_email}: {sign_in_error}"
+            )
         if encrypted_token:
             try:
                 if onboarding_ref is None:
@@ -2652,53 +2657,52 @@ async def login_user(user_login: UserLogin, request: Request):
                 "login_user.token_sync",
                 lambda pdh: pdh.collection('onboarding').document(user_id).set(pdh_data, merge=True),
             )
-        if not is_special_session:
-            try:
-                if onboarding_ref is None:
-                    onboarding_ref, onboarding_info = await asyncio.wait_for(
-                        asyncio.to_thread(_get_best_onboarding_record, user_id),
-                        timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS + 1.0,
-                    )
-                else:
-                    onboarding_info = onboarding_data or {}
-                existing_login_count = _safe_int(
-                    onboarding_info.get('loginCount', user_data.get('loginCount', 0)),
-                    0,
+        # Also update onboarding login tracking for "special" sessions so
+        # the same data source is used by User Management.
+        try:
+            if onboarding_ref is None:
+                onboarding_ref, onboarding_info = await asyncio.wait_for(
+                    asyncio.to_thread(_get_best_onboarding_record, user_id),
+                    timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS + 1.0,
                 )
-                login_count = existing_login_count + 1
-                tracking_payload = {
-                    'user_id': user_id,
-                    'email': user_data.get('email', ''),
-                    'lastSignInAt': last_sign_in_at,
-                    'loginCount': login_count,
-                    'updated_at': datetime.utcnow(),
-                }
-                if onboarding_ref is not None:
-                    onboarding_ref.set(tracking_payload, merge=True)
-                else:
-                    tracking_payload['created_at'] = datetime.utcnow()
-                    db.collection('onboarding').document(user_id).set(
-                        tracking_payload,
-                        merge=True,
-                    )
-                _run_with_pdh_db(
-                    "login_user.signin_tracking",
-                    lambda pdh: pdh.collection('onboarding').document(user_id).set(
-                        {
-                            'email': user_data.get('email', ''),
-                            'lastSignInAt': last_sign_in_at,
-                            'loginCount': login_count,
-                            'updated_at': datetime.utcnow(),
-                        },
-                        merge=True,
-                    ),
+            else:
+                onboarding_info = onboarding_data or {}
+            existing_login_count = _safe_int(
+                onboarding_info.get('loginCount', user_data.get('loginCount', 0)),
+                0,
+            )
+            login_count = existing_login_count + 1
+            tracking_payload = {
+                'user_id': user_id,
+                'email': user_data.get('email', ''),
+                'lastSignInAt': last_sign_in_at,
+                'loginCount': login_count,
+                'updated_at': datetime.utcnow(),
+            }
+            if onboarding_ref is not None:
+                onboarding_ref.set(tracking_payload, merge=True)
+            else:
+                tracking_payload['created_at'] = datetime.utcnow()
+                db.collection('onboarding').document(user_id).set(
+                    tracking_payload,
+                    merge=True,
                 )
-            except Exception as onboarding_signin_error:
-                error_log(
-                    f"Failed to update onboarding login tracking for {normalized_email}: {onboarding_signin_error}"
-                )
-        else:
-            login_count = 0
+            _run_with_pdh_db(
+                "login_user.signin_tracking",
+                lambda pdh: pdh.collection('onboarding').document(user_id).set(
+                    {
+                        'email': user_data.get('email', ''),
+                        'lastSignInAt': last_sign_in_at,
+                        'loginCount': login_count,
+                        'updated_at': datetime.utcnow(),
+                    },
+                    merge=True,
+                ),
+            )
+        except Exception as onboarding_signin_error:
+            error_log(
+                f"Failed to update onboarding login tracking for {normalized_email}: {onboarding_signin_error}"
+            )
         module_access_raw = user_data.get('moduleAccess') or onboarding_data.get('moduleAccess', '')
         final_module_access = derive_module_access_from_role(module_access_raw, module_access_role)
         response_name = full_name or user_data.get('name', '')
@@ -2798,6 +2802,14 @@ async def get_user_token(
             "sprint_signoff",
             "sprint_sign_off",
         )
+        is_sow_builder = normalized_module in (
+            "sow_builder",
+            "sowbuilder",
+            "sow",
+            "proposal_sow_builder",
+            "proposal_sow",
+            "proposal_and_sow_builder",
+        )
         if is_arw:
             roles = parse_module_access_role_to_arw_roles(module_access_role)
             print(f"[DEBUG] Generating ARW token for user_id: {user_id} with roles: {roles}")
@@ -2813,6 +2825,12 @@ async def get_user_token(
             else:
                 roles = parse_module_access_role_to_deliverables_roles(module_access_role)
             print(f"[DEBUG] Generating deliverables token for user_id: {user_id} with roles: {roles}")
+        elif is_sow_builder:
+            if role and role.strip():
+                roles = [f"Proposal & SOW Builder - {role.strip()}"]
+            else:
+                roles = parse_module_access_role_to_sow_builder_roles(module_access_role)
+            print(f"[DEBUG] Generating SOW Builder token for user_id: {user_id} with roles: {roles}")
         else:
             roles = parse_module_access_role_to_roles(module_access_role)
             print(f"[DEBUG] Generating fresh token for user_id: {user_id} with roles: {roles}")

@@ -212,6 +212,20 @@ def parse_module_access_role_to_deliverables_roles(module_access_role: str) -> l
         "Deliverables & Sprint Sign-Off Hub - ",
     )
     return [f"Deliverables & Sprint Sign-Off Hub - {role}" for role in role_suffixes]
+
+
+def parse_module_access_role_to_sow_builder_roles(module_access_role: str) -> list:
+    """
+    Extract Proposal & SOW Builder persona from moduleAccessRole and map to
+    Proposal & SOW Builder - X format.
+    """
+    role_suffixes = _parse_module_role_with_prefix(
+        module_access_role,
+        "Proposal & SOW Builder - ",
+    )
+    return [f"Proposal & SOW Builder - {role}" for role in role_suffixes]
+
+
 def generate_and_encrypt_token(
     user_id: str,
     email: str,

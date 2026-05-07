@@ -1,80 +1,11 @@
-# Generates daily-commits.json for legacy/tooling. Does NOT change version.
-# Version is updated only by version-control.yml on push (YYYY.MM.<W><D><n>).
-
-name: Generate Daily Commits
+# Merged into deploy-check.yml as job generate-daily-commits (+ scheduled-maintenance for cron).
+name: Generate Daily Commits (standalone)
 
 on:
-  push:
-    branches:
-      - khono_v4
-      - khono-v4
-      - main
-  schedule:
-    - cron: '30 16 * * *'
   workflow_dispatch:
 
-concurrency:
-  group: generate-daily-commits-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: write
-
 jobs:
-  generate-commits:
+  noop:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Sync branch before generating
-        run: |
-          git pull --ff-only origin ${GITHUB_REF#refs/heads/}
-
-      - name: Generate daily commits JSON
-        id: gen
-        run: |
-          TODAY=$(date -u +"%Y-%m-%d")
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          echo "today=$TODAY" >> $GITHUB_OUTPUT
-
-          COMMITS_JSON=$(git log --since="${TODAY}T00:00:00Z" --pretty=format:'%an|%s|%aI' --no-merges | \
-            jq -R -s '
-              split("\n") |
-              map(select(length > 0)) |
-              map(split("|") | {author: .[0], message: .[1], timestamp: .[2]})
-            ')
-          COMMIT_COUNT=$(git log --since="${TODAY}T00:00:00Z" --oneline --no-merges | wc -l | tr -d ' ')
-          [ -z "$COMMIT_COUNT" ] && COMMIT_COUNT=0
-          [ "$COMMIT_COUNT" -eq 0 ] && COMMITS_JSON="[]"
-
-          VER="2026.03.BA1"
-          [ -f "assets/data/version.json" ] && VER=$(jq -r '.version // "2026.03.BA1"' assets/data/version.json)
-          jq -n \
-            --arg version "$VER" \
-            --arg generated_at "$TIMESTAMP" \
-            --argjson commits "$COMMITS_JSON" \
-            --argjson total_commits "$COMMIT_COUNT" \
-            --arg date_range "$TODAY" \
-            '{version: $version, generated_at: $generated_at, commits: $commits, total_commits: $total_commits, date_range: $date_range}' \
-            > assets/data/daily-commits.json
-
-      - name: Verify JSON
-        run: |
-          jq . assets/data/daily-commits.json && echo "JSON valid"
-
-      - name: Commit and push (if changed)
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add assets/data/daily-commits.json
-          if git diff --staged --quiet; then
-            echo "No changes to daily-commits.json"
-          else
-            git commit -m "Update daily commits data [${{ steps.gen.outputs.today }}] [skip ci]"
-            git push
-          fi
+      - run: echo "Use deploy-check workflow for push pipelines." && exit 0

@@ -1,12 +1,12 @@
-# 1) Flutter analyze + test
-# 2) On main: pull latest, flutter build web, stamp build/web with source commit SHA,
-#    commit + push build/web (always when SHA changes), wait, POST RENDER_DEPLOY_HOOK
+# Orchestrated pipeline (runs in order):
+# 1) Version Control — bump assets/data/version.json on eligible pushes
+# 2) Auto Version Update — ensure/sync root version.json
+# 3) Generate Daily Commits — refresh assets/data/daily-commits.json
+# 4) Version Control API — emit version-api.json artifact from version_control.dart
+# 5) Version Control Monitor — consistency report + artifact
+# 6) checks-build-deploy — Flutter analyze/test, web build, commit build/web, Render hook
 #
-# Render must serve pre-built files only (Static Site): buildCommand = no-op, publish = build/web.
-# The version label (Ver … SIT) comes from assets/data/version.json bundled at build time — it must
-# be committed to the branch you deploy, or CI will keep building old version string.
-#
-# Secrets: RENDER_DEPLOY_HOOK = full URL from Render → Service → Settings → Deploy Hook
+# Render: Static Site with pre-built build/web. Secrets: RENDER_DEPLOY_HOOK
 
 name: deploy-check
 
@@ -17,18 +17,456 @@ on:
       - khono-v4
       - main
   workflow_dispatch:
+  schedule:
+    # Hourly monitor (version report only — no deploy)
+    - cron: '0 * * * *'
+    # Daily commits JSON refresh (no deploy unless same run as push — deploy gated below)
+    - cron: '30 16 * * *'
 
 concurrency:
-  group: deploy-check-${{ github.ref }}
+  group: deploy-check-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 permissions:
   contents: write
 
 jobs:
+  version-control:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    name: Version Control
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get latest commit info
+        id: commit
+        run: |
+          MSG="${{ github.event.head_commit.message }}"
+          if [ -z "$MSG" ]; then
+            MSG=$(git log -1 --pretty=format:"%s")
+          fi
+          echo "Commit message: $MSG"
+          echo "Branch: ${{ github.ref_name }}"
+          if echo "$MSG" | grep -q '\[skip ci\]'; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "skip_weekend=false" >> $GITHUB_OUTPUT
+            echo "starts_with_feature=false" >> $GITHUB_OUTPUT
+            echo "message<<EOF" >> $GITHUB_OUTPUT
+            echo "$MSG" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "date=" >> $GITHUB_OUTPUT
+            echo "is_feature=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "skip=false" >> $GITHUB_OUTPUT
+          COMMIT_DATE=$(git log -1 --format='%ci' | cut -d' ' -f1)
+          DAY_OF_WEEK=$(date -d "$COMMIT_DATE" +%u)
+          if [ "$DAY_OF_WEEK" -eq 6 ] || [ "$DAY_OF_WEEK" -eq 7 ]; then
+            echo "skip_weekend=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip_weekend=false" >> $GITHUB_OUTPUT
+          fi
+          TRIMMED=$(echo "$MSG" | sed 's/^[[:space:]]*//')
+          if echo "$TRIMMED" | grep -Eqi '^(Feature|feat)([[:space:]]*[-:]|:)'; then
+            echo "starts_with_feature=true" >> $GITHUB_OUTPUT
+          else
+            echo "starts_with_feature=false" >> $GITHUB_OUTPUT
+          fi
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "date=$COMMIT_DATE" >> $GITHUB_OUTPUT
+          if echo "$TRIMMED" | grep -Eqi '^(Feature|feat)([[:space:]]*[-:]|:)'; then
+            echo "is_feature=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_feature=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Read or initialize version.json
+        id: version
+        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
+        run: |
+          VERSION_FILE="assets/data/version.json"
+          COMMIT_DATE="${{ steps.commit.outputs.date }}"
+          DAY_OF_MONTH=$(date -d "$COMMIT_DATE" +%d 2>/dev/null | sed 's/^0//')
+          DAY_OF_WEEK=$(date -d "$COMMIT_DATE" +%u)
+          WEEK_OF_MONTH=$(( (DAY_OF_MONTH - 1) / 7 + 1 ))
+          [ "$WEEK_OF_MONTH" -gt 4 ] && WEEK_OF_MONTH=4
+          WEEK_LETTER=$(printf "\\x$(printf %02x $((64 + WEEK_OF_MONTH)))")
+          DAY_LETTER=$(printf "\\x$(printf %02x $((64 + DAY_OF_WEEK)))")
+          YEAR=$(echo "$COMMIT_DATE" | cut -d'-' -f1)
+          MONTH=$(echo "$COMMIT_DATE" | cut -d'-' -f2)
+          DATE_PART="${YEAR}.${MONTH}.${WEEK_LETTER}${DAY_LETTER}"
+          if [ -f "$VERSION_FILE" ]; then
+            CURRENT_VERSION=$(jq -r '.version' "$VERSION_FILE")
+            LAST_FEATURE=$(jq -r '.last_feature_commit // ""' "$VERSION_FILE")
+            FEATURE_DATE=$(jq -r '.feature_date // ""' "$VERSION_FILE")
+            COMMIT_COUNT=$(jq -r '.commit_count_since_feature // 1' "$VERSION_FILE")
+          else
+            CURRENT_VERSION=""
+            LAST_FEATURE=""
+            FEATURE_DATE=""
+            COMMIT_COUNT="0"
+          fi
+          IS_FEATURE="${{ steps.commit.outputs.is_feature }}"
+          COMMIT_MSG="${{ steps.commit.outputs.message }}"
+          if [ "$IS_FEATURE" = "true" ]; then
+            NEW_COUNT=1
+            NEW_VERSION="${YEAR}.${MONTH}.AB${NEW_COUNT}"
+            NEW_LAST_FEATURE="$COMMIT_MSG"
+            NEW_FEATURE_DATE="$COMMIT_DATE"
+          else
+            if [ -z "$CURRENT_VERSION" ] || [ "$CURRENT_VERSION" = "null" ]; then
+              NEW_COUNT=1
+              NEW_VERSION="${DATE_PART}1"
+              NEW_LAST_FEATURE=""
+              NEW_FEATURE_DATE=""
+            else
+              CURRENT_BASE=$(echo "$CURRENT_VERSION" | sed -n 's/^\([0-9]\{4\}\.[0-9]\{2\}\.[A-Z]\{2\}\)[0-9]*$/\1/p')
+              if [ -n "$CURRENT_BASE" ]; then
+                DATE_PART="$CURRENT_BASE"
+              fi
+              NEW_COUNT=$((COMMIT_COUNT + 1))
+              NEW_VERSION="${DATE_PART}${NEW_COUNT}"
+              NEW_LAST_FEATURE="$LAST_FEATURE"
+              NEW_FEATURE_DATE="$FEATURE_DATE"
+            fi
+          fi
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "new_count=$NEW_COUNT" >> $GITHUB_OUTPUT
+          echo "last_feature=$NEW_LAST_FEATURE" >> $GITHUB_OUTPUT
+          echo "feature_date=$NEW_FEATURE_DATE" >> $GITHUB_OUTPUT
+
+      - name: Write version.json
+        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
+        run: |
+          mkdir -p assets/data
+          jq -n \
+            --arg version "${{ steps.version.outputs.new_version }}" \
+            --arg last_feature_commit "${{ steps.version.outputs.last_feature }}" \
+            --arg feature_date "${{ steps.version.outputs.feature_date }}" \
+            --argjson commit_count_since_feature ${{ steps.version.outputs.new_count }} \
+            '{version: $version, last_feature_commit: $last_feature_commit, feature_date: $feature_date, commit_count_since_feature: $commit_count_since_feature}' \
+            > assets/data/version.json
+          cp assets/data/version.json version.json
+
+      - name: Commit and push version.json
+        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Actions"
+          git add assets/data/version.json version.json
+          if git diff --staged --quiet; then
+            echo "No version change to commit"
+          else
+            git commit -m "chore: update version to ${{ steps.version.outputs.new_version }} [skip ci]"
+            git push
+          fi
+
+      - name: Summary
+        if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
+        run: |
+          echo "## Version Control Update" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Skipped (version-bump or weekend)
+        if: steps.commit.outputs.skip == 'true' || steps.commit.outputs.skip_weekend == 'true'
+        run: |
+          echo "## Version Control Skipped" >> $GITHUB_STEP_SUMMARY
+
+  auto-version-update:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    name: Auto Version Control Update
+    needs: [version-control]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync to latest remote (after version-control may have pushed)
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          git fetch origin "$BRANCH"
+          git pull --rebase origin "$BRANCH" || git pull --ff-only origin "$BRANCH"
+
+      - name: Ensure version.json exists
+        run: |
+          if [ ! -f "assets/data/version.json" ]; then
+            mkdir -p assets/data
+            jq -n \
+              --arg version "2026.03.BA1" \
+              --arg last_feature_commit "feature: initial" \
+              --arg feature_date "$(date -u +%Y-%m-%d)" \
+              --argjson commit_count_since_feature 1 \
+              '{version: $version, last_feature_commit: $last_feature_commit, feature_date: $feature_date, commit_count_since_feature: $commit_count_since_feature}' \
+              > assets/data/version.json
+            cp assets/data/version.json version.json
+          fi
+      - name: Sync root version.json from assets
+        run: |
+          if [ -f "assets/data/version.json" ]; then
+            cp assets/data/version.json version.json
+          fi
+      - name: Commit if changed
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add assets/data/version.json version.json 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No version file changes"
+          else
+            V=$(jq -r '.version' assets/data/version.json)
+            git commit -m "chore: sync version.json ($V) [skip ci]"
+            git push
+          fi
+
+  generate-daily-commits:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    name: Generate Daily Commits
+    needs: [auto-version-update]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Sync branch
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          git fetch origin "$BRANCH"
+          git pull --rebase origin "$BRANCH" || git pull --ff-only origin "$BRANCH"
+      - name: Generate daily commits JSON
+        id: gen
+        run: |
+          TODAY=$(date -u +"%Y-%m-%d")
+          echo "today=$TODAY" >> $GITHUB_OUTPUT
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          COMMITS_JSON=$(git log --since="${TODAY}T00:00:00Z" --pretty=format:'%an|%s|%aI' --no-merges | \
+            jq -R -s 'split("\n") | map(select(length > 0)) | map(split("|") | {author: .[0], message: .[1], timestamp: .[2]})')
+          COMMIT_COUNT=$(git log --since="${TODAY}T00:00:00Z" --oneline --no-merges | wc -l | tr -d ' ')
+          [ -z "$COMMIT_COUNT" ] && COMMIT_COUNT=0
+          [ "$COMMIT_COUNT" -eq 0 ] && COMMITS_JSON="[]"
+          VER="2026.03.BA1"
+          [ -f "assets/data/version.json" ] && VER=$(jq -r '.version // "2026.03.BA1"' assets/data/version.json)
+          jq -n \
+            --arg version "$VER" \
+            --arg generated_at "$TIMESTAMP" \
+            --argjson commits "$COMMITS_JSON" \
+            --argjson total_commits "$COMMIT_COUNT" \
+            --arg date_range "$TODAY" \
+            '{version: $version, generated_at: $generated_at, commits: $commits, total_commits: $total_commits, date_range: $date_range}' \
+            > assets/data/daily-commits.json
+      - name: Verify JSON
+        run: jq . assets/data/daily-commits.json
+      - name: Commit and push (if changed)
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add assets/data/daily-commits.json
+          if git diff --staged --quiet; then
+            echo "No changes to daily-commits.json"
+          else
+            git commit -m "Update daily commits data [${{ steps.gen.outputs.today }}] [skip ci]"
+            git push
+          fi
+
+  version-api:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    name: Version Control API
+    needs: [generate-daily-commits]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Sync branch
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          git fetch origin "$BRANCH"
+          git pull --rebase origin "$BRANCH" || git pull --ff-only origin "$BRANCH"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Get version information
+        id: version
+        run: |
+          YEAR=$(grep "static const int _versionYear" lib/widgets/version_control.dart | sed 's/.*= \([0-9]*\).*/\1/')
+          MONTH=$(grep "static const String _versionMonth" lib/widgets/version_control.dart | sed "s/.*= '\([0-9]*\)'.*/\1/")
+          WEEK_CODE=$(grep "static const String _versionWeekCode" lib/widgets/version_control.dart | sed "s/.*= '\([A-Z]\)'.*/\1/")
+          DAY_CODE=$(grep "static const String _versionDayCode" lib/widgets/version_control.dart | sed "s/.*= '\([A-Z]\)'.*/\1/")
+          COMMIT_COUNT=$(grep "static const int _versionCommitNumber" lib/widgets/version_control.dart | sed 's/.*= \([0-9]*\).*/\1/')
+          ENVIRONMENT=$(grep "static const String _versionEnvironment" lib/widgets/version_control.dart | sed "s/.*= '\([A-Z]*\)'.*/\1/")
+          VERSION_STRING="Ver. $YEAR.$MONTH.$WEEK_CODE$DAY_CODE$COMMIT_COUNT.$ENVIRONMENT"
+          echo "version_string=$VERSION_STRING" >> $GITHUB_OUTPUT
+          echo "year=$YEAR" >> $GITHUB_OUTPUT
+          echo "month=$MONTH" >> $GITHUB_OUTPUT
+          echo "week_code=$WEEK_CODE" >> $GITHUB_OUTPUT
+          echo "day_code=$DAY_CODE" >> $GITHUB_OUTPUT
+          echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+      - name: Create version API endpoint
+        run: |
+          cat > version-api.json << EOF
+          {
+            "version": "${{ steps.version.outputs.version_string }}",
+            "components": {
+              "year": ${{ steps.version.outputs.year }},
+              "month": "${{ steps.version.outputs.month }}",
+              "week_code": "${{ steps.version.outputs.week_code }}",
+              "day_code": "${{ steps.version.outputs.day_code }}",
+              "commit_count": ${{ steps.version.outputs.commit_count }},
+              "environment": "${{ steps.version.outputs.environment }}"
+            },
+            "generated_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
+            "git_info": {
+              "branch": "${{ github.ref_name }}",
+              "commit_sha": "${{ github.sha }}",
+              "workflow_run": "${{ github.workflow }}",
+              "run_id": "${{ github.run_id }}"
+            }
+          }
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: version-info
+          path: version-api.json
+          retention-days: 30
+
+  version-monitor:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    name: Version Control Monitor
+    needs: [version-api]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Sync branch
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          git fetch origin "$BRANCH"
+          git pull --rebase origin "$BRANCH" || git pull --ff-only origin "$BRANCH"
+      - name: Read version from version.json
+        id: version
+        run: |
+          if [ -f "assets/data/version.json" ]; then
+            V=$(jq -r '.version' assets/data/version.json)
+            COUNT=$(jq -r '.commit_count_since_feature' assets/data/version.json)
+            FEATURE=$(jq -r '.last_feature_commit' assets/data/version.json)
+            FDATE=$(jq -r '.feature_date' assets/data/version.json)
+            echo "version=$V" >> $GITHUB_OUTPUT
+            echo "commit_count=$COUNT" >> $GITHUB_OUTPUT
+            echo "last_feature=$FEATURE" >> $GITHUB_OUTPUT
+            echo "feature_date=$FDATE" >> $GITHUB_OUTPUT
+          else
+            echo "version=not_found" >> $GITHUB_OUTPUT
+            echo "commit_count=0" >> $GITHUB_OUTPUT
+            echo "last_feature=" >> $GITHUB_OUTPUT
+            echo "feature_date=" >> $GITHUB_OUTPUT
+          fi
+      - name: Git info
+        id: git_info
+        run: |
+          echo "latest_commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      - name: Consistency check
+        id: check
+        run: |
+          V="${{ steps.version.outputs.version }}"
+          if [ "$V" = "not_found" ] || [ -z "$V" ]; then
+            echo "consistent=false" >> $GITHUB_OUTPUT
+            echo "status=version.json missing" >> $GITHUB_OUTPUT
+          else
+            echo "consistent=true" >> $GITHUB_OUTPUT
+            echo "status=OK" >> $GITHUB_OUTPUT
+          fi
+      - name: Create version report
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## Version Control Monitor
+          - **Version**: ${{ steps.version.outputs.version }}
+          - **Status**: ${{ steps.check.outputs.status }}
+          EOF
+          cat > version-report.md << MDEOF
+          # Version Control Monitor Report
+          - Version: ${{ steps.version.outputs.version }}
+          - Status: ${{ steps.check.outputs.status }}
+          MDEOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: version-monitor-report
+          path: version-report.md
+          retention-days: 7
+        continue-on-error: true
+
+  # Scheduled: lightweight maintenance (default branch)
+  scheduled-maintenance:
+    if: github.event_name == 'schedule'
+    name: Scheduled version monitor + daily commits (no deploy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Default branch sync
+        run: |
+          git pull --ff-only origin ${{ github.event.repository.default_branch }}
+      - name: Monitor snapshot
+        run: |
+          if [ -f "assets/data/version.json" ]; then
+            jq . assets/data/version.json >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No version.json" >> $GITHUB_STEP_SUMMARY
+          fi
+      - name: Regenerate daily commits (when cron is daily window)
+        run: |
+          H=$(date -u +%H)
+          M=$(date -u +%M)
+          # Only regenerate file on the 16:30 UTC run (hour 16, minute band 25-35)
+          if [ "$H" = "16" ] && [ "$M" -ge 25 ] && [ "$M" -le 40 ]; then
+            TODAY=$(date -u +"%Y-%m-%d")
+            TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            COMMITS_JSON=$(git log --since="${TODAY}T00:00:00Z" --pretty=format:'%an|%s|%aI' --no-merges | \
+              jq -R -s 'split("\n") | map(select(length > 0)) | map(split("|") | {author: .[0], message: .[1], timestamp: .[2]})')
+            COMMIT_COUNT=$(git log --since="${TODAY}T00:00:00Z" --oneline --no-merges | wc -l | tr -d ' ')
+            [ -z "$COMMIT_COUNT" ] && COMMIT_COUNT=0
+            [ "$COMMIT_COUNT" -eq 0 ] && COMMITS_JSON="[]"
+            VER="2026.03.BA1"
+            [ -f "assets/data/version.json" ] && VER=$(jq -r '.version // "2026.03.BA1"' assets/data/version.json)
+            jq -n \
+              --arg version "$VER" \
+              --arg generated_at "$TIMESTAMP" \
+              --argjson commits "$COMMITS_JSON" \
+              --argjson total_commits "$COMMIT_COUNT" \
+              --arg date_range "$TODAY" \
+              '{version: $version, generated_at: $generated_at, commits: $commits, total_commits: $total_commits, date_range: $date_range}' \
+              > assets/data/daily-commits.json
+            git config user.email "action@github.com"
+            git config user.name "GitHub Action"
+            git add assets/data/daily-commits.json
+            if ! git diff --staged --quiet; then
+              git commit -m "Update daily commits data [schedule] [skip ci]"
+              git push
+            fi
+          else
+            echo "Skipping daily-commits.json (not 16:30 UTC window)"
+          fi
+
   checks-build-deploy:
-    if: ${{ !contains(github.event.head_commit.message || '', '[skip ci]') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && !contains(github.event.head_commit.message || '', '[skip ci]')) }}
     name: Flutter CI, web build, Render deploy
+    needs: [version-monitor]
     runs-on: ubuntu-latest
     steps:
       - name: Resolve deploy branch eligibility
@@ -47,8 +485,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Sync branch (avoid stale checkout vs other bots)
-        if: steps.branch.outputs.deploy == 'true'
+      - name: Sync branch (include bot commits from earlier jobs)
         run: |
           BRANCH="${{ steps.branch.outputs.name }}"
           git fetch origin "$BRANCH"
@@ -73,11 +510,11 @@ jobs:
         if: steps.branch.outputs.deploy == 'true'
         run: flutter build web --release --base-href /
 
-      - name: Disable service worker in web bundle (avoid stale cached JS after deploy)
+      - name: Disable service worker in web bundle
         if: steps.branch.outputs.deploy == 'true'
         run: python3 tool/strip_web_service_worker.py
 
-      - name: Stamp build with source commit (forces deploy when HEAD changes)
+      - name: Stamp build with source commit
         if: steps.branch.outputs.deploy == 'true'
         run: |
           mkdir -p build/web
@@ -99,7 +536,7 @@ jobs:
             git commit -m "chore: update Flutter web build [skip ci]"
             git fetch origin "$BRANCH"
             if ! git pull origin "$BRANCH" --rebase; then
-              echo "::error::Rebase failed (conflicts with origin/$BRANCH). Resolve on branch and re-run workflow."
+              echo "::error::Rebase failed"
               exit 1
             fi
             if ! git push origin "$BRANCH"; then
@@ -108,26 +545,68 @@ jobs:
             fi
           fi
 
-      - name: Wait for GitHub default branch tip (Render clones latest)
+      - name: Wait for GitHub default branch tip
         if: steps.branch.outputs.deploy == 'true'
         run: sleep 20
 
-      - name: Trigger Render deploy hook
+      - name: Detect frontend/backend changes for deploy hooks
+        id: changes
         if: steps.branch.outputs.deploy == 'true'
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BEFORE_SHA="${{ github.event.before }}"
+          AFTER_SHA="${{ github.sha }}"
+          if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE_SHA=$(git rev-parse HEAD~1)
+          fi
+
+          CHANGED_FILES=$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" || true)
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          if echo "$CHANGED_FILES" | grep -Eq '^(lib/|web/|assets/|pubspec\.yaml|pubspec\.lock|\.github/workflows/)'; then
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -Eq '^backend/'; then
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger Render frontend deploy hook
+        if: steps.branch.outputs.deploy == 'true' && steps.changes.outputs.frontend_changed == 'true'
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
           if [ -z "${RENDER_DEPLOY_HOOK}" ]; then
-            echo "::error::RENDER_DEPLOY_HOOK is not set. Add it under Settings → Secrets and variables → Actions."
+            echo "::error::RENDER_DEPLOY_HOOK is not set"
             exit 1
           fi
           curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
-          echo "Render deploy hook invoked successfully."
+
+      - name: Trigger Render backend deploy hook
+        if: steps.branch.outputs.deploy == 'true' && steps.changes.outputs.backend_changed == 'true'
+        env:
+          RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
+        run: |
+          if [ -z "${RENDER_BACKEND_DEPLOY_HOOK}" ]; then
+            echo "::error::RENDER_BACKEND_DEPLOY_HOOK is not set"
+            exit 1
+          fi
+          curl -fsS -X POST "$RENDER_BACKEND_DEPLOY_HOOK"
 
       - name: Deploy summary
         if: ${{ always() && steps.branch.outputs.deploy == 'true' }}
         run: |
           echo "## deploy-check summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Branch built:** ${{ steps.branch.outputs.name }} at commit \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **build/web** includes \`.ci-source-commit\` (open \`https://<your-site>/.ci-source-commit\` after deploy to verify live SHA)." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Render: use **only** deploy hook after this workflow, or turn off auto-deploy on push so you never publish a commit before the bot updates \`build/web\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Branch:** ${{ steps.branch.outputs.name }} at \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Frontend deploy hook triggered:** ${{ steps.changes.outputs.frontend_changed }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Backend deploy hook triggered:** ${{ steps.changes.outputs.backend_changed }}" >> "$GITHUB_STEP_SUMMARY"
