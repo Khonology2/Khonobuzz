@@ -55,7 +55,9 @@ jobs:
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "skip_weekend=false" >> $GITHUB_OUTPUT
             echo "starts_with_feature=false" >> $GITHUB_OUTPUT
-            echo "message=$MSG" >> $GITHUB_OUTPUT
+            echo "message<<EOF" >> $GITHUB_OUTPUT
+            echo "$MSG" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
             echo "date=" >> $GITHUB_OUTPUT
             echo "is_feature=false" >> $GITHUB_OUTPUT
             exit 0
