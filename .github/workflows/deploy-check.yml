@@ -547,8 +547,40 @@ jobs:
         if: steps.branch.outputs.deploy == 'true'
         run: sleep 20
 
-      - name: Trigger Render deploy hook
+      - name: Detect frontend/backend changes for deploy hooks
+        id: changes
         if: steps.branch.outputs.deploy == 'true'
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BEFORE_SHA="${{ github.event.before }}"
+          AFTER_SHA="${{ github.sha }}"
+          if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE_SHA=$(git rev-parse HEAD~1)
+          fi
+
+          CHANGED_FILES=$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" || true)
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          if echo "$CHANGED_FILES" | grep -Eq '^(lib/|web/|assets/|pubspec\.yaml|pubspec\.lock|\.github/workflows/)'; then
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -Eq '^backend/'; then
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger Render frontend deploy hook
+        if: steps.branch.outputs.deploy == 'true' && steps.changes.outputs.frontend_changed == 'true'
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
@@ -558,8 +590,21 @@ jobs:
           fi
           curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
 
+      - name: Trigger Render backend deploy hook
+        if: steps.branch.outputs.deploy == 'true' && steps.changes.outputs.backend_changed == 'true'
+        env:
+          RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
+        run: |
+          if [ -z "${RENDER_BACKEND_DEPLOY_HOOK}" ]; then
+            echo "::error::RENDER_BACKEND_DEPLOY_HOOK is not set"
+            exit 1
+          fi
+          curl -fsS -X POST "$RENDER_BACKEND_DEPLOY_HOOK"
+
       - name: Deploy summary
         if: ${{ always() && steps.branch.outputs.deploy == 'true' }}
         run: |
           echo "## deploy-check summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Branch:** ${{ steps.branch.outputs.name }} at \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Frontend deploy hook triggered:** ${{ steps.changes.outputs.frontend_changed }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Backend deploy hook triggered:** ${{ steps.changes.outputs.backend_changed }}" >> "$GITHUB_STEP_SUMMARY"
