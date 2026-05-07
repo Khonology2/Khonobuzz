@@ -1093,6 +1093,66 @@ Future<void> _launchUrlFromContext(
       debugPrint(
         '[ModuleLaunch] Using latest deliverables token with role: $selectedRole',
       );
+    } else if (moduleKey == 'sow_builder') {
+      String? selectedRole;
+      try {
+        final roleSource = latestModuleAccessRole;
+        if (roleSource != null && roleSource.isNotEmpty) {
+          final parts = roleSource.split(',');
+          for (final part in parts) {
+            final trimmedPart = part.trim();
+            if (trimmedPart.startsWith('Proposal & SOW Builder - ')) {
+              selectedRole = trimmedPart
+                  .replaceFirst('Proposal & SOW Builder - ', '')
+                  .trim();
+              break;
+            }
+          }
+        }
+        if ((selectedRole == null || selectedRole.isEmpty) &&
+            userProvider.users.isNotEmpty) {
+          final currentUser = userProvider.users.firstWhere(
+            (u) => u.email.toLowerCase() == email.toLowerCase(),
+            orElse: () => throw StateError('Current user not found'),
+          );
+          final localRole = currentUser.moduleAccessRole;
+          if (localRole != null && localRole.isNotEmpty) {
+            final parts = localRole.split(',');
+            for (final part in parts) {
+              final trimmedPart = part.trim();
+              if (trimmedPart.startsWith('Proposal & SOW Builder - ')) {
+                selectedRole = trimmedPart
+                    .replaceFirst('Proposal & SOW Builder - ', '')
+                    .trim();
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[ModuleLaunch] Error getting SOW Builder persona: $e');
+      }
+      selectedRole =
+          (selectedRole == null || selectedRole.isEmpty) ? 'Manager' : selectedRole;
+
+      final String sowCacheKey =
+          '$moduleKey:$email:$selectedRole:$theme';
+      final fresh = await fetchLatestToken(
+        tokenEndpoint: ApiConfig.authTokenEndpoint(
+          email,
+          module: 'sow_builder',
+          role: selectedRole,
+          theme: theme,
+        ),
+      );
+      if (fresh == null || fresh.isEmpty) {
+        return;
+      }
+      token = fresh;
+      _moduleLaunchTokenCache[sowCacheKey] = fresh;
+      debugPrint(
+        '[ModuleLaunch] Using latest SOW Builder token with persona: $selectedRole',
+      );
     } else {
       final fresh = await fetchLatestToken(
         tokenEndpoint: ApiConfig.authTokenEndpoint(email, theme: theme),

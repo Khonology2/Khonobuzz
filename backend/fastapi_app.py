@@ -27,6 +27,7 @@ try:
         parse_module_access_role_to_arw_roles,
         parse_module_access_role_to_skills_heatmap_roles,
         parse_module_access_role_to_deliverables_roles,
+        parse_module_access_role_to_sow_builder_roles,
         verify_token,
     )
 except ImportError:
@@ -36,6 +37,7 @@ except ImportError:
         parse_module_access_role_to_arw_roles,
         parse_module_access_role_to_skills_heatmap_roles,
         parse_module_access_role_to_deliverables_roles,
+        parse_module_access_role_to_sow_builder_roles,
         verify_token,
     )
 try:
@@ -2798,6 +2800,14 @@ async def get_user_token(
             "sprint_signoff",
             "sprint_sign_off",
         )
+        is_sow_builder = normalized_module in (
+            "sow_builder",
+            "sowbuilder",
+            "sow",
+            "proposal_sow_builder",
+            "proposal_sow",
+            "proposal_and_sow_builder",
+        )
         if is_arw:
             roles = parse_module_access_role_to_arw_roles(module_access_role)
             print(f"[DEBUG] Generating ARW token for user_id: {user_id} with roles: {roles}")
@@ -2813,6 +2823,12 @@ async def get_user_token(
             else:
                 roles = parse_module_access_role_to_deliverables_roles(module_access_role)
             print(f"[DEBUG] Generating deliverables token for user_id: {user_id} with roles: {roles}")
+        elif is_sow_builder:
+            if role and role.strip():
+                roles = [f"Proposal & SOW Builder - {role.strip()}"]
+            else:
+                roles = parse_module_access_role_to_sow_builder_roles(module_access_role)
+            print(f"[DEBUG] Generating SOW Builder token for user_id: {user_id} with roles: {roles}")
         else:
             roles = parse_module_access_role_to_roles(module_access_role)
             print(f"[DEBUG] Generating fresh token for user_id: {user_id} with roles: {roles}")
