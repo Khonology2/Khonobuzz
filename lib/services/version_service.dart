@@ -124,7 +124,13 @@ class VersionService {
     } catch (_) {}
   }
 
-  static Future<VersionData> loadVersion() async {
+  static Future<VersionData> loadVersion({bool forceRefresh = false}) async {
+    if (forceRefresh) {
+      _networkCached = null;
+      _inFlightLoad = null;
+      _versionEndpointUnavailable = false;
+      _networkAttemptCount = 0;
+    }
     if (_networkCached != null) {
       return _networkCached!;
     }
