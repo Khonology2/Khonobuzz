@@ -85,31 +85,42 @@ class ManagedUser {
 
   /// Copy with optional overrides so the updated user can be sorted to the top.
   ManagedUser copyWith({
+    String? firstName,
+    String? lastName,
+    String? email,
+    String? department,
+    String? designation,
+    String? role,
+    String? status,
     DateTime? updatedAt,
     String? entity,
+    String? manager,
     String? moduleAccess,
     String? moduleRole,
     String? moduleAccessRole,
+    String? phoneNumber,
+    String? profilePictureUrl,
+    DateTime? createdAt,
     DateTime? lastSignInAt,
     int? loginCount,
   }) {
     return ManagedUser(
       id: id,
-      firstName: firstName,
-      lastName: lastName,
-      email: email,
-      department: department,
-      designation: designation,
-      role: role,
-      status: status,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      email: email ?? this.email,
+      department: department ?? this.department,
+      designation: designation ?? this.designation,
+      role: role ?? this.role,
+      status: status ?? this.status,
       entity: entity ?? this.entity,
-      manager: manager,
+      manager: manager ?? this.manager,
       moduleAccess: moduleAccess ?? this.moduleAccess,
       moduleRole: moduleRole ?? this.moduleRole,
       moduleAccessRole: moduleAccessRole ?? this.moduleAccessRole,
-      phoneNumber: phoneNumber,
-      profilePictureUrl: profilePictureUrl,
-      createdAt: createdAt,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
+      createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastSignInAt: lastSignInAt ?? this.lastSignInAt,
       loginCount: loginCount ?? this.loginCount,
@@ -246,10 +257,25 @@ class ManagedUser {
     // Derive moduleAccess from moduleAccessRole if moduleAccess is empty
     final finalModuleAccess = _deriveModuleAccessFromRole(moduleAccessRaw, moduleAccessRoleRaw);
 
+    final rawFirstName = (data['firstName'] ?? '').toString();
+    final rawLastName = (data['lastName'] ?? '').toString();
+    String parsedFirstName = rawFirstName;
+    String parsedLastName = rawLastName;
+    if (parsedFirstName.isEmpty && parsedLastName.isEmpty) {
+      final fullName = (data['name'] ?? '').toString().trim();
+      if (fullName.isNotEmpty) {
+        final parts = fullName.split(RegExp(r'\s+'));
+        parsedFirstName = parts.first;
+        if (parts.length > 1) {
+          parsedLastName = parts.sublist(1).join(' ');
+        }
+      }
+    }
+
     return ManagedUser(
       id: data['id'] ?? '',
-      firstName: data['firstName'] ?? '',
-      lastName: data['lastName'] ?? '',
+      firstName: parsedFirstName,
+      lastName: parsedLastName,
       email: data['email'] ?? '',
       department: data['department'] ?? '',
       designation: data['designation'] ?? '',

@@ -620,7 +620,21 @@ class _UserManagementScreenState extends State<UserManagementScreen>
           final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
           final backendUser = decoded?['user'] as Map<String, dynamic>?;
           if (backendUser != null) {
-            final updatedUser = ManagedUser.fromApi(backendUser);
+            final existingIndex = userProvider.users.indexWhere(
+              (u) => u.id == userId,
+            );
+            final existing = existingIndex >= 0
+                ? userProvider.users[existingIndex]
+                : null;
+            final updatedUser = _mergeBackendUserData(
+              existing,
+              backendUser,
+              fallbackDepartment: department,
+              fallbackDesignation: designation,
+              fallbackRole: newRole,
+              fallbackStatus: newStatus,
+              fallbackEntity: entity,
+            );
             userProvider.updateUser(updatedUser);
             _editedDepartments.remove(userId);
             _editedDesignations.remove(userId);
@@ -633,7 +647,12 @@ class _UserManagementScreenState extends State<UserManagementScreen>
               if (entity != null) {
                 users[index].entity = entity;
               }
-              userProvider.updateUser(users[index]);
+              userProvider.updateUser(
+                users[index].copyWith(
+                  department: department,
+                  designation: designation,
+                ),
+              );
             }
           }
         } catch (_) {
@@ -645,7 +664,12 @@ class _UserManagementScreenState extends State<UserManagementScreen>
             if (entity != null) {
               users[index].entity = entity;
             }
-            userProvider.updateUser(users[index]);
+            userProvider.updateUser(
+              users[index].copyWith(
+                department: department,
+                designation: designation,
+              ),
+            );
           }
         }
       }
@@ -2169,7 +2193,15 @@ class _UserManagementScreenState extends State<UserManagementScreen>
       final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
       final backendUser = decoded?['user'] as Map<String, dynamic>?;
       if (backendUser != null && mounted) {
-        final updatedUser = ManagedUser.fromApi(backendUser);
+        final updatedUser = _mergeBackendUserData(
+          user,
+          backendUser,
+          fallbackDepartment: user.department,
+          fallbackDesignation: user.designation,
+          fallbackRole: user.role,
+          fallbackStatus: user.status,
+          fallbackEntity: user.entity,
+        );
         final userProvider = Provider.of<UserProvider>(context, listen: false);
         userProvider.updateUser(updatedUser);
       }
@@ -2200,6 +2232,66 @@ class _UserManagementScreenState extends State<UserManagementScreen>
         });
       }
     }
+  }
+
+  ManagedUser _mergeBackendUserData(
+    ManagedUser? existingUser,
+    Map<String, dynamic> backendUser, {
+    required String fallbackDepartment,
+    required String fallbackDesignation,
+    required String fallbackRole,
+    required String fallbackStatus,
+    String? fallbackEntity,
+  }) {
+    final parsed = ManagedUser.fromApi(backendUser);
+    return parsed.copyWith(
+      firstName: parsed.firstName.isNotEmpty
+          ? parsed.firstName
+          : existingUser?.firstName,
+      lastName: parsed.lastName.isNotEmpty
+          ? parsed.lastName
+          : existingUser?.lastName,
+      email: parsed.email.isNotEmpty ? parsed.email : existingUser?.email,
+      department: parsed.department.isNotEmpty
+          ? parsed.department
+          : (existingUser?.department.isNotEmpty == true
+                ? existingUser!.department
+                : fallbackDepartment),
+      designation: parsed.designation.isNotEmpty
+          ? parsed.designation
+          : (existingUser?.designation.isNotEmpty == true
+                ? existingUser!.designation
+                : fallbackDesignation),
+      role: parsed.role.isNotEmpty ? parsed.role : fallbackRole,
+      status: parsed.status.isNotEmpty ? parsed.status : fallbackStatus,
+      entity: (parsed.entity ?? '').trim().isNotEmpty
+          ? parsed.entity
+          : (existingUser?.entity ?? fallbackEntity),
+      manager: (parsed.manager ?? '').trim().isNotEmpty
+          ? parsed.manager
+          : existingUser?.manager,
+      moduleAccess: (parsed.moduleAccess ?? '').trim().isNotEmpty
+          ? parsed.moduleAccess
+          : existingUser?.moduleAccess,
+      moduleRole: (parsed.moduleRole ?? '').trim().isNotEmpty
+          ? parsed.moduleRole
+          : existingUser?.moduleRole,
+      moduleAccessRole: (parsed.moduleAccessRole ?? '').trim().isNotEmpty
+          ? parsed.moduleAccessRole
+          : existingUser?.moduleAccessRole,
+      phoneNumber: (parsed.phoneNumber ?? '').trim().isNotEmpty
+          ? parsed.phoneNumber
+          : existingUser?.phoneNumber,
+      profilePictureUrl: (parsed.profilePictureUrl ?? '').trim().isNotEmpty
+          ? parsed.profilePictureUrl
+          : existingUser?.profilePictureUrl,
+      createdAt: parsed.createdAt ?? existingUser?.createdAt,
+      updatedAt: parsed.updatedAt ?? DateTime.now(),
+      lastSignInAt: parsed.lastSignInAt ?? existingUser?.lastSignInAt,
+      loginCount: parsed.loginCount > 0
+          ? parsed.loginCount
+          : (existingUser?.loginCount ?? 0),
+    );
   }
 
   void _showManagedByDialog(ManagedUser user) {

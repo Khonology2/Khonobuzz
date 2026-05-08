@@ -423,7 +423,10 @@ class AuthProvider extends ChangeNotifier {
         return true; // Indicate success
       } else if (response.statusCode == 409) {
         // User already exists; attempt fallback login to fetch real role
-        final fallbackSuccess = await _attemptFallbackLogin(email);
+        final fallbackSuccess = await _attemptFallbackLogin(
+          email,
+          allowPendingStatus: true,
+        );
         return fallbackSuccess;
       } else {
         // Handle other errors
@@ -780,7 +783,10 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> _attemptFallbackLogin(String email) async {
+  Future<bool> _attemptFallbackLogin(
+    String email, {
+    bool allowPendingStatus = false,
+  }) async {
     try {
       http.Response? userCheckResponse;
       Object? lastError;
@@ -823,7 +829,9 @@ class AuthProvider extends ChangeNotifier {
 
         if (foundUser != null) {
           final status = (foundUser['status']?.toString() ?? '').trim();
-          if (status.toLowerCase() != 'active') {
+          final statusLower = status.toLowerCase();
+          final isPending = statusLower == 'pending' || statusLower.isEmpty;
+          if (statusLower != 'active' && !(allowPendingStatus && isPending)) {
             _setLoginFeedback(
               status: status.isEmpty ? 'Pending' : status,
               error:
@@ -838,12 +846,14 @@ class AuthProvider extends ChangeNotifier {
           _userProfileImageUrl = null;
           _userProfilePublicId = null;
           _isAuthenticated = true;
+          _userAlreadyOnboarded = !isPending;
           _userEmail = foundUser['email'] ?? email;
           _userRole = foundUser['role'] ?? 'Staff';
           _userThemePreference =
               (foundUser['themePreference'] as String?)?.trim().toLowerCase();
           _initialScreenIndex = 9;
           _currentScreenIndex = 9;
+          _setLoginFeedback(status: status.isEmpty ? 'Pending' : status);
 
           final moduleAccessRaw = foundUser['moduleAccess'] as String?;
           final moduleAccessRoleRaw = foundUser['moduleAccessRole'] as String?;

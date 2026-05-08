@@ -11,7 +11,6 @@ import 'screens/module_access_screen.dart';
 import 'screens/module_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/landing_screen.dart';
-import 'screens/onboarding_alert_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/admin_alert_provider.dart';
 import 'providers/theme_mode_provider.dart';
@@ -222,7 +221,6 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen>
     with SingleTickerProviderStateMixin {
   int _selectedIndex = 3; // Initialize to Modules screen (index 3)
-  bool _isAlertPanelOpen = false;
   AdminAlertProvider? _adminAlertProvider;
   Timer? _staffBellShakeTimer;
   late final AnimationController _bellShakeController;
@@ -390,9 +388,10 @@ class _MainScreenState extends State<MainScreen>
         )
         .toList();
 
-    final hasOnboardingAlerts =
-        _isAdmin() &&
-        (pendingUsers.isNotEmpty || activeUsersWithoutAssignments.isNotEmpty);
+    final onboardingAlertCount = _isAdmin()
+        ? pendingUsers.length + activeUsersWithoutAssignments.length
+        : 0;
+    final totalAlertCount = unreadAlerts + onboardingAlertCount;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -468,7 +467,7 @@ class _MainScreenState extends State<MainScreen>
                             ),
                           ),
                         ),
-                        if (unreadAlerts > 0)
+                        if (totalAlertCount > 0)
                           Positioned(
                             top: -4,
                             right: -4,
@@ -483,7 +482,9 @@ class _MainScreenState extends State<MainScreen>
                                 border: Border.all(color: const Color(0xFFC10D00)),
                               ),
                               child: Text(
-                                unreadAlerts > 99 ? '99+' : '$unreadAlerts',
+                                totalAlertCount > 99
+                                    ? '99+'
+                                    : '$totalAlertCount',
                                 style: const TextStyle(
                                   color: Color(0xFFC10D00),
                                   fontSize: 10,
@@ -500,79 +501,6 @@ class _MainScreenState extends State<MainScreen>
               ),
             ),
           ),
-          if (hasOnboardingAlerts)
-            Positioned(
-              top: 16,
-              right: 72,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        SoundSystem.playButtonClick();
-                        setState(() {
-                          _isAlertPanelOpen = !_isAlertPanelOpen;
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFC10D00),
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.4),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.notifications_active,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              pendingUsers.isNotEmpty
-                                  ? 'New user onboarded'
-                                  : 'Assign access and entity',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (_isAlertPanelOpen) ...[
-                    const SizedBox(height: 8),
-                    OnboardingAlertPanel(
-                      pendingUsers: pendingUsers,
-                      activeUsersWithoutAssignments:
-                          activeUsersWithoutAssignments,
-                      onClose: () {
-                        setState(() {
-                          _isAlertPanelOpen = false;
-                        });
-                      },
-                    ),
-                  ],
-                ],
-              ),
-            ),
         ],
       ),
     );

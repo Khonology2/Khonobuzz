@@ -1537,10 +1537,10 @@ async def register_user(user: UserRegister):
         print(f"[DEBUG] Department (from Pydantic): {department}")
         print(f"[DEBUG] Designation (from Pydantic): {designation}")
         email_stripped = email.strip() if email else ''
-        if email_stripped and not email_stripped.lower().endswith('@khonology.com'):
+        if email_stripped and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_stripped):
             return JSONResponse(
                 status_code=400,
-                content={"error": "Only Khonology work emails (@khonology.com) are allowed"}
+                content={"error": "Please provide a valid email address."}
             )
         if not email or not password or not full_name:
             return JSONResponse(status_code=400, content={"error": "Email, password, and name required"})
@@ -2464,10 +2464,10 @@ async def login_user(user_login: UserLogin, request: Request):
                 content={"error": "Email is required"}
             )
         email_input = user_login.email.strip()
-        if not email_input.lower().endswith('@khonology.com'):
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_input):
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                content={"error": "Only Khonology work emails (@khonology.com) are allowed"}
+                content={"error": "Please provide a valid email address."}
             )
         normalized_email = user_login.email.lower().strip()
         if not is_special_session:

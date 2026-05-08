@@ -152,16 +152,16 @@ class _LandingScreenState extends State<LandingScreen> {
                   const SizedBox(height: 50),
                   FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Column(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Semantics(
                           label: 'GET STARTED',
                           button: true,
-                          child: _buildLoginButton(
+                          child: _buildLandingActionButton(
                             text: 'GET STARTED',
-                            color: const Color(0xFFC10D00),
+                            isPrimary: true,
                             onPressed: () {
                               AuthProvider.warmUpBackendForLogin();
                               _pingBackend();
@@ -173,13 +173,13 @@ class _LandingScreenState extends State<LandingScreen> {
                             },
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(width: 22),
                         Semantics(
                           label: 'LEARN MORE',
                           button: true,
-                          child: _buildThemeSecondaryPillButton(
+                          child: _buildLandingActionButton(
                             text: 'LEARN MORE',
-                            isLight: isLight,
+                            isPrimary: false,
                             onPressed: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
@@ -245,63 +245,49 @@ class _LandingScreenState extends State<LandingScreen> {
     );
   }
 
-  /// Filled pill that inverts with theme (black/white) — pairs with the brand red [GET STARTED] button.
-  Widget _buildThemeSecondaryPillButton({
+  Widget _buildLandingActionButton({
     required String text,
-    required bool isLight,
+    required bool isPrimary,
     required VoidCallback onPressed,
   }) {
-    final bg = isLight ? Colors.black : Colors.white;
-    final fg = isLight ? Colors.white : Colors.black;
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final bg = isPrimary
+        ? const Color(0xFFC10D00)
+        : Colors.transparent;
+    final fg = isPrimary
+        ? Colors.white
+        : (isLight ? Colors.black : Colors.white);
+    final borderColor = isPrimary
+        ? Colors.transparent
+        : (isLight ? Colors.black : Colors.white);
+
     return Container(
-      width: 250,
+      width: 168,
+      height: 40,
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(50.0),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: borderColor, width: 1.2),
       ),
-      child: MaterialButton(
-        onPressed: () {
-          SoundSystem.playButtonClick();
-          onPressed();
-        },
-        padding: const EdgeInsets.symmetric(vertical: 16.0),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            color: fg,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoginButton({
-    required String text,
-    required Color color,
-    VoidCallback? onPressed,
-  }) {
-    return Container(
-      width: 250,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(50.0),
-      ),
-      child: MaterialButton(
-        onPressed: onPressed == null
-            ? null
-            : () {
-                SoundSystem.playButtonClick();
-                onPressed();
-              },
-        padding: const EdgeInsets.symmetric(vertical: 16.0),
-        child: Text(
-          text,
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: () {
+            SoundSystem.playButtonClick();
+            onPressed();
+          },
+          child: Center(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: fg,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                letterSpacing: 0.2,
+              ),
+            ),
           ),
         ),
       ),
