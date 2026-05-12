@@ -13,6 +13,9 @@ class UserProvider extends ChangeNotifier {
   DateTime? _lastFetchTime;
   static const Duration _cacheValidDuration = Duration(minutes: 5);
 
+  /// When [fetchUsers] runs, concurrent callers with [forceRefresh] await this.
+  Future<void>? _fetchUsersInFlight;
+
   List<ManagedUser> get users => _users;
   bool get isLoading => _isLoading;
   bool get hasError => _hasError;
@@ -111,30 +114,41 @@ class UserProvider extends ChangeNotifier {
     return bestDoc == null ? {} : Map<String, dynamic>.from(bestDoc.data());
   }
 
-  /// Fetch users directly from Firestore - fast, no backend cold start
+  /// Fetch users directly from Firestore - fast, no backend cold start.
+  /// Uses [Source.server] so new users appear after admin creates them (not a stale local cache).
   Future<List<ManagedUser>?> _fetchUsersFromFirestore({
     Duration timeout = const Duration(seconds: 10),
   }) async {
     try {
       final firestore = FirebaseFirestore.instance;
-      final usersSnapshot = await firestore.collection('users').get().timeout(
+      const serverSource = GetOptions(source: Source.server);
+      final usersSnapshot = await firestore
+          .collection('users')
+          .get(serverSource)
+          .timeout(
             timeout,
             onTimeout: () => throw Exception('Firestore timeout'),
           );
 
       final List<ManagedUser> managedUsers = [];
       for (final userDoc in usersSnapshot.docs) {
-        final userData = userDoc.data();
-        final userInfo = Map<String, dynamic>.from(userData);
-
-        Map<String, dynamic> onboardingData = {};
-        final onboardingSnapshot = await firestore
-            .collection('onboarding')
-            .where('user_id', isEqualTo: userDoc.id)
-            .get();
-        onboardingData = _selectBestOnboardingData(onboardingSnapshot.docs);
-
         try {
+          final userData = userDoc.data();
+          final userInfo = Map<String, dynamic>.from(userData);
+
+          Map<String, dynamic> onboardingData = {};
+          try {
+            final onboardingSnapshot = await firestore
+                .collection('onboarding')
+                .where('user_id', isEqualTo: userDoc.id)
+                .get(serverSource);
+            onboardingData = _selectBestOnboardingData(onboardingSnapshot.docs);
+          } catch (e) {
+            debugPrint(
+              'UserProvider: onboarding fetch failed for ${userDoc.id}: $e',
+            );
+          }
+
           final managed = ManagedUser.fromFirestore(
             userDoc.id,
             userInfo,
@@ -142,7 +156,7 @@ class UserProvider extends ChangeNotifier {
           );
           managedUsers.add(managed);
         } catch (e) {
-          debugPrint('UserProvider: parse error for ${userDoc.id}: $e');
+          debugPrint('UserProvider: skip user ${userDoc.id}: $e');
         }
       }
       return managedUsers;
@@ -193,7 +207,11 @@ class UserProvider extends ChangeNotifier {
     }
 
     if (_isLoading) {
-      return;
+      if (forceRefresh && _fetchUsersInFlight != null) {
+        await _fetchUsersInFlight;
+      } else {
+        return;
+      }
     }
 
     try {
@@ -238,11 +256,26 @@ class UserProvider extends ChangeNotifier {
       return;
     }
 
-    // If already loading, don't start another request
     if (_isLoading) {
+      if (forceRefresh && _fetchUsersInFlight != null) {
+        await _fetchUsersInFlight;
+        return fetchUsers(forceRefresh: true);
+      }
       return;
     }
 
+    final Future<void> work = _executeFetchUsers();
+    _fetchUsersInFlight = work;
+    try {
+      await work;
+    } finally {
+      if (_fetchUsersInFlight == work) {
+        _fetchUsersInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _executeFetchUsers() async {
     _isLoading = true;
     _hasError = false;
     _errorMessage = null;
@@ -257,8 +290,8 @@ class UserProvider extends ChangeNotifier {
         _setUsersAndSort(firestoreUsers);
         _hasError = false;
         _errorMessage = null;
-        notifyListeners();
         _isLoading = false;
+        notifyListeners();
         // Refresh from API in background to sync any backend-only data
         refreshUsersInBackground();
         return;
@@ -339,6 +372,7 @@ class UserProvider extends ChangeNotifier {
   void clearCache() {
     _users = [];
     _lastFetchTime = null;
+    _fetchUsersInFlight = null;
     notifyListeners();
   }
 

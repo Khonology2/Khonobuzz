@@ -217,13 +217,18 @@ class ManagedUser {
     // Derive moduleAccess from moduleAccessRole if moduleAccess is empty
     final finalModuleAccess = _deriveModuleAccessFromRole(moduleAccessValue, moduleAccessRoleValue);
 
+    final deptOnboarding = onboardingData['department']?.toString().trim() ?? '';
+    final deptUser = userData['department']?.toString().trim() ?? '';
+    final desigOnboarding = onboardingData['designation']?.toString().trim() ?? '';
+    final desigUser = userData['designation']?.toString().trim() ?? '';
+
     return ManagedUser(
       id: id,
       firstName: firstName,
       lastName: lastName,
       email: userData['email'] ?? '',
-      department: onboardingData['department'] ?? '',
-      designation: onboardingData['designation'] ?? '',
+      department: deptOnboarding.isNotEmpty ? deptOnboarding : deptUser,
+      designation: desigOnboarding.isNotEmpty ? desigOnboarding : desigUser,
       role: userData['role'] ?? 'Staff',
       status: userData['status'] ?? 'Active',
       entity: entityValue,

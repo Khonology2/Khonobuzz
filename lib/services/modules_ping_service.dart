@@ -12,11 +12,11 @@ class ModulesPingService {
 
   /// Base URLs (no trailing slash required).
   static const List<String> moduleBackendBaseUrls = [
-    'https://resource-capacity-backend.onrender.com',
     'https://personal-development-backend.onrender.com',
     'https://recruitment-api-zovg.onrender.com',
     'https://lukens-wp8w.onrender.com',
     'https://flow-space.onrender.com',
+    'https://resource-capacity.onrender.com',
   ];
 
   /// How often to GET each backend while logged in (Render free tier sleeps ~15 min idle).

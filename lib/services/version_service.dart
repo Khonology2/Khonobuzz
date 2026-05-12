@@ -20,18 +20,19 @@ class VersionData {
 
   factory VersionData.fromJson(Map<String, dynamic> json) {
     return VersionData(
-      version: json['version'] as String? ?? '2026.03.AB1',
+      version: json['version'] as String? ?? '2026.03.AB30',
       lastFeatureCommit: json['last_feature_commit'] as String? ?? '',
       featureDate: json['feature_date'] as String? ?? '',
       commitCountSinceFeature: json['commit_count_since_feature'] as int? ?? 0,
     );
   }
 
+  /// Keep in sync with [assets/data/version.json] so UI is not stuck on an ancient label when parsing fails.
   static VersionData get fallback => VersionData(
-    version: '2026.03.AB1',
-    lastFeatureCommit: '',
-    featureDate: '',
-    commitCountSinceFeature: 1,
+    version: '2026.03.AB30',
+    lastFeatureCommit: 'feat: module launch token theme sync',
+    featureDate: '2026-03-31',
+    commitCountSinceFeature: 30,
   );
 }
 
@@ -127,6 +128,7 @@ class VersionService {
   static Future<VersionData> loadVersion({bool forceRefresh = false}) async {
     if (forceRefresh) {
       _networkCached = null;
+      _cached = null;
       _inFlightLoad = null;
       _versionEndpointUnavailable = false;
       _networkAttemptCount = 0;
@@ -218,7 +220,13 @@ class VersionService {
         _networkAttemptCount < _maxNetworkAttempts) {
       try {
         _networkAttemptCount++;
-        final uri = Uri.parse(_versionUrl!);
+        final base = Uri.parse(_versionUrl!);
+        final uri = base.replace(
+          queryParameters: {
+            ...base.queryParameters,
+            '_': DateTime.now().millisecondsSinceEpoch.toString(),
+          },
+        );
         final response = await http
             .get(uri)
             .timeout(const Duration(seconds: 5));
@@ -266,11 +274,29 @@ class VersionService {
           }
         }
       } catch (_) {
-        // Fall through to assets
+        // Fall through to bundled asset / prefs
       }
     }
 
-    // Offline / no valid network payload: last known version from SharedPreferences
+    // Bundled [assets/data/version.json] is the ship vehicle of truth for mobile/desktop.
+    // It must run before SharedPreferences: an old persisted payload (e.g. 2026.03.AB1) must not
+    // hide a newer version shipped in the app binary.
+    final bundled = await _loadBundledAssetVersion();
+    if (bundled != null) {
+      // #region agent log
+      _debugLog(
+        'H4',
+        'lib/services/version_service.dart:bundled',
+        'Using bundled asset version',
+        {'version': bundled.version, 'featureDate': bundled.featureDate},
+      );
+      // #endregion
+      _networkCached = bundled;
+      await _persistNetworkVersion(bundled);
+      return bundled;
+    }
+
+    // Offline: last known version from SharedPreferences
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonStr = prefs.getString(_prefsKey);
@@ -283,49 +309,45 @@ class VersionService {
       }
     } catch (_) {}
 
-    // 2) Use cached asset result if we have it
     if (_cached != null) {
-      // #region agent log
       _debugLog(
         'H4',
         'lib/services/version_service.dart:145',
         'Using cached asset version',
         {'version': _cached!.version},
       );
-      // #endregion
       _networkCached = _cached;
       await _persistNetworkVersion(_cached!);
       return _cached!;
     }
 
-    // 3) Load from assets and cache (offline / no API)
+    _debugLog(
+      'H5',
+      'lib/services/version_service.dart:fallback',
+      'Falling back to hardcoded version data',
+      {'fallbackVersion': VersionData.fallback.version},
+    );
+    _networkCached = VersionData.fallback;
+    await _persistNetworkVersion(VersionData.fallback);
+    return VersionData.fallback;
+  }
+
+  /// Loads and caches [assets/data/version.json] when present and valid.
+  static Future<VersionData?> _loadBundledAssetVersion() async {
+    if (_cached != null) {
+      return _cached;
+    }
     try {
       final s = await rootBundle.loadString('assets/data/version.json');
       final map = json.decode(s) as Map<String, dynamic>;
-      _cached = VersionData.fromJson(map);
-      // #region agent log
-      _debugLog(
-        'H4',
-        'lib/services/version_service.dart:156',
-        'Loaded bundled asset version',
-        {'version': _cached!.version, 'featureDate': _cached!.featureDate},
-      );
-      // #endregion
-      _networkCached = _cached;
-      await _persistNetworkVersion(_cached!);
-      return _cached!;
+      if (!_isCustomVersionFormat(map)) {
+        return null;
+      }
+      final data = VersionData.fromJson(map);
+      _cached = data;
+      return data;
     } catch (_) {
-      // #region agent log
-      _debugLog(
-        'H5',
-        'lib/services/version_service.dart:163',
-        'Falling back to hardcoded version data',
-        {'fallbackVersion': VersionData.fallback.version},
-      );
-      // #endregion
-      _networkCached = VersionData.fallback;
-      await _persistNetworkVersion(VersionData.fallback);
-      return VersionData.fallback;
+      return null;
     }
   }
 

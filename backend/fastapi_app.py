@@ -950,10 +950,10 @@ async def get_version(request: Request):
             )
             # endregion
             fallback_payload = {
-                "version": "2026.03.AB1",
-                "last_feature_commit": "",
-                "feature_date": "",
-                "commit_count_since_feature": 1,
+                "version": "2026.03.AB30",
+                "last_feature_commit": "feat: module launch token theme sync",
+                "feature_date": "2026-03-31",
+                "commit_count_since_feature": 30,
             }
             response = JSONResponse(content=fallback_payload)
             response.headers["X-Version-Cache"] = "FALLBACK"
@@ -1616,6 +1616,8 @@ async def register_user(user: UserRegister):
         print(f"[DEBUG] Onboarding data being sent to Firestore (onboarding collection - FastAPI): {onboarding_data}")
         db.collection('onboarding').add(onboarding_data)
         sync_sso_user_login(user_id, user_data, onboarding_data)
+        # New user must appear on next /api/users call; list endpoint is cached in memory.
+        _cache_delete("users:list")
         response_content = {
             "message": "User created successfully",
             "user": {
