@@ -11,9 +11,6 @@ services:
       - HOST=0.0.0.0
       - PORT=5000
       - DEBUG=true
-      # Firebase credentials paths (mount credentials as volumes)
-      - PDH_FIREBASE_CREDENTIALS_PATH=/app/credentials/pdh-fe6eb-firebase-adminsdk-fbsvc-2700680531.json
-      - FIREBASE_CREDENTIALS_PATH=/app/credentials/khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json
       # Security keys (should be overridden in production)
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-PudwjIQa-kMPoQ8KCE9OqN3-HnIu2P12Dkf2U6rFH8I=}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-50g5j-Pa1SXyyABDbrghP0Spo1lZnQIGoWAIZBM_zZ0=}
@@ -21,8 +18,6 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql://sowbuilder_user:KKdN0nfyI4fF4LgmUXUePhCQN1SNjhQa@dpg-d5druhmr433s73anst30-a.virginia-postgres.render.com:5432/sowbuilder}
       - BACKEND_URL=${BACKEND_URL:-https://khonobuzz-backend-ac0j.onrender.com}
     volumes:
-      # Mount Firebase credentials (you need to copy them to ./credentials/)
-      - ./credentials:/app/credentials:ro
       # Mount logs directory
       - ./logs:/app/logs
     restart: unless-stopped

@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../models/managed_user.dart';
-import '../utils/pdh_firebase.dart'
+import '../utils/pdh_sync.dart'
     show updatePDHUserPartial, updateSkillsHeatmapUserPartial;
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';

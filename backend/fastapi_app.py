@@ -2,12 +2,10 @@ from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from brotli_asgi import BrotliMiddleware
-from firebase_admin import credentials, firestore, initialize_app
 from dotenv import load_dotenv
 import os
 import logging
 import json
-import base64
 import time
 import re
 import asyncio
@@ -48,6 +46,14 @@ try:
     from .sso_pg_sync import sync_sso_user_login
 except ImportError:
     from sso_pg_sync import sync_sso_user_login
+try:
+    from .database import engine as pg_engine
+except ImportError:
+    from database import engine as pg_engine
+try:
+    from .pg_firestore_compat import PGFirestoreClient, firestore as pg_store
+except ImportError:
+    from pg_firestore_compat import PGFirestoreClient, firestore as pg_store
 load_dotenv()
 DEBUG_MODE = os.environ.get('DEBUG', 'True').lower() == 'true'
 LOG_LEVEL = logging.DEBUG if DEBUG_MODE else logging.INFO
@@ -103,7 +109,7 @@ _VERSION_JSON_CACHE: Dict[str, Any] = {
     "data": None,
 }
 
-# Hot endpoint caches (in-memory) to reduce Firestore pressure.
+# Hot endpoint caches (in-memory) to reduce datastore pressure.
 USERS_CACHE_TTL_SECONDS = int(os.environ.get('USERS_CACHE_TTL_SECONDS', '45'))
 ADMIN_NOTIFICATIONS_CACHE_TTL_SECONDS = int(
     os.environ.get('ADMIN_NOTIFICATIONS_CACHE_TTL_SECONDS', '30')
@@ -122,7 +128,7 @@ _REDIS_STATE: Dict[str, Any] = {
     "disabled_until": 0.0,
 }
 
-# Firestore circuit breaker for quota-protection.
+# Datastore circuit breaker for quota-protection.
 FIRESTORE_BREAKER_FAILURE_THRESHOLD = int(
     os.environ.get('FIRESTORE_BREAKER_FAILURE_THRESHOLD', '3')
 )
@@ -298,16 +304,16 @@ def _redis_delete_prefix(prefix: str) -> None:
         debug_log(f"Redis cache prefix delete failed for {prefix}: {exc}")
 
 
-def _firestore_breaker_is_open() -> bool:
+def _db_breaker_is_open() -> bool:
     return time.time() < float(FIRESTORE_BREAKER_STATE.get("open_until", 0.0))
 
 
-def _firestore_breaker_record_success() -> None:
+def _db_breaker_record_success() -> None:
     FIRESTORE_BREAKER_STATE["consecutive_failures"] = 0
     FIRESTORE_BREAKER_STATE["open_until"] = 0.0
 
 
-def _firestore_breaker_record_failure(exc: Exception) -> None:
+def _db_breaker_record_failure(exc: Exception) -> None:
     if not _is_quota_error(exc):
         return
     failures = int(FIRESTORE_BREAKER_STATE.get("consecutive_failures", 0)) + 1
@@ -348,7 +354,7 @@ def _coerce_datetime(value: Any) -> Optional[datetime]:
     if isinstance(value, datetime):
         return value
     try:
-        candidate = value.to_datetime()  # Firestore DatetimeWithNanoseconds
+        candidate = value.to_datetime()  # DatetimeWithNanoseconds-like values
         if isinstance(candidate, datetime):
             return candidate
     except Exception:
@@ -416,249 +422,10 @@ def _get_best_onboarding_record(user_id: str):
 
     best_doc = max(docs, key=_score)
     return best_doc.reference, (best_doc.to_dict() or {})
-def load_firebase_credentials(env_var_name: str, default_path: str):
-    """
-    Load Firebase credentials from environment variable (JSON string or base64 encoded JSON) or file path.
-    Priority:
-    1. Environment variable with JSON string (PDH_FIREBASE_CREDENTIALS_JSON, etc.)
-    2. Environment variable with base64 encoded JSON
-    3. Environment variable with file path (PDH_FIREBASE_CREDENTIALS_PATH, etc.)
-    4. Default file path
-    Args:
-        env_var_name: Name of the environment variable (e.g., 'PDH_FIREBASE_CREDENTIALS')
-        default_path: Default file path if no env var is set
-    Returns:
-        credentials.Certificate object
-    """
-    def _normalize_credential_dict(cred_dict: dict) -> dict:
-        """Normalize service account fields commonly mangled in env vars."""
-        normalized = dict(cred_dict)
-        private_key = normalized.get('private_key')
-        if isinstance(private_key, str) and private_key:
-            pk = private_key.strip()
-            # Remove accidental wrapping quotes from env editors.
-            if (pk.startswith('"') and pk.endswith('"')) or (
-                pk.startswith("'") and pk.endswith("'")
-            ):
-                pk = pk[1:-1]
-            # Convert escaped newlines to real newlines.
-            pk = pk.replace('\\r\\n', '\n').replace('\\n', '\n')
-            # Ensure header/footer start on their own lines.
-            pk = pk.replace(
-                "-----BEGIN PRIVATE KEY----- ",
-                "-----BEGIN PRIVATE KEY-----\n",
-            ).replace(
-                " -----END PRIVATE KEY-----",
-                "\n-----END PRIVATE KEY-----",
-            )
-            normalized['private_key'] = pk
-        return normalized
-
-    json_env_var = f"{env_var_name}_JSON"
-    literal_json_env_var = env_var_name
-    json_str = None
-    json_source_var = None
-    for candidate_var in (json_env_var, literal_json_env_var):
-        candidate_value = os.environ.get(candidate_var)
-        if candidate_value is None:
-            continue
-        if not candidate_value.strip():
-            error_log(f"{candidate_var} is set but EMPTY (only whitespace). Please set a valid JSON value.")
-            continue
-        json_str = candidate_value
-        json_source_var = candidate_var
-        debug_log(f"Checking for {candidate_var}: SET (length: {len(candidate_value)} chars)")
-        break
-
-    if not json_str:
-        debug_log(f"Checking for {json_env_var}: NOT SET")
-        debug_log(f"Checking for {literal_json_env_var}: NOT SET")
-        possible_vars = [
-            json_env_var.upper(),
-            json_env_var.lower(),
-            json_env_var.replace('_JSON', ''),
-            f"{env_var_name}_CREDENTIALS",
-            f"{env_var_name}_CREDENTIALS_JSON",
-        ]
-        for possible_var in possible_vars:
-            if possible_var not in (json_env_var, literal_json_env_var) and possible_var in os.environ:
-                debug_log(
-                    f"Found similar variable '{possible_var}' but looking for "
-                    f"'{json_env_var}' or '{literal_json_env_var}'"
-                )
-
-    if json_str and json_source_var:
-        try:
-            json_str = json_str.strip()
-            # Remove surrounding quotes if present
-            if (json_str.startswith('"') and json_str.endswith('"')) or \
-               (json_str.startswith("'") and json_str.endswith("'")):
-                json_str = json_str[1:-1]
-            
-            # Check for common formatting issues
-            if json_str.startswith('"') and not json_str.startswith('{"'):
-                error_msg = (
-                    f"Invalid format in {json_source_var}. The value appears to have extra quotes.\n"
-                    f"Current format starts with: {json_str[:50]}...\n"
-                    f"Expected format: {{\"type\":\"service_account\",...}}\n"
-                    f"Solution: Remove surrounding quotes from the environment variable in Render."
-                )
-                raise ValueError(error_msg)
-            
-            # Additional check for malformed JSON that starts with quotes but not proper JSON
-            if json_str.startswith('"') and '\n' in json_str:
-                error_msg = (
-                    f"Invalid format in {json_source_var}. The JSON appears to be quoted with newlines.\n"
-                    f"This usually happens when copying multi-line JSON into Render's environment variable field.\n"
-                    f"Solution: Ensure the JSON is valid and without extra quotes.\n"
-                    f"First 100 chars: {json_str[:100]}..."
-                )
-                raise ValueError(error_msg)
-            
-            # Check if it looks like base64 (starts with base64 characters)
-            import re
-            if re.match(r'^[A-Za-z0-9+/]+={0,2}$', json_str.strip()) and len(json_str.strip()) > 50:
-                debug_log(f"{json_source_var} appears to be base64 encoded, attempting decode...")
-                try:
-                    json_str = base64.b64decode(json_str).decode('utf-8')
-                    debug_log(f"Successfully base64 decoded {json_source_var}")
-                except Exception as decode_error:
-                    debug_log(f"Base64 decode failed for {json_source_var}: {decode_error}")
-                    # Continue with original string
-            
-            debug_log(f"{json_source_var} value length: {len(json_str)} characters")
-            debug_log(f"{json_source_var} starts with: {json_str[:50]}...")
-            debug_log(f"{json_source_var} ends with: ...{json_str[-50:]}")
-            try:
-                cred_dict = json.loads(json_str)
-                required_fields = ['type', 'project_id', 'private_key', 'client_email']
-                missing_fields = [field for field in required_fields if field not in cred_dict]
-                if missing_fields:
-                    raise ValueError(f"Missing required Firebase credential fields: {missing_fields}")
-                cred_dict = _normalize_credential_dict(cred_dict)
-                info_log(
-                    f"Using {json_source_var} as credential source for {env_var_name}"
-                )
-                debug_log(f"Successfully loaded credentials from {json_source_var} (direct JSON)")
-                return credentials.Certificate(cred_dict)
-            except json.JSONDecodeError as e:
-                error_log(f"JSON decode error for {json_source_var}: {str(e)}")
-                error_log(f"Error at position {e.pos if hasattr(e, 'pos') else 'unknown'}")
-                debug_log(f"Direct JSON parse failed for {json_source_var}, trying base64 decode...")
-                try:
-                    json_str = base64.b64decode(json_str).decode('utf-8')
-                    cred_dict = json.loads(json_str)
-                    cred_dict = _normalize_credential_dict(cred_dict)
-                    info_log(
-                        f"Using {json_source_var} as credential source for {env_var_name}"
-                    )
-                    debug_log(f"Successfully loaded credentials from {json_source_var} (base64 decoded)")
-                    return credentials.Certificate(cred_dict)
-                except Exception as decode_error:
-                    error_log(f"Base64 decode failed for {json_source_var}: {decode_error}")
-                    error_msg = (
-                        f"Invalid JSON format in {json_source_var}.\n"
-                        f"JSON Parse Error: {str(e)}\n"
-                        f"Make sure you copied the ENTIRE JSON content from your Firebase service account file.\n"
-                        f"The value should start with '{{\"type\":\"service_account\"' and end with '}}'.\n"
-                        f"Current value length: {len(json_str)} characters.\n"
-                        f"Check that the value in Render is complete and not truncated."
-                    )
-                    raise ValueError(error_msg)
-            except ValueError:
-                raise
-            except Exception as e:
-                error_log(f"Unexpected error parsing {json_source_var}: {type(e).__name__}: {str(e)}")
-                raise
-        except (ValueError, json.JSONDecodeError) as e:
-            error_log(f"Failed to parse credentials from {json_source_var}: {e}")
-            raise
-        except Exception as e:
-            error_log(f"Failed to load credentials from {json_source_var}: {e}")
-    path_env_var = f"{env_var_name}_PATH"
-    file_path = os.environ.get(path_env_var)
-    debug_log(f"Checking for {path_env_var}: {'SET' if file_path else 'NOT SET'}")
-    if file_path:
-        debug_log(f"Checking if file exists: {file_path}")
-        script_dir = Path(__file__).parent.absolute()
-        env_file_path = script_dir / file_path if not os.path.isabs(file_path) else Path(file_path)
-        if os.path.exists(file_path):
-            debug_log(f"Successfully loaded credentials from file: {file_path}")
-            return credentials.Certificate(file_path)
-        elif env_file_path.exists():
-            debug_log(f"Successfully loaded credentials from file (script dir): {env_file_path}")
-            return credentials.Certificate(str(env_file_path))
-        else:
-            error_log(f"File path specified in {path_env_var} does not exist: {file_path} (also tried: {env_file_path})")
-    script_dir = Path(__file__).parent.absolute()
-    default_file_path = script_dir / default_path
-    debug_log(f"Checking default file path: {default_path}")
-    if os.path.exists(default_path):
-        debug_log(f"Successfully loaded credentials from default file (relative path): {default_path}")
-        return credentials.Certificate(default_path)
-    elif default_file_path.exists():
-        debug_log(f"Successfully loaded credentials from default file (script dir): {default_file_path}")
-        return credentials.Certificate(str(default_file_path))
-    related_vars = [var for var in os.environ.keys() if 'FIREBASE' in var.upper() or 'CREDENTIAL' in var.upper()]
-    error_msg = (
-        f"Firebase credentials not found for {env_var_name}.\n"
-        f"Please set one of the following environment variables on Render:\n"
-        f"  1. {json_env_var} - JSON string (recommended for Render)\n"
-        f"  2. {path_env_var} - File path to credentials JSON file\n"
-        f"Or ensure the default file exists: {default_path}\n"
-        f"\n"
-        f"To set {json_env_var} on Render:\n"
-        f"1. Go to your Render service dashboard\n"
-        f"2. Navigate to Environment tab\n"
-        f"3. Add new environment variable: {json_env_var}\n"
-        f"4. Paste the entire JSON content from your Firebase service account file\n"
-        f"5. Save and redeploy\n"
-        f"\n"
-        f"DEBUG INFO:\n"
-        f"  Looking for: {json_env_var}\n"
-        f"  Found related environment variables: {', '.join(related_vars) if related_vars else 'NONE'}\n"
-        f"  Total environment variables: {len(os.environ)}"
-    )
-    error_log(error_msg)
-    raise FileNotFoundError(error_msg)
-# Initialize PDH Firebase (optional)
-pdh_db = None
-try:
-    pdh_cred = load_firebase_credentials('PDH_FIREBASE_CREDENTIALS', 'pdh-v2-firebase-adminsdk-fbsvc-24b03c7996.json')
-    pdh_app = initialize_app(pdh_cred, name='pdhApp')
-    candidate_pdh_db = firestore.client(app=pdh_app)
-    # Validate PDH credentials once up front; if invalid, disable PDH sync paths.
-    candidate_pdh_db.collection('_health').limit(1).get()
-    pdh_db = candidate_pdh_db
-    info_log("PDH Firebase credentials loaded successfully")
-except Exception as e:
-    error_log(f"Failed to initialize PDH Firebase (continuing without it): {e}")
-    info_log("Backend will continue without PDH Firebase functionality")
-
-
 def _run_with_pdh_db(action_label: str, operation: Callable[[Any], None]) -> bool:
-    """Run a PDH operation and disable PDH after first auth failure."""
-    global pdh_db
-    if pdh_db is None:
-        return False
-    try:
-        operation(pdh_db)
-        return True
-    except Exception as e:
-        msg = str(e).lower()
-        auth_failure = (
-            e.__class__.__name__ == "RefreshError"
-            or "invalid_grant" in msg
-            or "invalid jwt signature" in msg
-        )
-        if auth_failure:
-            error_log(
-                f"PDH auth failed during {action_label}; disabling PDH sync for this process: {e}"
-            )
-            pdh_db = None
-        else:
-            error_log(f"PDH operation failed during {action_label}: {e}")
-        return False
+    del action_label, operation
+    # Firebase PDH sync has been removed; PostgreSQL is now the only runtime datastore.
+    return False
 
 from fastapi import Body
 class UserRegister(BaseModel):
@@ -735,14 +502,10 @@ class AdminNotificationDismiss(BaseModel):
 class AdminNotificationAcknowledge(BaseModel):
     userEmail: str
     alertId: str
-try:
-    main_cred = load_firebase_credentials('FIREBASE_CREDENTIALS', 'khonology-buzz-build-web-app-firebase-adminsdk-fbsvc-539b11f7f3.json')
-    initialize_app(main_cred)
-    db = firestore.client()
-    info_log("Main Firebase credentials loaded successfully")
-except Exception as e:
-    error_log(f"Failed to initialize main Firebase: {e}")
-    raise
+if pg_engine is None:
+    raise RuntimeError("DATABASE_URL is required.")
+db = PGFirestoreClient(pg_engine)
+info_log("Using PostgreSQL as primary datastore")
 app = FastAPI(
     title="Khonology Backend API",
     description="Backend API for Khonology project management application",
@@ -753,24 +516,24 @@ async def startup_warmup():
     start = time.time()
     try:
         _get_redis_client()
-        if _firestore_breaker_is_open():
-            info_log("Startup warm-up skipped: Firestore circuit breaker is open")
+        if _db_breaker_is_open():
+            info_log("Startup warm-up skipped: datastore circuit breaker is open")
             return
-        # Keep startup non-blocking: Firestore can be slow on cold starts.
+        # Keep startup non-blocking to avoid cold-start delays.
         await asyncio.wait_for(
             asyncio.to_thread(lambda: db.collection('users').limit(1).get()),
             timeout=6.0,
         )
-        _firestore_breaker_record_success()
+        _db_breaker_record_success()
         info_log(
-            f"Startup warm-up Firestore users took {time.time() - start:.3f} seconds",
+            f"Startup warm-up users query took {time.time() - start:.3f} seconds",
         )
     except asyncio.TimeoutError:
         error_log(
             "Startup warm-up timed out after 6s; continuing startup without blocking",
         )
     except Exception as e:
-        _firestore_breaker_record_failure(e)
+        _db_breaker_record_failure(e)
         error_log(f"Startup warm-up failed: {e}")
 cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
 PRIMARY_FRONTEND_URL = os.environ.get(
@@ -1570,10 +1333,10 @@ async def register_user(user: UserRegister):
             'moduleAccessRole': '',
             'themePreference': 'dark',
         }
-        print(f"[DEBUG] User data being sent to Firestore (users collection - FastAPI): {user_data}")
+        print(f"[DEBUG] User data being sent to datastore (users collection - FastAPI): {user_data}")
         doc_ref = users_ref.add(user_data)
         user_id = doc_ref[1].id
-        print(f"[DEBUG] Firestore doc_ref for users (FastAPI): {doc_ref}, User ID: {user_id}")
+        print(f"[DEBUG] Datastore doc_ref for users (FastAPI): {doc_ref}, User ID: {user_id}")
         module_role = ''
         roles = parse_module_access_role_to_roles(module_role)
         encrypted_token = None
@@ -1613,7 +1376,7 @@ async def register_user(user: UserRegister):
         if encrypted_token:
             onboarding_data['token'] = encrypted_token
             onboarding_data['token_updated_at'] = datetime.utcnow()
-        print(f"[DEBUG] Onboarding data being sent to Firestore (onboarding collection - FastAPI): {onboarding_data}")
+        print(f"[DEBUG] Onboarding data being sent to datastore (onboarding collection - FastAPI): {onboarding_data}")
         db.collection('onboarding').add(onboarding_data)
         sync_sso_user_login(user_id, user_data, onboarding_data)
         # New user must appear on next /api/users call; list endpoint is cached in memory.
@@ -1642,11 +1405,11 @@ async def list_users():
     fresh_cache = _cache_get(cache_key)
     if fresh_cache is not None:
         return JSONResponse(status_code=status.HTTP_200_OK, content={'users': fresh_cache})
-    if _firestore_breaker_is_open():
+    if _db_breaker_is_open():
         stale_cache = _cache_get_any(cache_key)
         if stale_cache is not None:
             return JSONResponse(status_code=status.HTTP_200_OK, content={'users': stale_cache})
-        return JSONResponse(status_code=429, content={"error": "Firestore temporarily throttled"})
+        return JSONResponse(status_code=429, content={"error": "Database temporarily throttled"})
     try:
         users_query = db.collection('users').stream()
         users_with_sort_keys = []
@@ -1713,11 +1476,11 @@ async def list_users():
             users_with_sort_keys.append((sort_key, user_payload))
         users_with_sort_keys.sort(key=lambda item: item[0] or datetime.min, reverse=True)
         users_data = [payload for _, payload in users_with_sort_keys]
-        _firestore_breaker_record_success()
+        _db_breaker_record_success()
         _cache_set(cache_key, users_data, USERS_CACHE_TTL_SECONDS)
         return JSONResponse(status_code=status.HTTP_200_OK, content={'users': users_data})
     except Exception as e:
-        _firestore_breaker_record_failure(e)
+        _db_breaker_record_failure(e)
         msg = str(e)
         print(f"[ERROR] During users fetch: {msg}")
         if _is_quota_error(e):
@@ -1951,7 +1714,7 @@ async def delete_user(user_id: str):
 
 @app.get("/api/departments")
 async def list_departments():
-    """Return all department names from both Firestore collections."""
+    """Return all department names from both department collections."""
     try:
         names = []
         for collection_name in ("departments", "department"):
@@ -2134,7 +1897,7 @@ async def create_admin_notification(payload: AdminNotificationCreate):
             "requiresAck": bool(getattr(payload, "requiresAck", False)),
             "effectiveDateIso": (getattr(payload, "effectiveDateIso", "") or "").strip(),
             "acknowledgedByEmails": [],
-            "createdAt": firestore.SERVER_TIMESTAMP,
+            "createdAt": pg_store.SERVER_TIMESTAMP,
             "createdAtIso": now.isoformat() + "Z",
         }
         ref = db.collection("admin_notifications").document()
@@ -2168,11 +1931,11 @@ async def list_admin_notifications(
     fresh_cache = _cache_get(cache_key)
     if fresh_cache is not None:
         return JSONResponse(status_code=200, content={"alerts": fresh_cache[:limit]})
-    if _firestore_breaker_is_open():
+    if _db_breaker_is_open():
         stale_cache = _cache_get_any(cache_key)
         if stale_cache is not None:
             return JSONResponse(status_code=200, content={"alerts": stale_cache[:limit]})
-        return JSONResponse(status_code=429, content={"error": "Firestore temporarily throttled"})
+        return JSONResponse(status_code=429, content={"error": "Database temporarily throttled"})
     try:
         if not normalized_role:
             raise HTTPException(status_code=400, detail="role is required")
@@ -2242,7 +2005,7 @@ async def list_admin_notifications(
             item["acknowledgedCount"] = len(acked_emails)
             item["targetCount"] = int(item.get("details", {}).get("targetCount", 0))
             item.pop("acknowledgedByEmails", None)
-        _firestore_breaker_record_success()
+        _db_breaker_record_success()
         _cache_set(cache_key, alerts, ADMIN_NOTIFICATIONS_CACHE_TTL_SECONDS)
         alerts = alerts[:limit]
 
@@ -2250,7 +2013,7 @@ async def list_admin_notifications(
     except HTTPException:
         raise
     except Exception as e:
-        _firestore_breaker_record_failure(e)
+        _db_breaker_record_failure(e)
         msg = str(e)
         print(f"[ERROR] list_admin_notifications: {msg}")
         if _is_quota_error(e):
@@ -2300,7 +2063,7 @@ async def dismiss_admin_notification(payload: AdminNotificationDismiss):
             raise HTTPException(status_code=400, detail="userEmail and alertId are required")
         db.collection("admin_notification_state").document(normalized_email).set(
             {
-                "dismissedIds": firestore.ArrayUnion([alert_id]),
+                "dismissedIds": pg_store.ArrayUnion([alert_id]),
                 "updatedAtIso": datetime.utcnow().isoformat() + "Z",
             },
             merge=True,
@@ -2324,7 +2087,7 @@ async def acknowledge_admin_notification(payload: AdminNotificationAcknowledge):
         ref = db.collection("admin_notifications").document(alert_id)
         ref.set(
             {
-                "acknowledgedByEmails": firestore.ArrayUnion([normalized_email]),
+                "acknowledgedByEmails": pg_store.ArrayUnion([normalized_email]),
                 "updatedAtIso": datetime.utcnow().isoformat() + "Z",
             },
             merge=True,
@@ -2340,7 +2103,7 @@ async def acknowledge_admin_notification(payload: AdminNotificationAcknowledge):
 
 @app.post("/api/designations")
 async def create_designation(body: NameBody):
-    """Add a new designation; store in Firestore collection. Returns updated list."""
+    """Add a new designation and return the updated list."""
     try:
         name = (body.name or "").strip()
         if not name:
@@ -2519,7 +2282,7 @@ async def login_user(user_login: UserLogin, request: Request):
                 user_lookup_end = time.time()
                 if not is_special_session:
                     error_log(
-                        f"Firestore user lookup timed out for {normalized_email} "
+                        f"Database user lookup timed out for {normalized_email} "
                         f"after {LOGIN_QUERY_TIMEOUT_SECONDS:.1f}s"
                     )
                 return JSONResponse(
@@ -2529,7 +2292,7 @@ async def login_user(user_login: UserLogin, request: Request):
             except Exception as query_error:
                 user_lookup_end = time.time()
                 if not is_special_session:
-                    error_log(f"Firestore query error during login: {query_error}")
+                    error_log(f"Database query error during login: {query_error}")
                 return JSONResponse(
                     status_code=500,
                     content={"error": f"Database query failed: {str(query_error)}"}

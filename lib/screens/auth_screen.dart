@@ -1,8 +1,7 @@
 // ignore_for_file: unused_local_variable, unused_import
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
-import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
@@ -26,7 +25,6 @@ class AuthScreen extends StatefulWidget {
 
 class AuthScreenState extends State<AuthScreen> {
   double _discsOpacity = 0.0;
-  bool _isCheckingRedirect = false;
   bool _isAnimatingNavigation = false;
 
   @override
@@ -40,124 +38,11 @@ class AuthScreenState extends State<AuthScreen> {
     });
 
     if (kIsWeb) {
-      // Ensure accessibility tree is properly initialized for web testing
-      Future.delayed(const Duration(milliseconds: 100), () {
-        _handleRedirectResult();
-      });
-
-      // Additional delay for accessibility tree generation
       Future.delayed(const Duration(milliseconds: 200), () {
-        // Force semantics update for testing
         if (mounted) {
           setState(() {});
         }
       });
-    }
-  }
-
-  Future<void> _handleRedirectResult() async {
-    if (_isCheckingRedirect) return;
-    _isCheckingRedirect = true;
-
-    try {
-      debugPrint('Checking for redirect result...');
-      final credential = await fb_auth.FirebaseAuth.instance
-          .getRedirectResult();
-
-      if (credential.user != null) {
-        debugPrint('Redirect result found, user: ${credential.user?.email}');
-        final email = credential.user?.email;
-        if (email != null && email.toLowerCase().endsWith('@khonology.com')) {
-          if (!mounted) {
-            _isCheckingRedirect = false;
-            return;
-          }
-          final authProvider = context.read<AuthProvider>();
-          final navigator = Navigator.of(context);
-          final messenger = ScaffoldMessenger.of(context);
-          final success = await authProvider.login(email, role: null);
-          if (!mounted) {
-            _isCheckingRedirect = false;
-            return;
-          }
-
-          if (success) {
-            await context.read<ThemeModeProvider>().applyThemePreference(
-              authProvider.userThemePreference,
-            );
-            if (!mounted) {
-              _isCheckingRedirect = false;
-              return;
-            }
-            final dialogContext = context;
-            showDialog<void>(
-              context: context,
-              barrierDismissible: false,
-              barrierColor: Colors.black54,
-              builder: (BuildContext _) => PrefetchOverlayDialog(
-                authProvider: authProvider,
-                onComplete: () {
-                  Navigator.of(dialogContext).pop();
-                  navigator.pushAndRemoveUntil(
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) =>
-                          const MainScreen(initialIndex: 8),
-                      transitionsBuilder:
-                          (context, animation, secondaryAnimation, child) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            );
-                          },
-                      transitionDuration: const Duration(milliseconds: 350),
-                    ),
-                    (route) => false,
-                  );
-                },
-              ),
-            );
-          } else {
-            await fb_auth.FirebaseAuth.instance.signOut();
-            if (!mounted) {
-              _isCheckingRedirect = false;
-              return;
-            }
-            messenger.showSnackBar(
-              const SnackBar(
-                content: Text('Login failed. Please try again later.'),
-              ),
-            );
-          }
-        } else {
-          await fb_auth.FirebaseAuth.instance.signOut();
-          if (!mounted) {
-            _isCheckingRedirect = false;
-            return;
-          }
-          final messenger = ScaffoldMessenger.of(context);
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Only khonology.com accounts are allowed'),
-            ),
-          );
-        }
-      } else {
-        debugPrint('No redirect result found');
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Redirect result error: $e');
-      debugPrint('Stack trace: $stackTrace');
-      if (mounted) {
-        final messenger = ScaffoldMessenger.of(context);
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Authentication error: ${e.toString()}'),
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } finally {
-      _isCheckingRedirect = false;
     }
   }
 
@@ -212,87 +97,7 @@ class AuthScreenState extends State<AuthScreen> {
                         ),
                       ),
                       const SizedBox(height: 32),
-                      // Microsoft login button hidden - only show Manual Login and Onboarding
-                      // _buildLoginButton(
-                      //   text: 'MICROSOFT LOGIN',
-                      //   color: const Color(0xFFC10D00),
-                      //   onPressed: () async {
-                      //     final messenger = ScaffoldMessenger.of(context);
-                      //     final navigator = Navigator.of(context);
-                      //     final authProvider = context.read<AuthProvider>();
-                      //     try {
-                      //       final provider = fb_auth.OAuthProvider(
-                      //         'microsoft.com',
-                      //       );
-
-                      //       fb_auth.UserCredential credential;
-                      //       if (kIsWeb) {
-                      //         debugPrint(
-                      //           'Initiating Microsoft sign-in redirect...',
-                      //         );
-                      //         await fb_auth.FirebaseAuth.instance
-                      //             .signInWithRedirect(provider);
-
-                      //         return;
-                      //       } else {
-                      //         credential = await fb_auth.FirebaseAuth.instance
-                      //             .signInWithProvider(provider);
-                      //       }
-
-                      //       final email = credential.user?.email;
-                      //       if (email == null ||
-                      //           !email.toLowerCase().endsWith(
-                      //             '@khonology.com',
-                      //           )) {
-                      //         await fb_auth.FirebaseAuth.instance.signOut();
-                      //         if (!mounted) return;
-                      //         messenger.showSnackBar(
-                      //           const SnackBar(
-                      //             content: Text(
-                      //               'Only khonology.com accounts are allowed',
-                      //             ),
-                      //           ),
-                      //         );
-                      //         return;
-                      //       }
-
-                      //       if (!mounted) return;
-                      //       final success = await authProvider.login(
-                      //         email,
-                      //         role: null,
-                      //       );
-                      //       if (!mounted) return;
-
-                      //       if (!success) {
-                      //         messenger.showSnackBar(
-                      //           const SnackBar(
-                      //             content: Text(
-                      //               'Login failed. Please try again later.',
-                      //             ),
-                      //           ),
-                      //         );
-                      //         return;
-                      //       }
-
-                      //       if (!mounted) return;
-                      //       navigator.pushAndRemoveUntil(
-                      //         MaterialPageRoute(
-                      //           builder: (context) =>
-                      //               const MainScreen(initialIndex: 8),
-                      //         ),
-                      //         (route) => false,
-                      //       );
-                      //     } catch (e) {
-                      //       if (!mounted) return;
-                      //       messenger.showSnackBar(
-                      //         SnackBar(
-                      //           content: Text('Microsoft sign-in failed: $e'),
-                      //         ),
-                      //       );
-                      //     }
-                      //   },
-                      // ),
-                      // const SizedBox(height: 16),
+                      // Microsoft/Firebase login path removed; app now uses backend login only.
                       Semantics(
                         key: const ValueKey('e2e_manual_login_button'),
                         label: 'MANUAL LOGIN',

@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http; // Import for making HTTP requests
 import 'dart:convert'; // Import for JSON encoding/decoding
 import 'dart:async'; // Import for TimeoutException
-import '../utils/pdh_firebase.dart' show syncUserToPDH, syncUserToSkillsHeatmap;
+import '../utils/pdh_sync.dart' show syncUserToPDH, syncUserToSkillsHeatmap;
 import '../config/api_config.dart';
 import '../services/modules_ping_service.dart';
 
