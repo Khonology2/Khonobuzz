@@ -3,8 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
-// Onboarding Collection Functions
-
 Future<void> updateOnboardingUserPartial(
   String uid,
   Map<String, dynamic> onboardingFields,
@@ -26,8 +24,6 @@ Future<void> updateOnboardingUserPartial(
     rethrow;
   }
 }
-
-// PDH Sync Functions
 
 Future<void> syncUserToPDH(
   Map<String, dynamic> userData,
@@ -78,7 +74,6 @@ Future<void> updatePDHUserPartial(
   }
 }
 
-// Skills Heatmap Sync Functions
 Future<void> syncUserToSkillsHeatmap(
   Map<String, dynamic> userData,
   Map<String, dynamic> onboardingData,

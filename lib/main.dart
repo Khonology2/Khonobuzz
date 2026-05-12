@@ -22,8 +22,6 @@ import 'screens/admin_profile_screen.dart';
 import 'screens/staff_profile_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'widgets/side_menu.dart';
-import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
-import 'firebase_options.dart'; // Import generated Firebase options
 import 'generated/app_localizations.dart';
 
 // Import for web-specific functionality
@@ -79,12 +77,7 @@ Locale? _trySupportedLocale(Locale device, Iterable<Locale> supported) {
 }
 
 void main() async {
-  // Made main async
-  WidgetsFlutterBinding.ensureInitialized(); // Ensure Flutter is initialized
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  ); // Initialize Firebase
-  debugPrint('Firebase initialized successfully!'); // Debug print
+  WidgetsFlutterBinding.ensureInitialized();
   // So version widget can fetch latest from backend and stop being stuck on build-time version
   VersionService.versionBaseUrl = ApiConfig.baseUrl;
 
