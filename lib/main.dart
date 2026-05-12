@@ -369,7 +369,7 @@ class _MainScreenState extends State<MainScreen>
     final users = userProvider.users;
 
     final pendingUsers = users
-        .where((u) => u.status.toLowerCase() == 'pending')
+        .where((u) => u.status == 'Inactive')
         .toList();
 
     final activeUsersWithoutAssignments = users

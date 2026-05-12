@@ -425,10 +425,10 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                                   .toLowerCase();
                               final errorMsg =
                                   authProvider.lastLoginError?.trim();
-                              if (status == 'pending') {
+                              if (status == 'pending' || status == 'inactive') {
                                 _showValidationError(
-                                  'Access Pending',
-                                  'Your account is still pending approval. Please contact admin for access.',
+                                  'Account inactive',
+                                  'Your account is inactive. Please contact an admin to activate your account.',
                                 );
                               } else {
                               _showValidationError(

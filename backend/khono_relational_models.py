@@ -26,7 +26,7 @@ class KbAppUser(Base):
     password: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     name: Mapped[str] = mapped_column(String(500), default="")
     role: Mapped[str] = mapped_column(String(100), default="Staff")
-    status: Mapped[str] = mapped_column(String(50), default="Pending")
+    status: Mapped[str] = mapped_column(String(50), default="Inactive")
     entity: Mapped[str] = mapped_column(String(255), default="")
     department: Mapped[str] = mapped_column(String(255), default="")
     designation: Mapped[str] = mapped_column(String(255), default="")

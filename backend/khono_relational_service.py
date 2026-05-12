@@ -267,7 +267,7 @@ def upsert_user_from_registration(
     u.password = user_data.get("password")
     u.name = user_data.get("name") or ""
     u.role = user_data.get("role") or "Staff"
-    u.status = user_data.get("status") or "Pending"
+    u.status = user_data.get("status") or "Inactive"
     u.entity = user_data.get("entity") or ""
     u.department = user_data.get("department") or ""
     u.designation = user_data.get("designation") or ""
@@ -493,7 +493,7 @@ def migrate_from_firestore_documents(_engine: Any = None) -> Dict[str, int]:
                 u.password = data.get("password")
                 u.name = data.get("name") or ""
                 u.role = data.get("role") or "Staff"
-                u.status = data.get("status") or "Pending"
+                u.status = data.get("status") or "Inactive"
                 u.entity = data.get("entity") or ""
                 u.department = data.get("department") or ""
                 u.designation = data.get("designation") or ""

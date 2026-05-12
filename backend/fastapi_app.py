@@ -439,6 +439,22 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _normalize_account_status_display(value: Any) -> str:
+    """Expose only Active or Inactive; legacy Pending (and unknown) map to Inactive."""
+    s = (str(value).strip() if value is not None else "")
+    if s.lower() == "active":
+        return "Active"
+    return "Inactive"
+
+
+def _normalize_users_list_status_inplace(users_data: Any) -> None:
+    if not isinstance(users_data, list):
+        return
+    for row in users_data:
+        if isinstance(row, dict):
+            row["status"] = _normalize_account_status_display(row.get("status"))
+
+
 def _get_best_onboarding_record(user_id: str):
     """Pick deterministic onboarding record for a user.
     Prefers canonical document id == user_id; otherwise best legacy record by recency.
@@ -1108,7 +1124,7 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
             response_user = {
                 'email': user_info.get('email', normalized_email),
                 'role': user_info.get('role', ''),
-                'status': user_info.get('status', 'Pending'),
+                'status': _normalize_account_status_display(user_info.get('status')),
                 'entity': entity_value,
                 'moduleAccess': module_access_raw or '',
                 'moduleAccessRole': module_access_role_raw or '',
@@ -1180,7 +1196,7 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
         response_user = {
             'email': user_info.get('email', normalized_email),
             'role': user_info.get('role', ''),
-            'status': user_info.get('status', 'Pending'),
+            'status': _normalize_account_status_display(user_info.get('status')),
             'entity': entity_value,
             'moduleAccess': module_access_raw or '',
             'moduleAccessRole': module_access_role_raw or '',
@@ -1507,7 +1523,7 @@ async def register_user(user: UserRegister):
             'password': password,
             'name': full_name,
             'role': role,
-            'status': 'Pending',
+            'status': 'Inactive',
             'created_at': datetime.utcnow(),
             'updated_at': datetime.utcnow(),
             'entity': entity_value,
@@ -1588,16 +1604,19 @@ async def list_users():
     cache_key = "users:list"
     fresh_cache = _cache_get(cache_key)
     if fresh_cache is not None:
+        _normalize_users_list_status_inplace(fresh_cache)
         return JSONResponse(status_code=status.HTTP_200_OK, content={'users': fresh_cache})
     if _db_breaker_is_open():
         stale_cache = _cache_get_any(cache_key)
         if stale_cache is not None:
+            _normalize_users_list_status_inplace(stale_cache)
             return JSONResponse(status_code=status.HTTP_200_OK, content={'users': stale_cache})
         return JSONResponse(status_code=429, content={"error": "Database temporarily throttled"})
     try:
         with SessionLocal() as s:
             if relational_user_count(s) > 0:
                 users_data = list_users_payloads(s)
+                _normalize_users_list_status_inplace(users_data)
                 _db_breaker_record_success()
                 _cache_set(cache_key, users_data, USERS_CACHE_TTL_SECONDS)
                 return JSONResponse(status_code=status.HTTP_200_OK, content={'users': users_data})
@@ -1646,7 +1665,7 @@ async def list_users():
                 'id': user_doc.id,
                 'email': user_info.get('email', ''),
                 'role': user_info.get('role', 'Staff'),
-                'status': user_info.get('status', 'Active'),
+                'status': _normalize_account_status_display(user_info.get('status')),
                 'firstName': first_name,
                 'lastName': last_name,
                 'department': onboarding_info.get('department', ''),
@@ -1666,6 +1685,7 @@ async def list_users():
             users_with_sort_keys.append((sort_key, user_payload))
         users_with_sort_keys.sort(key=lambda item: item[0], reverse=True)
         users_data = [payload for _, payload in users_with_sort_keys]
+        _normalize_users_list_status_inplace(users_data)
         _db_breaker_record_success()
         _cache_set(cache_key, users_data, USERS_CACHE_TTL_SECONDS)
         return JSONResponse(status_code=status.HTTP_200_OK, content={'users': users_data})
@@ -1676,6 +1696,7 @@ async def list_users():
         if _is_quota_error(e):
             stale_cache = _cache_get_any(cache_key)
             if stale_cache is not None:
+                _normalize_users_list_status_inplace(stale_cache)
                 return JSONResponse(status_code=status.HTTP_200_OK, content={'users': stale_cache})
             return JSONResponse(status_code=429, content={"error": "Quota exceeded"})
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -1735,6 +1756,14 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
             onboarding_update_payload['moduleAccessRole'] = user_update.moduleAccessRole
         if user_update.adminApproved is not None and not is_special_session:
             onboarding_update_payload['admin'] = {'approved': user_update.adminApproved}
+        if "status" in update_payload:
+            update_payload["status"] = _normalize_account_status_display(
+                update_payload["status"]
+            )
+        if "status" in onboarding_update_payload:
+            onboarding_update_payload["status"] = _normalize_account_status_display(
+                onboarding_update_payload["status"]
+            )
         use_rel = False
         with SessionLocal() as _chk:
             if relational_user_count(_chk) > 0 and _chk.get(KbAppUser, user_id) is not None:
@@ -1857,7 +1886,7 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
             'id': user_id,
             'email': updated_data.get('email', ''),
             'role': updated_data.get('role', 'Staff'),
-            'status': updated_data.get('status', 'Active'),
+            'status': _normalize_account_status_display(updated_data.get('status')),
             'firstName': first_name,
             'lastName': last_name,
             'department': onboarding_info.get('department', ''),
@@ -2552,14 +2581,14 @@ async def login_user(user_login: UserLogin, request: Request):
                 status_code=500,
                 content={"error": "Authentication error. Please try again."},
             )
-        user_status = user_data.get('status', 'Pending')
-        if not is_special_session and user_status != 'Active':
+        user_status = _normalize_account_status_display(user_data.get("status"))
+        if not is_special_session and user_status != "Active":
             return JSONResponse(
                 status_code=status.HTTP_403_FORBIDDEN,
                 content={
                     "error": f"Your account status is '{user_status}'. Please wait for admin approval to activate your account.",
-                    "status": user_status
-                }
+                    "status": user_status,
+                },
             )
         onboarding_data = {}
         onboarding_ref = None

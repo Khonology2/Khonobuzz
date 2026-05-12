@@ -6,6 +6,7 @@ import 'dart:async'; // Import for TimeoutException
 import '../utils/pdh_sync.dart' show syncUserToPDH, syncUserToSkillsHeatmap;
 import '../config/api_config.dart';
 import '../services/modules_ping_service.dart';
+import '../models/managed_user.dart';
 
 class AuthProvider extends ChangeNotifier {
   static const String _fallbackBackendBaseUrl = String.fromEnvironment(
@@ -331,7 +332,7 @@ class AuthProvider extends ChangeNotifier {
             'password': 'password',
             'name': '$firstName $lastName',
             'role': role ?? 'Staff',
-            'status': 'Pending',
+            'status': 'Inactive',
             'created_at': DateTime.now().toUtc().toIso8601String(),
             'updated_at': DateTime.now().toUtc().toIso8601String(),
             'entity': '',
@@ -346,7 +347,7 @@ class AuthProvider extends ChangeNotifier {
             'fullName': '$firstName $lastName'.trim(),
             'department': department ?? '',
             'designation': designation,
-            'status': 'Pending',
+            'status': 'Inactive',
             'role': role ?? 'Staff',
             'first_valid': DateTime.utc(2025, 9, 25).toIso8601String(),
             'inserted_by': email,
@@ -647,7 +648,7 @@ class AuthProvider extends ChangeNotifier {
             status: parsed['status']?.toString(),
           );
           final statusLower = (_lastLoginStatus ?? '').trim().toLowerCase();
-          if (statusLower == 'pending') {
+          if (statusLower == 'pending' || statusLower == 'inactive') {
             _isAuthenticated = false;
             notifyListeners();
             return false;
@@ -830,12 +831,18 @@ class AuthProvider extends ChangeNotifier {
         if (foundUser != null) {
           final status = (foundUser['status']?.toString() ?? '').trim();
           final statusLower = status.toLowerCase();
-          final isPending = statusLower == 'pending' || statusLower.isEmpty;
-          if (statusLower != 'active' && !(allowPendingStatus && isPending)) {
+          final displayStatus = ManagedUser.normalizeAccountStatus(
+            status.isEmpty ? null : status,
+          );
+          final isAwaitingActivation =
+              statusLower == 'pending' ||
+              statusLower == 'inactive' ||
+              status.isEmpty;
+          if (statusLower != 'active' && !(allowPendingStatus && isAwaitingActivation)) {
             _setLoginFeedback(
-              status: status.isEmpty ? 'Pending' : status,
+              status: displayStatus,
               error:
-                  "Your account status is '${status.isEmpty ? 'Pending' : status}'. Please contact admin for access.",
+                  "Your account status is '$displayStatus'. Please contact admin for access.",
             );
             _isAuthenticated = false;
             notifyListeners();
@@ -846,14 +853,14 @@ class AuthProvider extends ChangeNotifier {
           _userProfileImageUrl = null;
           _userProfilePublicId = null;
           _isAuthenticated = true;
-          _userAlreadyOnboarded = !isPending;
+          _userAlreadyOnboarded = !isAwaitingActivation;
           _userEmail = foundUser['email'] ?? email;
           _userRole = foundUser['role'] ?? 'Staff';
           _userThemePreference =
               (foundUser['themePreference'] as String?)?.trim().toLowerCase();
           _initialScreenIndex = 9;
           _currentScreenIndex = 9;
-          _setLoginFeedback(status: status.isEmpty ? 'Pending' : status);
+          _setLoginFeedback(status: displayStatus);
 
           final moduleAccessRaw = foundUser['moduleAccess'] as String?;
           final moduleAccessRoleRaw = foundUser['moduleAccessRole'] as String?;
