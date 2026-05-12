@@ -59,6 +59,10 @@ class ModulesPingService {
 
   /// Call after login success. Idempotent: restarts the timer if already running.
   static void start() {
+    if (kIsWeb) {
+      // Browser enforces CORS; cross-origin GETs to module backends fail and flood the console.
+      return;
+    }
     stop();
     unawaited(pingOnce());
     _timer = Timer.periodic(pingInterval, (_) {

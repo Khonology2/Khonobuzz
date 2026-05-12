@@ -9,7 +9,7 @@ import json
 import time
 import re
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from fastapi import status
@@ -386,6 +386,15 @@ def _coerce_datetime(value: Any) -> Optional[datetime]:
     return None
 
 
+def _sortable_datetime(dt: Optional[datetime]) -> datetime:
+    """Naive UTC datetime safe for ordering (avoids TypeError mixing aware/naive in sort/max)."""
+    if dt is None:
+        return datetime.min
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
@@ -413,12 +422,12 @@ def _get_best_onboarding_record(user_id: str):
 
     def _score(doc):
         data = doc.to_dict() or {}
-        return (
+        raw = (
             _coerce_datetime(data.get('updated_at'))
             or _coerce_datetime(data.get('lastSignInAt'))
             or _coerce_datetime(data.get('created_at'))
-            or datetime.min
         )
+        return _sortable_datetime(raw)
 
     best_doc = max(docs, key=_score)
     return best_doc.reference, (best_doc.to_dict() or {})
@@ -1472,9 +1481,9 @@ async def list_users():
                 'lastSignInAt': last_sign_in_str,
                 'loginCount': login_count,
             }
-            sort_key = updated_at_dt or created_at_dt
+            sort_key = _sortable_datetime(updated_at_dt or created_at_dt)
             users_with_sort_keys.append((sort_key, user_payload))
-        users_with_sort_keys.sort(key=lambda item: item[0] or datetime.min, reverse=True)
+        users_with_sort_keys.sort(key=lambda item: item[0], reverse=True)
         users_data = [payload for _, payload in users_with_sort_keys]
         _db_breaker_record_success()
         _cache_set(cache_key, users_data, USERS_CACHE_TTL_SECONDS)
@@ -1720,9 +1729,8 @@ async def list_departments():
         for collection_name in ("departments", "department"):
             docs = list(db.collection(collection_name).stream())
             docs.sort(
-                key=lambda doc: (
+                key=lambda doc: _sortable_datetime(
                     _coerce_datetime((doc.to_dict() or {}).get("created_at"))
-                    or datetime.min
                 ),
                 reverse=True,
             )
@@ -1754,9 +1762,8 @@ async def create_department(body: NameBody):
         for collection_name in ("departments", "department"):
             docs = list(db.collection(collection_name).stream())
             docs.sort(
-                key=lambda doc: (
+                key=lambda doc: _sortable_datetime(
                     _coerce_datetime((doc.to_dict() or {}).get("created_at"))
-                    or datetime.min
                 ),
                 reverse=True,
             )
@@ -1781,9 +1788,8 @@ async def list_designations():
         for collection_name in ("designations", "designation"):
             docs = list(db.collection(collection_name).stream())
             docs.sort(
-                key=lambda doc: (
+                key=lambda doc: _sortable_datetime(
                     _coerce_datetime((doc.to_dict() or {}).get("created_at"))
-                    or datetime.min
                 ),
                 reverse=True,
             )
@@ -1986,14 +1992,15 @@ async def list_admin_notifications(
             )
 
         alerts.sort(
-            key=lambda item: _coerce_datetime(item.get("createdAtIso")) or datetime.min,
+            key=lambda item: _sortable_datetime(_coerce_datetime(item.get("createdAtIso"))),
             reverse=True,
         )
         if cleared_after is not None:
+            cleared_key = _sortable_datetime(cleared_after)
             alerts = [
                 item
                 for item in alerts
-                if (_coerce_datetime(item.get("createdAtIso")) or datetime.min) > cleared_after
+                if _sortable_datetime(_coerce_datetime(item.get("createdAtIso"))) > cleared_key
             ]
         alerts = [item for item in alerts if item.get("id") not in dismissed_ids]
 
@@ -2118,9 +2125,8 @@ async def create_designation(body: NameBody):
         for collection_name in ("designations", "designation"):
             docs = list(db.collection(collection_name).stream())
             docs.sort(
-                key=lambda doc: (
+                key=lambda doc: _sortable_datetime(
                     _coerce_datetime((doc.to_dict() or {}).get("created_at"))
-                    or datetime.min
                 ),
                 reverse=True,
             )
