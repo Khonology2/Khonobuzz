@@ -61,7 +61,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
     if (fullName.isNotEmpty) {
       return fullName;
     }
-    return user.name;
+    return user.displayName;
   }
 
   Future<void> _approveUser(ManagedUser user) async {

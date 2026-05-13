@@ -1,3 +1,5 @@
+import '../utils/user_display_name.dart';
+
 class ManagedUser {
   final String id;
   final String firstName;
@@ -20,6 +22,31 @@ class ManagedUser {
   final int loginCount;
 
   String get name => '$firstName $lastName'.trim();
+
+  /// Shown in lists when [name] is empty (API omitted names or used only alternate keys).
+  String get displayName {
+    final n = name.trim();
+    if (n.isNotEmpty) return n;
+    final fromEmail = userDisplayNameFromEmail(email);
+    if (fromEmail.isNotEmpty) return fromEmail;
+    return email.trim();
+  }
+
+  static String? _firstNonEmptyString(Map<String, dynamic> data, List<String> keys) {
+    for (final k in keys) {
+      final v = data[k];
+      if (v == null) continue;
+      final s = v.toString().trim();
+      if (s.isNotEmpty) return s;
+    }
+    return null;
+  }
+
+  static String displayLabelFromUserPayload(Map<String, dynamic> data) {
+    final merged = Map<String, dynamic>.from(data);
+    merged.putIfAbsent('id', () => merged['id'] ?? '');
+    return ManagedUser.fromApi(merged).displayName;
+  }
 
   /// Derives moduleAccess from moduleAccessRole if moduleAccess is empty or incomplete
   static String? _deriveModuleAccessFromRole(String? moduleAccess, String? moduleAccessRole) {
@@ -156,12 +183,27 @@ class ManagedUser {
     // Derive moduleAccess from moduleAccessRole if moduleAccess is empty
     final finalModuleAccess = _deriveModuleAccessFromRole(moduleAccessRaw, moduleAccessRoleRaw);
 
-    final rawFirstName = (data['firstName'] ?? '').toString();
-    final rawLastName = (data['lastName'] ?? '').toString();
-    String parsedFirstName = rawFirstName;
-    String parsedLastName = rawLastName;
+    String parsedFirstName =
+        _firstNonEmptyString(data, const ['firstName', 'first_name', 'givenName', 'given_name']) ??
+            '';
+    String parsedLastName = _firstNonEmptyString(data, const [
+          'lastName',
+          'last_name',
+          'surname',
+          'familyName',
+          'family_name',
+        ]) ??
+        '';
+
     if (parsedFirstName.isEmpty && parsedLastName.isEmpty) {
-      final fullName = (data['name'] ?? '').toString().trim();
+      final fullName = _firstNonEmptyString(data, const [
+            'fullName',
+            'full_name',
+            'displayName',
+            'display_name',
+            'name',
+          ]) ??
+          '';
       if (fullName.isNotEmpty) {
         final parts = fullName.split(RegExp(r'\s+'));
         parsedFirstName = parts.first;
@@ -171,27 +213,61 @@ class ManagedUser {
       }
     }
 
+    if (parsedFirstName.isEmpty && parsedLastName.isNotEmpty) {
+      final legacyName = (data['name'] ?? '').toString().trim();
+      if (legacyName.isNotEmpty && legacyName.toLowerCase() != parsedLastName.toLowerCase()) {
+        parsedFirstName = legacyName;
+      }
+    }
+
     return ManagedUser(
       id: data['id'] ?? '',
       firstName: parsedFirstName,
       lastName: parsedLastName,
       email: data['email'] ?? '',
-      department: data['department'] ?? '',
-      designation: data['designation'] ?? '',
+      department: _firstNonEmptyString(data, const [
+            'department',
+            'departmentName',
+            'dept',
+            'team',
+            'division',
+          ]) ??
+          '',
+      designation: _firstNonEmptyString(data, const [
+            'designation',
+            'jobTitle',
+            'job_title',
+            'title',
+            'position',
+            'roleTitle',
+            'role_title',
+          ]) ??
+          '',
       role: data['role'] ?? 'Staff',
       status: normalizeAccountStatus(data['status']?.toString()),
       entity: (data['entity'] as String?)?.isNotEmpty == true
           ? data['entity'] as String
           : null,
-      manager: (data['manager'] as String?)?.isNotEmpty == true
-          ? data['manager'] as String
-          : null,
+      manager: () {
+        final m = _firstNonEmptyString(data, const [
+          'manager',
+          'managedBy',
+          'reportsTo',
+          'managerEmail',
+        ]);
+        return (m != null && m.isNotEmpty) ? m : null;
+      }(),
       moduleAccess: finalModuleAccess,
       moduleRole: (data['moduleRole'] as String?)?.isNotEmpty == true
           ? data['moduleRole'] as String
           : null,
       moduleAccessRole: moduleAccessRoleRaw,
-      phoneNumber: data['phone'],
+      phoneNumber: _firstNonEmptyString(data, const [
+        'phoneNumber',
+        'phone',
+        'mobile',
+        'mobileNumber',
+      ]),
       profilePictureUrl: data['profilePictureUrl'] ?? data['profileImageUrl'],
       createdAt: createdAtRaw is String && createdAtRaw.isNotEmpty
           ? DateTime.tryParse(createdAtRaw)
