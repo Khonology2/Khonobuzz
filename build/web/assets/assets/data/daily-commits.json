@@ -1,7 +1,107 @@
 {
-  "version": "2026.03.AB32",
-  "generated_at": "2026-05-12T07:45:30Z",
+  "version": "2026.03.AB37",
+  "generated_at": "2026-05-12T10:50:03Z",
   "commits": [
+    {
+      "author": "GitHub Actions",
+      "message": "chore: update version to 2026.03.AB37 [skip ci]",
+      "timestamp": "2026-05-12T10:49:23Z"
+    },
+    {
+      "author": "Nathi2266",
+      "message": "chore: enhance deploy-check workflow for better SHA handling",
+      "timestamp": "2026-05-12T12:47:42+02:00"
+    },
+    {
+      "author": "Nathi2266",
+      "message": "Feature: integrate relational database support for user management",
+      "timestamp": "2026-05-12T12:42:59+02:00"
+    },
+    {
+      "author": "github-actions[bot]",
+      "message": "chore: update Flutter web build [skip ci]",
+      "timestamp": "2026-05-12T10:18:36Z"
+    },
+    {
+      "author": "GitHub Action",
+      "message": "Update daily commits data [2026-05-12] [skip ci]",
+      "timestamp": "2026-05-12T10:15:43Z"
+    },
+    {
+      "author": "GitHub Actions",
+      "message": "chore: update version to 2026.03.AB36 [skip ci]",
+      "timestamp": "2026-05-12T10:14:53Z"
+    },
+    {
+      "author": "Nathi2266",
+      "message": "Feature: improve datetime handling for sorting",
+      "timestamp": "2026-05-12T12:12:29+02:00"
+    },
+    {
+      "author": "github-actions[bot]",
+      "message": "chore: update Flutter web build [skip ci]",
+      "timestamp": "2026-05-12T09:59:13Z"
+    },
+    {
+      "author": "GitHub Action",
+      "message": "Update daily commits data [2026-05-12] [skip ci]",
+      "timestamp": "2026-05-12T09:56:02Z"
+    },
+    {
+      "author": "GitHub Actions",
+      "message": "chore: update version to 2026.03.AB35 [skip ci]",
+      "timestamp": "2026-05-12T09:55:13Z"
+    },
+    {
+      "author": "Nathi2266",
+      "message": "chore: update requirements for backend dependencies",
+      "timestamp": "2026-05-12T11:53:40+02:00"
+    },
+    {
+      "author": "github-actions[bot]",
+      "message": "chore: update Flutter web build [skip ci]",
+      "timestamp": "2026-05-12T09:44:09Z"
+    },
+    {
+      "author": "GitHub Action",
+      "message": "Update daily commits data [2026-05-12] [skip ci]",
+      "timestamp": "2026-05-12T09:41:05Z"
+    },
+    {
+      "author": "GitHub Actions",
+      "message": "chore: update version to 2026.03.AB34 [skip ci]",
+      "timestamp": "2026-05-12T09:40:22Z"
+    },
+    {
+      "author": "Nathi2266",
+      "message": "Feature: fixed the login bug.",
+      "timestamp": "2026-05-12T11:36:36+02:00"
+    },
+    {
+      "author": "GitHub Action",
+      "message": "Update daily commits data [2026-05-12] [skip ci]",
+      "timestamp": "2026-05-12T09:07:44Z"
+    },
+    {
+      "author": "GitHub Actions",
+      "message": "chore: update version to 2026.03.AB33 [skip ci]",
+      "timestamp": "2026-05-12T09:07:03Z"
+    },
+    {
+      "author": "Nathi2266",
+      "message": "refactor: migrate from Firestore to PostgreSQL as primary datastore",
+      "timestamp": "2026-05-12T11:04:10+02:00"
+    },
+    {
+      "author": "github-actions[bot]",
+      "message": "chore: update Flutter web build [skip ci]",
+      "timestamp": "2026-05-12T07:48:25Z"
+    },
+    {
+      "author": "GitHub Action",
+      "message": "Update daily commits data [2026-05-12] [skip ci]",
+      "timestamp": "2026-05-12T07:45:30Z"
+    },
     {
       "author": "GitHub Actions",
       "message": "chore: update version to 2026.03.AB32 [skip ci]",
@@ -13,6 +113,6 @@
       "timestamp": "2026-05-12T09:43:43+02:00"
     }
   ],
-  "total_commits": 2,
+  "total_commits": 22,
   "date_range": "2026-05-12"
 }
