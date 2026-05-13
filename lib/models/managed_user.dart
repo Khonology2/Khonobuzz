@@ -225,22 +225,49 @@ class ManagedUser {
       firstName: parsedFirstName,
       lastName: parsedLastName,
       email: data['email'] ?? '',
-      department: data['department'] ?? '',
-      designation: data['designation'] ?? '',
+      department: _firstNonEmptyString(data, const [
+            'department',
+            'departmentName',
+            'dept',
+            'team',
+            'division',
+          ]) ??
+          '',
+      designation: _firstNonEmptyString(data, const [
+            'designation',
+            'jobTitle',
+            'job_title',
+            'title',
+            'position',
+            'roleTitle',
+            'role_title',
+          ]) ??
+          '',
       role: data['role'] ?? 'Staff',
       status: normalizeAccountStatus(data['status']?.toString()),
       entity: (data['entity'] as String?)?.isNotEmpty == true
           ? data['entity'] as String
           : null,
-      manager: (data['manager'] as String?)?.isNotEmpty == true
-          ? data['manager'] as String
-          : null,
+      manager: () {
+        final m = _firstNonEmptyString(data, const [
+          'manager',
+          'managedBy',
+          'reportsTo',
+          'managerEmail',
+        ]);
+        return (m != null && m.isNotEmpty) ? m : null;
+      }(),
       moduleAccess: finalModuleAccess,
       moduleRole: (data['moduleRole'] as String?)?.isNotEmpty == true
           ? data['moduleRole'] as String
           : null,
       moduleAccessRole: moduleAccessRoleRaw,
-      phoneNumber: data['phone'],
+      phoneNumber: _firstNonEmptyString(data, const [
+        'phoneNumber',
+        'phone',
+        'mobile',
+        'mobileNumber',
+      ]),
       profilePictureUrl: data['profilePictureUrl'] ?? data['profileImageUrl'],
       createdAt: createdAtRaw is String && createdAtRaw.isNotEmpty
           ? DateTime.tryParse(createdAtRaw)

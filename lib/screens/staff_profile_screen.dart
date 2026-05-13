@@ -14,6 +14,7 @@ import '../providers/theme_mode_provider.dart';
 import '../theme/app_text_colors.dart';
 import '../theme/app_themes.dart';
 import '../services/sound_system.dart';
+import '../utils/profile_api_fields.dart';
 
 class StaffProfileScreen extends StatefulWidget {
   const StaffProfileScreen({super.key});
@@ -40,6 +41,8 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
 
   String? _selectedDepartment;
   String? _selectedDesignation;
+  late List<String> _departmentOptions;
+  late List<String> _designationOptions;
   String? _profileImageUrl;
   String? _profileImagePublicId;
   String _userEntity = '';
@@ -111,6 +114,8 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _departmentOptions = List<String>.from(_departments);
+    _designationOptions = List<String>.from(_designations);
     _firstNameController.addListener(_onFieldChanged);
     _surnameController.addListener(_onFieldChanged);
     _emailController.addListener(_onFieldChanged);
@@ -206,11 +211,11 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
       final curEnc = curEmail.replaceAll('@', '%40');
       final firstName = (userMap['firstName'] ?? userMap['name'] ?? '').toString().trim();
       final lastName = (userMap['lastName'] ?? userMap['surname'] ?? '').toString().trim();
-      final phone = (userMap['phoneNumber'] ?? '').toString().trim();
-      final deptRaw = (userMap['department'] ?? '').toString().trim();
-      final desigRaw = (userMap['designation'] ?? '').toString().trim();
+      final phone = ProfileApiFields.phoneFrom(userMap);
+      final deptRaw = ProfileApiFields.departmentFrom(userMap);
+      final desigRaw = ProfileApiFields.designationFrom(userMap);
       final preferred = (userMap['preferredName'] ?? '').toString().trim();
-      final manager = (userMap['managedBy'] ?? '').toString().trim();
+      final manager = ProfileApiFields.managerFrom(userMap);
       String profileImageUrl = (userMap['profileImageUrl'] ?? '').toString().trim();
       String profileImagePublicId = (userMap['profileImagePublicId'] ?? '').toString().trim();
       if (profileImageUrl.isNotEmpty && !profileImageUrl.toLowerCase().contains(curEmail) && !profileImageUrl.contains(curEnc)) {
@@ -225,31 +230,16 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
       final moduleAccess = (userMap['moduleAccess'] ?? '').toString().trim();
       final responseEmailDisplay = (userMap['email'] ?? email).toString().trim();
 
-      String? matchedDept;
-      if (deptRaw.isNotEmpty) {
-        try {
-          matchedDept = _departments.firstWhere(
-            (d) => d.toLowerCase() == deptRaw.toLowerCase(),
-          );
-        } catch (_) {
-          matchedDept = null;
-        }
-      }
-
-      String? matchedDesig;
-      if (desigRaw.isNotEmpty) {
-        try {
-          matchedDesig = _designations.firstWhere(
-            (d) => d.toLowerCase() == desigRaw.toLowerCase(),
-          );
-        } catch (_) {
-          matchedDesig = null;
-        }
-      }
+      final deptOpts = ProfileApiFields.dropdownOptionsFor(deptRaw, _departments);
+      final desigOpts = ProfileApiFields.dropdownOptionsFor(desigRaw, _designations);
+      final matchedDept = ProfileApiFields.dropdownSelection(deptRaw, deptOpts);
+      final matchedDesig = ProfileApiFields.dropdownSelection(desigRaw, desigOpts);
 
       if (mounted) {
         _isHydratingProfile = true;
         setState(() {
+          _departmentOptions = deptOpts;
+          _designationOptions = desigOpts;
           _firstNameController.text = firstName;
           _surnameController.text = lastName;
           _emailController.text = responseEmailDisplay;
@@ -258,6 +248,8 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
           _managerController.text = manager;
           _selectedDepartment = matchedDept;
           _selectedDesignation = matchedDesig;
+          _departmentController.text = matchedDept ?? deptRaw;
+          _designationController.text = matchedDesig ?? desigRaw;
           _profileImageUrl = profileImageUrl.isNotEmpty ? profileImageUrl : null;
           _profileImagePublicId = profileImagePublicId.isNotEmpty ? profileImagePublicId : null;
           _userEntity = entity.isEmpty ? 'Not assigned' : entity;
@@ -305,8 +297,10 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         'surname': _surnameController.text.trim(),
         'email': _emailController.text.trim(),
         'phoneNumber': _phoneController.text.trim(),
-        'department': _selectedDepartment ?? '',
-        'designation': _selectedDesignation ?? '',
+        'department':
+            (_selectedDepartment ?? _departmentController.text).trim(),
+        'designation':
+            (_selectedDesignation ?? _designationController.text).trim(),
         'preferredName': _preferredNameController.text.trim(),
         'managedBy': _managerController.text.trim(),
         'profileImageUrl': saveProfileUrl,
@@ -350,6 +344,10 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         },
         body: json.encode({
           'themePreference': isLightMode ? 'light' : 'dark',
+          'department':
+              (_selectedDepartment ?? _departmentController.text).trim(),
+          'designation':
+              (_selectedDesignation ?? _designationController.text).trim(),
         }),
       );
       if (response.statusCode != 200) {
@@ -525,10 +523,11 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                                 'Department',
                                 _departmentController,
                                 _selectedDepartment,
-                                _departments,
+                                _departmentOptions,
                                 (String? newValue) {
                                   setState(() {
                                     _selectedDepartment = newValue;
+                                    _departmentController.text = newValue ?? '';
                                   });
                                   _onFieldChanged();
                                 },
@@ -538,10 +537,11 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                                 'Designation',
                                 _designationController,
                                 _selectedDesignation,
-                                _designations,
+                                _designationOptions,
                                 (String? newValue) {
                                   setState(() {
                                     _selectedDesignation = newValue;
+                                    _designationController.text = newValue ?? '';
                                   });
                                   _onFieldChanged();
                                 },
