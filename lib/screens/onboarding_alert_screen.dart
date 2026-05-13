@@ -365,7 +365,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                                       stage ==
                                               OnboardingAlertStage
                                                   .pendingApproval
-                                          ? 'Pending'
+                                          ? 'Inactive'
                                           : 'Active',
                                       style: const TextStyle(
                                         color: Colors.white,

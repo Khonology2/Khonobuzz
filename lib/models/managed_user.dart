@@ -134,6 +134,13 @@ class ManagedUser {
     return 0;
   }
 
+  /// API may return Active, Inactive, or legacy Pending; the app uses only Active / Inactive.
+  static String normalizeAccountStatus(String? raw) {
+    final s = (raw ?? '').trim().toLowerCase();
+    if (s == 'active') return 'Active';
+    return 'Inactive';
+  }
+
   factory ManagedUser.fromApi(Map<String, dynamic> data) {
     final createdAtRaw = data['createdAt'];
     final updatedAtRaw = data['updatedAt'];
@@ -172,7 +179,7 @@ class ManagedUser {
       department: data['department'] ?? '',
       designation: data['designation'] ?? '',
       role: data['role'] ?? 'Staff',
-      status: data['status'] ?? 'Active',
+      status: normalizeAccountStatus(data['status']?.toString()),
       entity: (data['entity'] as String?)?.isNotEmpty == true
           ? data['entity'] as String
           : null,

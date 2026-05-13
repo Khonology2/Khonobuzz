@@ -88,7 +88,9 @@ class _UserManagementScreenState extends State<UserManagementScreen>
 
   Set<String> get _availableStatuses {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
-    return userProvider.users.map((user) => user.status).toSet();
+    return userProvider.users
+        .map((user) => ManagedUser.normalizeAccountStatus(user.status))
+        .toSet();
   }
 
   List<String> get _availableDepartments {
@@ -139,7 +141,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   final Map<String, Color> userStatusColors = {
     'Active': Colors.green.shade600,
     'Inactive': Colors.grey.shade600,
-    'Pending': Colors.orange.shade500,
   };
 
   final Map<String, Color> userRoleColors = {
@@ -151,7 +152,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   final Map<String, Color> userStatusCircleColors = {
     'Active': Colors.green.shade500,
     'Inactive': Colors.grey.shade500,
-    'Pending': Colors.orange.shade500,
   };
 
   final List<String> userRoles = ['Staff', 'Admin'];
@@ -173,7 +173,13 @@ class _UserManagementScreenState extends State<UserManagementScreen>
     }
 
     if (_selectedStatus != null) {
-      users = users.where((user) => user.status == _selectedStatus).toList();
+      users = users
+          .where(
+            (user) =>
+                ManagedUser.normalizeAccountStatus(user.status) ==
+                _selectedStatus,
+          )
+          .toList();
     }
 
     if (_selectedDepartment != null) {
@@ -1591,14 +1597,17 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   }
 
   Widget _buildStatusBadge(String status) {
+    final label = ManagedUser.normalizeAccountStatus(status);
+    final color =
+        userStatusColors[label] ?? Colors.grey.shade600;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
       decoration: BoxDecoration(
-        color: userStatusColors[status],
+        color: color,
         borderRadius: BorderRadius.circular(20.0),
       ),
       child: Text(
-        status,
+        label,
         style: TextStyle(
           fontSize: 12.0,
           fontWeight: FontWeight.bold,
@@ -1620,7 +1629,9 @@ class _UserManagementScreenState extends State<UserManagementScreen>
     );
 
     String selectedRole = user.role;
-    String selectedStatusLocal = user.status;
+    String selectedStatusLocal = ManagedUser.normalizeAccountStatus(
+      user.status,
+    );
     String selectedDepartmentLocal =
         _editedDepartments[user.id] ?? user.department;
     String selectedDesignationLocal =
@@ -1748,7 +1759,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                       ),
                       child: DropdownButton<String>(
                         value:
-                            ['Active', 'Pending'].contains(selectedStatusLocal)
+                            ['Active', 'Inactive'].contains(selectedStatusLocal)
                             ? selectedStatusLocal
                             : null,
                         hint: Text(
@@ -1797,7 +1808,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                             );
                           }
                         },
-                        items: ['Active', 'Pending']
+                        items: ['Active', 'Inactive']
                             .map<DropdownMenuItem<String>>((String value) {
                               return DropdownMenuItem<String>(
                                 value: value,
@@ -2263,7 +2274,9 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                 ? existingUser!.designation
                 : fallbackDesignation),
       role: parsed.role.isNotEmpty ? parsed.role : fallbackRole,
-      status: parsed.status.isNotEmpty ? parsed.status : fallbackStatus,
+      status: ManagedUser.normalizeAccountStatus(
+        parsed.status.isNotEmpty ? parsed.status : fallbackStatus,
+      ),
       entity: (parsed.entity ?? '').trim().isNotEmpty
           ? parsed.entity
           : (existingUser?.entity ?? fallbackEntity),

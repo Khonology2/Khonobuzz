@@ -128,9 +128,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final Color panelBg = isDark
         ? _notificationsDarkWidgetBg
         : Colors.white.withValues(alpha: 0.40);
-    final pendingUsers = userProvider.users
-        .where((u) => u.status.toLowerCase() == 'pending')
-        .toList();
+      final pendingUsers = userProvider.users
+          .where((u) => u.status == 'Inactive')
+          .toList();
     final unassignedUsers = userProvider.users
         .where(
           (u) =>
