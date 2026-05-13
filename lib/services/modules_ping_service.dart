@@ -20,7 +20,7 @@ class ModulesPingService {
   ];
 
   /// How often to GET each backend while logged in (Render free tier sleeps ~15 min idle).
-  static const Duration pingInterval = Duration(minutes: 4);
+  static const Duration pingInterval = Duration(minutes: 10);
 
   static const Duration _requestTimeout = Duration(seconds: 12);
 
@@ -70,6 +70,18 @@ class ModulesPingService {
     });
     if (kDebugMode) {
       debugPrint('[ModulesPing] Started periodic warmup (${pingInterval.inMinutes} min)');
+    }
+  }
+
+  /// Call when a user launches any module to nudge sleeping backends.
+  static void pingOnModuleLaunch() {
+    if (kIsWeb) {
+      // Browser enforces CORS; cross-origin GETs to module backends fail and flood the console.
+      return;
+    }
+    unawaited(pingOnce());
+    if (kDebugMode) {
+      debugPrint('[ModulesPing] Triggered immediate warmup on module launch');
     }
   }
 
