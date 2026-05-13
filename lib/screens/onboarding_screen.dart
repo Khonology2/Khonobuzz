@@ -663,96 +663,14 @@ class OnboardingScreenState extends State<OnboardingScreen>
                             return;
                           }
 
-                          // Validate Email Domain
-                          if (!email.toLowerCase().endsWith('@khonology.com')) {
+                          final emailPattern = RegExp(
+                            r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                          );
+                          if (!emailPattern.hasMatch(email)) {
                             await _playErrorSound();
-                            final currentContext = context;
-                            if (!currentContext.mounted) return;
-                            showDialog(
-                              context: currentContext,
-                              barrierColor: Colors.black54,
-                              builder: (BuildContext context) {
-                                final bool isDark = Theme.of(context).brightness == Brightness.dark;
-                                final Color dialogBg = isDark
-                                    ? const Color(0xFF3D3F40)
-                                    : Colors.white;
-                                final Color dialogTextColor = isDark
-                                    ? Colors.white
-                                    : Colors.black;
-
-                                return Dialog(
-                                  backgroundColor: Colors.transparent,
-                                  child: BackdropFilter(
-                                    filter: ImageFilter.blur(
-                                      sigmaX: 10,
-                                      sigmaY: 10,
-                                    ),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: dialogBg,
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(24.0),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              'Please use your correct work email',
-                                              style: TextStyle(
-                                                color: dialogTextColor,
-                                                fontFamily: 'Poppins',
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                            const SizedBox(height: 16),
-                                            Text(
-                                              'Only Khonology work emails (@khonology.com) are allowed.',
-                                              style: TextStyle(
-                                                color: dialogTextColor,
-                                                fontFamily: 'Poppins',
-                                                fontSize: 14,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                            const SizedBox(height: 24),
-                                            TextButton(
-                                              onPressed: () {
-                                                SoundSystem.playButtonClick();
-                                                Navigator.of(context).pop();
-                                              },
-                                              style: TextButton.styleFrom(
-                                                backgroundColor: const Color(
-                                                  0xFFC10D00,
-                                                ),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 32,
-                                                      vertical: 12,
-                                                    ),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                              ),
-                                              child: Text(
-                                                'OK',
-                                                style: TextStyle(
-                                                  color: dialogTextColor,
-                                                  fontFamily: 'Poppins',
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
+                            _showValidationError(
+                              'Email Address',
+                              'Please enter a valid email address to continue.',
                             );
                             return;
                           }

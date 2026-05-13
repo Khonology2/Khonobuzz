@@ -3,9 +3,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http; // Import for making HTTP requests
 import 'dart:convert'; // Import for JSON encoding/decoding
 import 'dart:async'; // Import for TimeoutException
-import '../utils/pdh_firebase.dart' show syncUserToPDH, syncUserToSkillsHeatmap;
+import '../utils/pdh_sync.dart' show syncUserToPDH, syncUserToSkillsHeatmap;
 import '../config/api_config.dart';
 import '../services/modules_ping_service.dart';
+import '../models/managed_user.dart';
 
 class AuthProvider extends ChangeNotifier {
   static const String _fallbackBackendBaseUrl = String.fromEnvironment(
@@ -28,6 +29,8 @@ class AuthProvider extends ChangeNotifier {
   String? _userThemePreference; // Preferred app theme: light | dark
   bool _isSpecialSession = false; // Track special session state
   Map<String, dynamic>? _cachedProfileData; // Cache for prefetched profile data
+  String? _lastLoginError;
+  String? _lastLoginStatus;
 
   bool get isAuthenticated => _isAuthenticated;
   String? get userEmail => _userEmail;
@@ -48,6 +51,21 @@ class AuthProvider extends ChangeNotifier {
   bool get isSpecialSession => _isSpecialSession; // Getter for special session
   Map<String, dynamic>? get cachedProfileData =>
       _cachedProfileData; // Getter for cached profile data
+  String? get lastLoginError => _lastLoginError;
+  String? get lastLoginStatus => _lastLoginStatus;
+
+  void _clearLoginFeedback() {
+    _lastLoginError = null;
+    _lastLoginStatus = null;
+  }
+
+  void _setLoginFeedback({
+    String? error,
+    String? status,
+  }) {
+    _lastLoginError = error;
+    _lastLoginStatus = status;
+  }
 
   AuthProvider() {
     _loadAuthState();
@@ -314,7 +332,7 @@ class AuthProvider extends ChangeNotifier {
             'password': 'password',
             'name': '$firstName $lastName',
             'role': role ?? 'Staff',
-            'status': 'Pending',
+            'status': 'Inactive',
             'created_at': DateTime.now().toUtc().toIso8601String(),
             'updated_at': DateTime.now().toUtc().toIso8601String(),
             'entity': '',
@@ -329,7 +347,7 @@ class AuthProvider extends ChangeNotifier {
             'fullName': '$firstName $lastName'.trim(),
             'department': department ?? '',
             'designation': designation,
-            'status': 'Pending',
+            'status': 'Inactive',
             'role': role ?? 'Staff',
             'first_valid': DateTime.utc(2025, 9, 25).toIso8601String(),
             'inserted_by': email,
@@ -406,7 +424,10 @@ class AuthProvider extends ChangeNotifier {
         return true; // Indicate success
       } else if (response.statusCode == 409) {
         // User already exists; attempt fallback login to fetch real role
-        final fallbackSuccess = await _attemptFallbackLogin(email);
+        final fallbackSuccess = await _attemptFallbackLogin(
+          email,
+          allowPendingStatus: true,
+        );
         return fallbackSuccess;
       } else {
         // Handle other errors
@@ -437,6 +458,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> manualLogin(String email, {bool isSpecialAccess = false}) async {
     final normalizedEmail = email.trim().toLowerCase();
+    _clearLoginFeedback();
 
     // Clear previous user's profile and cache as soon as login is attempted so we never show their data
     _cachedProfileData = null;
@@ -497,6 +519,7 @@ class AuthProvider extends ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
+        _clearLoginFeedback();
         final responseData = json.decode(response.body);
 
         final prefs = await SharedPreferences.getInstance();
@@ -600,6 +623,13 @@ class AuthProvider extends ChangeNotifier {
 
         return true;
       } else if (!isSpecialAccess && response.statusCode >= 500) {
+        try {
+          final parsed = json.decode(response.body) as Map<String, dynamic>;
+          _setLoginFeedback(
+            error: parsed['error']?.toString(),
+            status: parsed['status']?.toString(),
+          );
+        } catch (_) {}
         final success = await _attemptFallbackLogin(email);
         if (success) {
           return true;
@@ -611,6 +641,19 @@ class AuthProvider extends ChangeNotifier {
           (response.statusCode == 403 ||
               response.statusCode == 404 ||
               response.statusCode == 401)) {
+        try {
+          final parsed = json.decode(response.body) as Map<String, dynamic>;
+          _setLoginFeedback(
+            error: parsed['error']?.toString(),
+            status: parsed['status']?.toString(),
+          );
+          final statusLower = (_lastLoginStatus ?? '').trim().toLowerCase();
+          if (statusLower == 'pending' || statusLower == 'inactive') {
+            _isAuthenticated = false;
+            notifyListeners();
+            return false;
+          }
+        } catch (_) {}
         final success = await _attemptFallbackLogin(email);
         if (success) {
           return true;
@@ -619,6 +662,13 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return false;
       } else {
+        try {
+          final parsed = json.decode(response.body) as Map<String, dynamic>;
+          _setLoginFeedback(
+            error: parsed['error']?.toString(),
+            status: parsed['status']?.toString(),
+          );
+        } catch (_) {}
         _isAuthenticated = false;
         notifyListeners();
         return false;
@@ -631,6 +681,7 @@ class AuthProvider extends ChangeNotifier {
         }
       }
       _isAuthenticated = false;
+      _setLoginFeedback(error: 'Login timed out. Please try again.');
       notifyListeners();
       return false;
     } catch (e) {
@@ -651,6 +702,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _isAuthenticated = false;
+      _setLoginFeedback(error: 'Login failed. Please try again.');
       notifyListeners();
       return false;
     }
@@ -732,7 +784,10 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> _attemptFallbackLogin(String email) async {
+  Future<bool> _attemptFallbackLogin(
+    String email, {
+    bool allowPendingStatus = false,
+  }) async {
     try {
       http.Response? userCheckResponse;
       Object? lastError;
@@ -774,17 +829,38 @@ class AuthProvider extends ChangeNotifier {
         final foundUser = usersData['user'] as Map<String, dynamic>?;
 
         if (foundUser != null) {
+          final status = (foundUser['status']?.toString() ?? '').trim();
+          final statusLower = status.toLowerCase();
+          final displayStatus = ManagedUser.normalizeAccountStatus(
+            status.isEmpty ? null : status,
+          );
+          final isAwaitingActivation =
+              statusLower == 'pending' ||
+              statusLower == 'inactive' ||
+              status.isEmpty;
+          if (statusLower != 'active' && !(allowPendingStatus && isAwaitingActivation)) {
+            _setLoginFeedback(
+              status: displayStatus,
+              error:
+                  "Your account status is '$displayStatus'. Please contact admin for access.",
+            );
+            _isAuthenticated = false;
+            notifyListeners();
+            return false;
+          }
           final prefs = await SharedPreferences.getInstance();
           _cachedProfileData = null;
           _userProfileImageUrl = null;
           _userProfilePublicId = null;
           _isAuthenticated = true;
+          _userAlreadyOnboarded = !isAwaitingActivation;
           _userEmail = foundUser['email'] ?? email;
           _userRole = foundUser['role'] ?? 'Staff';
           _userThemePreference =
               (foundUser['themePreference'] as String?)?.trim().toLowerCase();
           _initialScreenIndex = 9;
           _currentScreenIndex = 9;
+          _setLoginFeedback(status: displayStatus);
 
           final moduleAccessRaw = foundUser['moduleAccess'] as String?;
           final moduleAccessRoleRaw = foundUser['moduleAccessRole'] as String?;
@@ -837,6 +913,7 @@ class AuthProvider extends ChangeNotifier {
         }
       } else if (userCheckResponse.statusCode == 404) {
         debugPrint('Fallback login: user not found for email $email');
+        _setLoginFeedback(error: 'User not found. Please check your email.');
         _isAuthenticated = false;
         notifyListeners();
         return false;

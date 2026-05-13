@@ -112,7 +112,49 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
         final backendUser = decoded?['user'] as Map<String, dynamic>?;
         if (backendUser != null) {
-          updatedUser = ManagedUser.fromApi(backendUser);
+          final parsed = ManagedUser.fromApi(backendUser);
+          updatedUser = parsed.copyWith(
+            firstName: parsed.firstName.isNotEmpty
+                ? parsed.firstName
+                : user.firstName,
+            lastName: parsed.lastName.isNotEmpty
+                ? parsed.lastName
+                : user.lastName,
+            email: parsed.email.isNotEmpty ? parsed.email : user.email,
+            department: parsed.department.isNotEmpty
+                ? parsed.department
+                : user.department,
+            designation: parsed.designation.isNotEmpty
+                ? parsed.designation
+                : user.designation,
+            role: parsed.role.isNotEmpty ? parsed.role : user.role,
+            status: parsed.status.isNotEmpty ? parsed.status : 'Active',
+            entity: (parsed.entity ?? '').trim().isNotEmpty
+                ? parsed.entity
+                : user.entity,
+            manager: (parsed.manager ?? '').trim().isNotEmpty
+                ? parsed.manager
+                : user.manager,
+            moduleAccess: (parsed.moduleAccess ?? '').trim().isNotEmpty
+                ? parsed.moduleAccess
+                : user.moduleAccess,
+            moduleRole: (parsed.moduleRole ?? '').trim().isNotEmpty
+                ? parsed.moduleRole
+                : user.moduleRole,
+            moduleAccessRole: (parsed.moduleAccessRole ?? '').trim().isNotEmpty
+                ? parsed.moduleAccessRole
+                : user.moduleAccessRole,
+            phoneNumber: (parsed.phoneNumber ?? '').trim().isNotEmpty
+                ? parsed.phoneNumber
+                : user.phoneNumber,
+            profilePictureUrl: (parsed.profilePictureUrl ?? '').trim().isNotEmpty
+                ? parsed.profilePictureUrl
+                : user.profilePictureUrl,
+            createdAt: parsed.createdAt ?? user.createdAt,
+            updatedAt: parsed.updatedAt ?? DateTime.now(),
+            lastSignInAt: parsed.lastSignInAt ?? user.lastSignInAt,
+            loginCount: parsed.loginCount > 0 ? parsed.loginCount : user.loginCount,
+          );
         }
       } catch (_) {
         updatedUser = null;
@@ -323,7 +365,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                                       stage ==
                                               OnboardingAlertStage
                                                   .pendingApproval
-                                          ? 'Pending'
+                                          ? 'Inactive'
                                           : 'Active',
                                       style: const TextStyle(
                                         color: Colors.white,

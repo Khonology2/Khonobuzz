@@ -34,7 +34,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   late AnimationController _animationController;
   late Animation<Color?> _colorAnimation;
   late Animation<double> _scaleAnimation;
-  String _currentVersion = 'Ver 2026.03.AB1 SIT';
+  String _currentVersion = 'Ver ${VersionData.fallback.version} SIT';
   String _tooltipMessage = 'Loading version...';
   String? _rawVersion;
   bool _showAttentionCatcher = false;
@@ -94,6 +94,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _sessionVersionFuture = null;
       _loadVersion();
     }
   }
@@ -134,11 +135,11 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
     _sessionVersionAttempts++;
     if (_sessionVersionAttempts > 3) {
       // Give callers the best-effort fallback from the service.
-      return VersionService.loadVersion();
+      return VersionService.loadVersion(forceRefresh: true);
     }
 
     try {
-      _sessionVersionFuture = VersionService.loadVersion();
+      _sessionVersionFuture = VersionService.loadVersion(forceRefresh: true);
       return await _sessionVersionFuture!;
     } catch (_) {
       // Allow a retry on the next widget attempt.

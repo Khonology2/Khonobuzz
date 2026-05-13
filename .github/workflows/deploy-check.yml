@@ -45,19 +45,20 @@ jobs:
       - name: Get latest commit info
         id: commit
         run: |
-          MSG="${{ github.event.head_commit.message }}"
-          if [ -z "$MSG" ]; then
-            MSG=$(git log -1 --pretty=format:"%s")
-          fi
-          echo "Commit message: $MSG"
+          # Always read from git to avoid shell injection/newline parsing issues
+          # from github.event.head_commit.message interpolation.
+          MSG=$(git log -1 --pretty=%B)
+          SUBJECT=$(git log -1 --pretty=format:%s)
+          DELIM="MSG_EOF_$(date +%s%N)"
+          echo "Commit subject: $SUBJECT"
           echo "Branch: ${{ github.ref_name }}"
           if echo "$MSG" | grep -q '\[skip ci\]'; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "skip_weekend=false" >> $GITHUB_OUTPUT
             echo "starts_with_feature=false" >> $GITHUB_OUTPUT
-            echo "message<<EOF" >> $GITHUB_OUTPUT
+            echo "message<<$DELIM" >> $GITHUB_OUTPUT
             echo "$MSG" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            echo "$DELIM" >> $GITHUB_OUTPUT
             echo "date=" >> $GITHUB_OUTPUT
             echo "is_feature=false" >> $GITHUB_OUTPUT
             exit 0
@@ -70,15 +71,15 @@ jobs:
           else
             echo "skip_weekend=false" >> $GITHUB_OUTPUT
           fi
-          TRIMMED=$(echo "$MSG" | sed 's/^[[:space:]]*//')
+          TRIMMED=$(echo "$SUBJECT" | sed 's/^[[:space:]]*//')
           if echo "$TRIMMED" | grep -Eqi '^(Feature|feat)([[:space:]]*[-:]|:)'; then
             echo "starts_with_feature=true" >> $GITHUB_OUTPUT
           else
             echo "starts_with_feature=false" >> $GITHUB_OUTPUT
           fi
-          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "message<<$DELIM" >> $GITHUB_OUTPUT
           echo "$MSG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "$DELIM" >> $GITHUB_OUTPUT
           echo "date=$COMMIT_DATE" >> $GITHUB_OUTPUT
           if echo "$TRIMMED" | grep -Eqi '^(Feature|feat)([[:space:]]*[-:]|:)'; then
             echo "is_feature=true" >> $GITHUB_OUTPUT
@@ -559,17 +560,27 @@ jobs:
             exit 0
           fi
 
+          # Compare pre-push ref to current branch tip. Do NOT use github.sha as the upper bound:
+          # version-control / daily-commits jobs push [skip ci] commits after the triggering SHA, so
+          # assets/data/version.json can change on tip while github.sha still points at the user's
+          # commit — that wrongly skipped the Render hook and left the deployed app on an old label.
           BEFORE_SHA="${{ github.event.before }}"
-          AFTER_SHA="${{ github.sha }}"
+          AFTER_SHA=$(git rev-parse HEAD)
           if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            BEFORE_SHA=$(git rev-parse HEAD~1)
+            BEFORE_SHA=$(git rev-parse HEAD~1 2>/dev/null) || BEFORE_SHA=""
+          fi
+          if [ -z "$BEFORE_SHA" ]; then
+            echo "::warning::Could not resolve BEFORE_SHA; assuming frontend+backend deploy"
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           CHANGED_FILES=$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" || true)
           echo "Changed files:"
           echo "$CHANGED_FILES"
 
-          if echo "$CHANGED_FILES" | grep -Eq '^(lib/|web/|assets/|pubspec\.yaml|pubspec\.lock|\.github/workflows/)'; then
+          if echo "$CHANGED_FILES" | grep -Eq '^(lib/|web/|assets/|pubspec\.yaml|pubspec\.lock|\.github/workflows/|build/web/)'; then
             echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "frontend_changed=false" >> "$GITHUB_OUTPUT"

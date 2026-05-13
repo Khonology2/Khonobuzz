@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../utils/pdh_firebase.dart'
+import '../utils/pdh_sync.dart'
     show
         updatePDHUserPartial,
         updateSkillsHeatmapUserPartial,
@@ -88,7 +88,9 @@ class _UserManagementScreenState extends State<UserManagementScreen>
 
   Set<String> get _availableStatuses {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
-    return userProvider.users.map((user) => user.status).toSet();
+    return userProvider.users
+        .map((user) => ManagedUser.normalizeAccountStatus(user.status))
+        .toSet();
   }
 
   List<String> get _availableDepartments {
@@ -139,7 +141,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   final Map<String, Color> userStatusColors = {
     'Active': Colors.green.shade600,
     'Inactive': Colors.grey.shade600,
-    'Pending': Colors.orange.shade500,
   };
 
   final Map<String, Color> userRoleColors = {
@@ -151,7 +152,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   final Map<String, Color> userStatusCircleColors = {
     'Active': Colors.green.shade500,
     'Inactive': Colors.grey.shade500,
-    'Pending': Colors.orange.shade500,
   };
 
   final List<String> userRoles = ['Staff', 'Admin'];
@@ -173,7 +173,13 @@ class _UserManagementScreenState extends State<UserManagementScreen>
     }
 
     if (_selectedStatus != null) {
-      users = users.where((user) => user.status == _selectedStatus).toList();
+      users = users
+          .where(
+            (user) =>
+                ManagedUser.normalizeAccountStatus(user.status) ==
+                _selectedStatus,
+          )
+          .toList();
     }
 
     if (_selectedDepartment != null) {
@@ -620,7 +626,21 @@ class _UserManagementScreenState extends State<UserManagementScreen>
           final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
           final backendUser = decoded?['user'] as Map<String, dynamic>?;
           if (backendUser != null) {
-            final updatedUser = ManagedUser.fromApi(backendUser);
+            final existingIndex = userProvider.users.indexWhere(
+              (u) => u.id == userId,
+            );
+            final existing = existingIndex >= 0
+                ? userProvider.users[existingIndex]
+                : null;
+            final updatedUser = _mergeBackendUserData(
+              existing,
+              backendUser,
+              fallbackDepartment: department,
+              fallbackDesignation: designation,
+              fallbackRole: newRole,
+              fallbackStatus: newStatus,
+              fallbackEntity: entity,
+            );
             userProvider.updateUser(updatedUser);
             _editedDepartments.remove(userId);
             _editedDesignations.remove(userId);
@@ -633,7 +653,12 @@ class _UserManagementScreenState extends State<UserManagementScreen>
               if (entity != null) {
                 users[index].entity = entity;
               }
-              userProvider.updateUser(users[index]);
+              userProvider.updateUser(
+                users[index].copyWith(
+                  department: department,
+                  designation: designation,
+                ),
+              );
             }
           }
         } catch (_) {
@@ -645,7 +670,12 @@ class _UserManagementScreenState extends State<UserManagementScreen>
             if (entity != null) {
               users[index].entity = entity;
             }
-            userProvider.updateUser(users[index]);
+            userProvider.updateUser(
+              users[index].copyWith(
+                department: department,
+                designation: designation,
+              ),
+            );
           }
         }
       }
@@ -1567,14 +1597,17 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   }
 
   Widget _buildStatusBadge(String status) {
+    final label = ManagedUser.normalizeAccountStatus(status);
+    final color =
+        userStatusColors[label] ?? Colors.grey.shade600;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
       decoration: BoxDecoration(
-        color: userStatusColors[status],
+        color: color,
         borderRadius: BorderRadius.circular(20.0),
       ),
       child: Text(
-        status,
+        label,
         style: TextStyle(
           fontSize: 12.0,
           fontWeight: FontWeight.bold,
@@ -1596,7 +1629,9 @@ class _UserManagementScreenState extends State<UserManagementScreen>
     );
 
     String selectedRole = user.role;
-    String selectedStatusLocal = user.status;
+    String selectedStatusLocal = ManagedUser.normalizeAccountStatus(
+      user.status,
+    );
     String selectedDepartmentLocal =
         _editedDepartments[user.id] ?? user.department;
     String selectedDesignationLocal =
@@ -1724,7 +1759,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                       ),
                       child: DropdownButton<String>(
                         value:
-                            ['Active', 'Pending'].contains(selectedStatusLocal)
+                            ['Active', 'Inactive'].contains(selectedStatusLocal)
                             ? selectedStatusLocal
                             : null,
                         hint: Text(
@@ -1773,7 +1808,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                             );
                           }
                         },
-                        items: ['Active', 'Pending']
+                        items: ['Active', 'Inactive']
                             .map<DropdownMenuItem<String>>((String value) {
                               return DropdownMenuItem<String>(
                                 value: value,
@@ -2169,7 +2204,15 @@ class _UserManagementScreenState extends State<UserManagementScreen>
       final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
       final backendUser = decoded?['user'] as Map<String, dynamic>?;
       if (backendUser != null && mounted) {
-        final updatedUser = ManagedUser.fromApi(backendUser);
+        final updatedUser = _mergeBackendUserData(
+          user,
+          backendUser,
+          fallbackDepartment: user.department,
+          fallbackDesignation: user.designation,
+          fallbackRole: user.role,
+          fallbackStatus: user.status,
+          fallbackEntity: user.entity,
+        );
         final userProvider = Provider.of<UserProvider>(context, listen: false);
         userProvider.updateUser(updatedUser);
       }
@@ -2200,6 +2243,68 @@ class _UserManagementScreenState extends State<UserManagementScreen>
         });
       }
     }
+  }
+
+  ManagedUser _mergeBackendUserData(
+    ManagedUser? existingUser,
+    Map<String, dynamic> backendUser, {
+    required String fallbackDepartment,
+    required String fallbackDesignation,
+    required String fallbackRole,
+    required String fallbackStatus,
+    String? fallbackEntity,
+  }) {
+    final parsed = ManagedUser.fromApi(backendUser);
+    return parsed.copyWith(
+      firstName: parsed.firstName.isNotEmpty
+          ? parsed.firstName
+          : existingUser?.firstName,
+      lastName: parsed.lastName.isNotEmpty
+          ? parsed.lastName
+          : existingUser?.lastName,
+      email: parsed.email.isNotEmpty ? parsed.email : existingUser?.email,
+      department: parsed.department.isNotEmpty
+          ? parsed.department
+          : (existingUser?.department.isNotEmpty == true
+                ? existingUser!.department
+                : fallbackDepartment),
+      designation: parsed.designation.isNotEmpty
+          ? parsed.designation
+          : (existingUser?.designation.isNotEmpty == true
+                ? existingUser!.designation
+                : fallbackDesignation),
+      role: parsed.role.isNotEmpty ? parsed.role : fallbackRole,
+      status: ManagedUser.normalizeAccountStatus(
+        parsed.status.isNotEmpty ? parsed.status : fallbackStatus,
+      ),
+      entity: (parsed.entity ?? '').trim().isNotEmpty
+          ? parsed.entity
+          : (existingUser?.entity ?? fallbackEntity),
+      manager: (parsed.manager ?? '').trim().isNotEmpty
+          ? parsed.manager
+          : existingUser?.manager,
+      moduleAccess: (parsed.moduleAccess ?? '').trim().isNotEmpty
+          ? parsed.moduleAccess
+          : existingUser?.moduleAccess,
+      moduleRole: (parsed.moduleRole ?? '').trim().isNotEmpty
+          ? parsed.moduleRole
+          : existingUser?.moduleRole,
+      moduleAccessRole: (parsed.moduleAccessRole ?? '').trim().isNotEmpty
+          ? parsed.moduleAccessRole
+          : existingUser?.moduleAccessRole,
+      phoneNumber: (parsed.phoneNumber ?? '').trim().isNotEmpty
+          ? parsed.phoneNumber
+          : existingUser?.phoneNumber,
+      profilePictureUrl: (parsed.profilePictureUrl ?? '').trim().isNotEmpty
+          ? parsed.profilePictureUrl
+          : existingUser?.profilePictureUrl,
+      createdAt: parsed.createdAt ?? existingUser?.createdAt,
+      updatedAt: parsed.updatedAt ?? DateTime.now(),
+      lastSignInAt: parsed.lastSignInAt ?? existingUser?.lastSignInAt,
+      loginCount: parsed.loginCount > 0
+          ? parsed.loginCount
+          : (existingUser?.loginCount ?? 0),
+    );
   }
 
   void _showManagedByDialog(ManagedUser user) {

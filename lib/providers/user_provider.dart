@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/managed_user.dart';
 import '../config/api_config.dart';
 
@@ -12,6 +11,9 @@ class UserProvider extends ChangeNotifier {
   String? _errorMessage;
   DateTime? _lastFetchTime;
   static const Duration _cacheValidDuration = Duration(minutes: 5);
+
+  /// When [fetchUsers] runs, concurrent callers with [forceRefresh] await this.
+  Future<void>? _fetchUsersInFlight;
 
   List<ManagedUser> get users => _users;
   bool get isLoading => _isLoading;
@@ -67,91 +69,6 @@ class UserProvider extends ChangeNotifier {
     _lastFetchTime = DateTime.now();
   }
 
-  DateTime? _parseDateTimeDynamic(dynamic value) {
-    if (value == null) return null;
-    if (value is DateTime) return value;
-    if (value is String && value.isNotEmpty) {
-      return DateTime.tryParse(value);
-    }
-    if (value is num) {
-      final ts = value.toDouble();
-      if (ts <= 0) return null;
-      // Accept both millis and seconds.
-      final millis = ts > 1e12 ? ts.toInt() : (ts * 1000).toInt();
-      return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
-    }
-    try {
-      final candidate = (value as dynamic).toDate();
-      if (candidate is DateTime) return candidate;
-    } catch (_) {}
-    return null;
-  }
-
-  Map<String, dynamic> _selectBestOnboardingData(
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-  ) {
-    if (docs.isEmpty) return {};
-
-    QueryDocumentSnapshot<Map<String, dynamic>>? bestDoc;
-    DateTime bestScore = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-
-    for (final doc in docs) {
-      final data = Map<String, dynamic>.from(doc.data());
-      final score =
-          _parseDateTimeDynamic(data['updated_at']) ??
-          _parseDateTimeDynamic(data['lastSignInAt']) ??
-          _parseDateTimeDynamic(data['created_at']) ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-      if (bestDoc == null || score.isAfter(bestScore)) {
-        bestDoc = doc;
-        bestScore = score;
-      }
-    }
-
-    return bestDoc == null ? {} : Map<String, dynamic>.from(bestDoc.data());
-  }
-
-  /// Fetch users directly from Firestore - fast, no backend cold start
-  Future<List<ManagedUser>?> _fetchUsersFromFirestore({
-    Duration timeout = const Duration(seconds: 10),
-  }) async {
-    try {
-      final firestore = FirebaseFirestore.instance;
-      final usersSnapshot = await firestore.collection('users').get().timeout(
-            timeout,
-            onTimeout: () => throw Exception('Firestore timeout'),
-          );
-
-      final List<ManagedUser> managedUsers = [];
-      for (final userDoc in usersSnapshot.docs) {
-        final userData = userDoc.data();
-        final userInfo = Map<String, dynamic>.from(userData);
-
-        Map<String, dynamic> onboardingData = {};
-        final onboardingSnapshot = await firestore
-            .collection('onboarding')
-            .where('user_id', isEqualTo: userDoc.id)
-            .get();
-        onboardingData = _selectBestOnboardingData(onboardingSnapshot.docs);
-
-        try {
-          final managed = ManagedUser.fromFirestore(
-            userDoc.id,
-            userInfo,
-            onboardingData,
-          );
-          managedUsers.add(managed);
-        } catch (e) {
-          debugPrint('UserProvider: parse error for ${userDoc.id}: $e');
-        }
-      }
-      return managedUsers;
-    } catch (e) {
-      debugPrint('UserProvider: Firestore fetch failed: $e');
-      return null;
-    }
-  }
-
   Future<List<dynamic>> _fetchUsersPayload({
     Duration timeout = const Duration(seconds: 90),
     int retries = 2,
@@ -193,23 +110,11 @@ class UserProvider extends ChangeNotifier {
     }
 
     if (_isLoading) {
-      return;
-    }
-
-    try {
-      // Firestore first - fast, no backend cold start
-      final firestoreUsers = await _fetchUsersFromFirestore(
-        timeout: const Duration(seconds: 8),
-      );
-      if (firestoreUsers != null && firestoreUsers.isNotEmpty) {
-        _setUsersAndSort(firestoreUsers);
-        _hasError = false;
-        _errorMessage = null;
-        notifyListeners();
+      if (forceRefresh && _fetchUsersInFlight != null) {
+        await _fetchUsersInFlight;
+      } else {
         return;
       }
-    } catch (e) {
-      debugPrint('Login prefetch Firestore failed: $e');
     }
 
     try {
@@ -238,34 +143,30 @@ class UserProvider extends ChangeNotifier {
       return;
     }
 
-    // If already loading, don't start another request
     if (_isLoading) {
+      if (forceRefresh && _fetchUsersInFlight != null) {
+        await _fetchUsersInFlight;
+        return fetchUsers(forceRefresh: true);
+      }
       return;
     }
 
+    final Future<void> work = _executeFetchUsers();
+    _fetchUsersInFlight = work;
+    try {
+      await work;
+    } finally {
+      if (_fetchUsersInFlight == work) {
+        _fetchUsersInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _executeFetchUsers() async {
     _isLoading = true;
     _hasError = false;
     _errorMessage = null;
     notifyListeners();
-
-    try {
-      // Firestore first - fast load, no backend cold start
-      final firestoreUsers = await _fetchUsersFromFirestore(
-        timeout: const Duration(seconds: 12),
-      );
-      if (firestoreUsers != null && firestoreUsers.isNotEmpty) {
-        _setUsersAndSort(firestoreUsers);
-        _hasError = false;
-        _errorMessage = null;
-        notifyListeners();
-        _isLoading = false;
-        // Refresh from API in background to sync any backend-only data
-        refreshUsersInBackground();
-        return;
-      }
-    } catch (e) {
-      debugPrint('UserProvider: Firestore fetch failed: $e');
-    }
 
     try {
       final rawUsers = await _fetchUsersPayload();
@@ -316,17 +217,6 @@ class UserProvider extends ChangeNotifier {
     if (_isLoading) return;
 
     try {
-      final firestoreUsers = await _fetchUsersFromFirestore(
-        timeout: const Duration(seconds: 10),
-      );
-      if (firestoreUsers != null && firestoreUsers.isNotEmpty) {
-        _setUsersAndSort(firestoreUsers);
-        notifyListeners();
-        return;
-      }
-    } catch (_) {}
-
-    try {
       final rawUsers = await _fetchUsersPayload();
       _setUsersFromApiPayload(rawUsers);
       notifyListeners();
@@ -339,6 +229,7 @@ class UserProvider extends ChangeNotifier {
   void clearCache() {
     _users = [];
     _lastFetchTime = null;
+    _fetchUsersInFlight = null;
     notifyListeners();
   }
 

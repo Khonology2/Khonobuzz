@@ -85,48 +85,46 @@ class ManagedUser {
 
   /// Copy with optional overrides so the updated user can be sorted to the top.
   ManagedUser copyWith({
+    String? firstName,
+    String? lastName,
+    String? email,
+    String? department,
+    String? designation,
+    String? role,
+    String? status,
     DateTime? updatedAt,
     String? entity,
+    String? manager,
     String? moduleAccess,
     String? moduleRole,
     String? moduleAccessRole,
+    String? phoneNumber,
+    String? profilePictureUrl,
+    DateTime? createdAt,
     DateTime? lastSignInAt,
     int? loginCount,
   }) {
     return ManagedUser(
       id: id,
-      firstName: firstName,
-      lastName: lastName,
-      email: email,
-      department: department,
-      designation: designation,
-      role: role,
-      status: status,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      email: email ?? this.email,
+      department: department ?? this.department,
+      designation: designation ?? this.designation,
+      role: role ?? this.role,
+      status: status ?? this.status,
       entity: entity ?? this.entity,
-      manager: manager,
+      manager: manager ?? this.manager,
       moduleAccess: moduleAccess ?? this.moduleAccess,
       moduleRole: moduleRole ?? this.moduleRole,
       moduleAccessRole: moduleAccessRole ?? this.moduleAccessRole,
-      phoneNumber: phoneNumber,
-      profilePictureUrl: profilePictureUrl,
-      createdAt: createdAt,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
+      createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastSignInAt: lastSignInAt ?? this.lastSignInAt,
       loginCount: loginCount ?? this.loginCount,
     );
-  }
-
-  static DateTime? _parseDateTimeValue(dynamic value) {
-    if (value == null) return null;
-    if (value is DateTime) return value;
-    if (value is String && value.isNotEmpty) {
-      return DateTime.tryParse(value);
-    }
-    try {
-      final dynamic candidate = (value as dynamic).toDate();
-      if (candidate is DateTime) return candidate;
-    } catch (_) {}
-    return null;
   }
 
   static int _parseLoginCount(dynamic value) {
@@ -136,99 +134,11 @@ class ManagedUser {
     return 0;
   }
 
-  factory ManagedUser.fromFirestore(
-    String id,
-    Map<String, dynamic> userData,
-    Map<String, dynamic> onboardingData,
-  ) {
-    String firstName = onboardingData['firstName'] ?? '';
-    String lastName = onboardingData['lastName'] ?? '';
-
-    if (firstName.isEmpty && lastName.isEmpty) {
-      final userName = userData['name'] as String?;
-      if (userName != null && userName.isNotEmpty) {
-        final nameParts = userName.split(' ');
-        if (nameParts.isNotEmpty) {
-          firstName = nameParts[0];
-        }
-        if (nameParts.length > 1) {
-          lastName = nameParts.sublist(1).join(' ');
-        }
-      }
-    }
-
-    final onboardingEntity = onboardingData['entity'];
-    final userEntity = userData['entity'];
-    final String? entityValue;
-    if (onboardingEntity is String && onboardingEntity.isNotEmpty) {
-      entityValue = onboardingEntity;
-    } else if (userEntity is String && userEntity.isNotEmpty) {
-      entityValue = userEntity;
-    } else {
-      entityValue = null;
-    }
-
-    // Get moduleAccess and moduleRole from onboarding data
-    final onboardingModuleAccess = onboardingData['moduleAccess'];
-    final userModuleAccess = userData['moduleAccess'];
-    final String? moduleAccessValue;
-    if (onboardingModuleAccess is String && onboardingModuleAccess.isNotEmpty) {
-      moduleAccessValue = onboardingModuleAccess;
-    } else if (userModuleAccess is String && userModuleAccess.isNotEmpty) {
-      moduleAccessValue = userModuleAccess;
-    } else {
-      moduleAccessValue = null;
-    }
-
-    final onboardingModuleRole = onboardingData['moduleRole'];
-    final userModuleRole = userData['moduleRole'];
-    final String? moduleRoleValue;
-    if (onboardingModuleRole is String && onboardingModuleRole.isNotEmpty) {
-      moduleRoleValue = onboardingModuleRole;
-    } else if (userModuleRole is String && userModuleRole.isNotEmpty) {
-      moduleRoleValue = userModuleRole;
-    } else {
-      moduleRoleValue = null;
-    }
-
-    final moduleAccessRoleValue = (onboardingData['moduleAccessRole'] as String?)?.isNotEmpty == true
-        ? onboardingData['moduleAccessRole'] as String
-        : (userData['moduleAccessRole'] as String?)?.isNotEmpty == true
-            ? userData['moduleAccessRole'] as String
-            : null;
-    final lastSignInAtValue =
-        _parseDateTimeValue(userData['lastSignInAt']) ??
-        _parseDateTimeValue(onboardingData['lastSignInAt']);
-    final loginCountValue = _parseLoginCount(
-      onboardingData['loginCount'] ?? userData['loginCount'],
-    );
-
-    // Derive moduleAccess from moduleAccessRole if moduleAccess is empty
-    final finalModuleAccess = _deriveModuleAccessFromRole(moduleAccessValue, moduleAccessRoleValue);
-
-    return ManagedUser(
-      id: id,
-      firstName: firstName,
-      lastName: lastName,
-      email: userData['email'] ?? '',
-      department: onboardingData['department'] ?? '',
-      designation: onboardingData['designation'] ?? '',
-      role: userData['role'] ?? 'Staff',
-      status: userData['status'] ?? 'Active',
-      entity: entityValue,
-      manager: (onboardingData['manager'] as String?)?.isNotEmpty == true
-          ? onboardingData['manager'] as String
-          : (userData['manager'] as String?)?.isNotEmpty == true
-              ? userData['manager'] as String
-              : null,
-      moduleAccess: finalModuleAccess,
-      moduleRole: moduleRoleValue,
-      moduleAccessRole: moduleAccessRoleValue,
-      phoneNumber: onboardingData['phone'] ?? userData['phone'],
-      profilePictureUrl: onboardingData['profilePictureUrl'] ?? userData['profilePictureUrl'],
-      lastSignInAt: lastSignInAtValue,
-      loginCount: loginCountValue,
-    );
+  /// API may return Active, Inactive, or legacy Pending; the app uses only Active / Inactive.
+  static String normalizeAccountStatus(String? raw) {
+    final s = (raw ?? '').trim().toLowerCase();
+    if (s == 'active') return 'Active';
+    return 'Inactive';
   }
 
   factory ManagedUser.fromApi(Map<String, dynamic> data) {
@@ -246,15 +156,30 @@ class ManagedUser {
     // Derive moduleAccess from moduleAccessRole if moduleAccess is empty
     final finalModuleAccess = _deriveModuleAccessFromRole(moduleAccessRaw, moduleAccessRoleRaw);
 
+    final rawFirstName = (data['firstName'] ?? '').toString();
+    final rawLastName = (data['lastName'] ?? '').toString();
+    String parsedFirstName = rawFirstName;
+    String parsedLastName = rawLastName;
+    if (parsedFirstName.isEmpty && parsedLastName.isEmpty) {
+      final fullName = (data['name'] ?? '').toString().trim();
+      if (fullName.isNotEmpty) {
+        final parts = fullName.split(RegExp(r'\s+'));
+        parsedFirstName = parts.first;
+        if (parts.length > 1) {
+          parsedLastName = parts.sublist(1).join(' ');
+        }
+      }
+    }
+
     return ManagedUser(
       id: data['id'] ?? '',
-      firstName: data['firstName'] ?? '',
-      lastName: data['lastName'] ?? '',
+      firstName: parsedFirstName,
+      lastName: parsedLastName,
       email: data['email'] ?? '',
       department: data['department'] ?? '',
       designation: data['designation'] ?? '',
       role: data['role'] ?? 'Staff',
-      status: data['status'] ?? 'Active',
+      status: normalizeAccountStatus(data['status']?.toString()),
       entity: (data['entity'] as String?)?.isNotEmpty == true
           ? data['entity'] as String
           : null,

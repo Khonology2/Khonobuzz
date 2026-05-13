@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../config/api_config.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
+import '../services/modules_ping_service.dart';
 import '../services/sound_system.dart';
 import '../theme/app_backgrounds.dart';
 import '../providers/theme_mode_provider.dart';
@@ -292,7 +293,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Skills heatmap',
                                   ],
                                   buttonText: 'LAUNCH',
-                                  url: 'https://resource-capacity-hczd.onrender.com',
+                                  url: 'https://resource-capacity.netlify.app/',
                                   moduleKey: 'skills_heatmap',
                                 ),
                               );
@@ -856,6 +857,8 @@ Future<void> _launchUrlFromContext(
   String moduleKey,
 ) async {
   try {
+    ModulesPingService.pingOnModuleLaunch();
+
     String secureUrl = url.trim();
     if (secureUrl.startsWith('http://')) {
       secureUrl = secureUrl.replaceFirst('http://', 'https://');
