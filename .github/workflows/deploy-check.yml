@@ -90,6 +90,9 @@ jobs:
       - name: Read or initialize version.json
         id: version
         if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
+        env:
+          # Do not interpolate the commit body into the shell script (quotes/newlines break bash).
+          COMMIT_MSG: ${{ steps.commit.outputs.message }}
         run: |
           VERSION_FILE="assets/data/version.json"
           COMMIT_DATE="${{ steps.commit.outputs.date }}"
@@ -114,7 +117,6 @@ jobs:
             COMMIT_COUNT="0"
           fi
           IS_FEATURE="${{ steps.commit.outputs.is_feature }}"
-          COMMIT_MSG="${{ steps.commit.outputs.message }}"
           if [ "$IS_FEATURE" = "true" ]; then
             NEW_COUNT=1
             NEW_VERSION="${YEAR}.${MONTH}.AB${NEW_COUNT}"
