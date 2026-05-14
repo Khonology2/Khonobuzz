@@ -167,12 +167,23 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Actions"
+          BRANCH="${GITHUB_REF#refs/heads/}"
           git add assets/data/version.json version.json
           if git diff --staged --quiet; then
             echo "No version change to commit"
           else
             git commit -m "chore: update version to ${{ steps.version.outputs.new_version }} [skip ci]"
-            git push
+            git fetch origin "$BRANCH"
+            if ! git pull --rebase origin "$BRANCH"; then
+              echo "::error::Rebase onto origin/$BRANCH failed before push (resolve conflicts locally if this persists)"
+              exit 1
+            fi
+            if ! git push origin "$BRANCH"; then
+              echo "Push rejected; fetch, rebase once more, retry push"
+              git fetch origin "$BRANCH"
+              git pull --rebase origin "$BRANCH" || exit 1
+              git push origin "$BRANCH" || exit 1
+            fi
           fi
 
       - name: Summary
@@ -225,13 +236,22 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          BRANCH="${GITHUB_REF#refs/heads/}"
           git add assets/data/version.json version.json 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "No version file changes"
           else
             V=$(jq -r '.version' assets/data/version.json)
             git commit -m "chore: sync version.json ($V) [skip ci]"
-            git push
+            git fetch origin "$BRANCH"
+            if ! git pull --rebase origin "$BRANCH"; then
+              git pull --ff-only origin "$BRANCH" || exit 1
+            fi
+            if ! git push origin "$BRANCH"; then
+              git fetch origin "$BRANCH"
+              git pull --rebase origin "$BRANCH" || exit 1
+              git push origin "$BRANCH" || exit 1
+            fi
           fi
 
   generate-daily-commits:
@@ -276,12 +296,21 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          BRANCH="${GITHUB_REF#refs/heads/}"
           git add assets/data/daily-commits.json
           if git diff --staged --quiet; then
             echo "No changes to daily-commits.json"
           else
             git commit -m "Update daily commits data [${{ steps.gen.outputs.today }}] [skip ci]"
-            git push
+            git fetch origin "$BRANCH"
+            if ! git pull --rebase origin "$BRANCH"; then
+              git pull --ff-only origin "$BRANCH" || exit 1
+            fi
+            if ! git push origin "$BRANCH"; then
+              git fetch origin "$BRANCH"
+              git pull --rebase origin "$BRANCH" || exit 1
+              git push origin "$BRANCH" || exit 1
+            fi
           fi
 
   version-api:
