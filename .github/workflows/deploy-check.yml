@@ -141,7 +141,12 @@ jobs:
           fi
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "new_count=$NEW_COUNT" >> $GITHUB_OUTPUT
-          echo "last_feature=$NEW_LAST_FEATURE" >> $GITHUB_OUTPUT
+          FEAT_OUT_DELIM="FEAT_OUT_${GITHUB_RUN_ID:-run}_${GITHUB_RUN_ATTEMPT:-1}"
+          {
+            echo "last_feature<<$FEAT_OUT_DELIM"
+            echo "$NEW_LAST_FEATURE"
+            echo "$FEAT_OUT_DELIM"
+          } >> $GITHUB_OUTPUT
           echo "feature_date=$NEW_FEATURE_DATE" >> $GITHUB_OUTPUT
 
       - name: Write version.json
