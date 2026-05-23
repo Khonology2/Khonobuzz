@@ -8,10 +8,15 @@ import 'env.dart';
 /// Loads Sentry DSN from compile-time `--dart-define` or, on web,
 /// `sentry-config.json` written by CI into `build/web/`.
 Future<String> resolveSentryDsn() async {
-  final compileTimeDsn = compileTimeSentryDsn;
-  if (compileTimeDsn.isNotEmpty) {
-    setRuntimeSentryDsn(compileTimeDsn);
-    return compileTimeDsn;
+  final normalizedCompile = normalizeSentryDsn(compileTimeSentryDsn);
+  if (normalizedCompile != null) {
+    setRuntimeSentryDsn(normalizedCompile);
+    return normalizedCompile;
+  }
+  if (compileTimeSentryDsn.isNotEmpty) {
+    debugPrint(
+      '[Sentry] Ignoring invalid compile-time DSN: $compileTimeSentryDsn',
+    );
   }
 
   if (!kIsWeb) {
@@ -36,13 +41,14 @@ Future<String> resolveSentryDsn() async {
     }
 
     final dsn = (json['dsn'] as String?)?.trim() ?? '';
-    if (dsn.isEmpty) {
+    final normalized = normalizeSentryDsn(dsn);
+    if (normalized == null) {
       return '';
     }
 
-    setRuntimeSentryDsn(dsn);
+    setRuntimeSentryDsn(normalized);
     debugPrint('[Sentry] Loaded DSN from sentry-config.json');
-    return dsn;
+    return normalized;
   } catch (e) {
     debugPrint('[Sentry] Could not load sentry-config.json: $e');
     return '';

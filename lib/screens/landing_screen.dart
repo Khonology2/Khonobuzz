@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:sentry_flutter/sentry_flutter.dart';
-import '../config/env.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_mode_provider.dart';
@@ -120,51 +118,9 @@ class _LandingScreenState extends State<LandingScreen> {
               left: 16,
               bottom: 16,
               child: SafeArea(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Semantics(
-                      label: 'Test Sentry error',
-                      button: true,
-                      child: OutlinedButton.icon(
-                        onPressed: _sendSentryTestError,
-                        icon: Icon(
-                          sentryEnabled
-                              ? Icons.bug_report_outlined
-                              : Icons.bug_report,
-                          size: 18,
-                        ),
-                        label: Text(
-                          sentryEnabled
-                              ? 'Test Sentry Error'
-                              : 'Sentry Off (no DSN)',
-                          style: const TextStyle(fontFamily: 'Poppins'),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor:
-                              isLight ? Colors.black87 : Colors.white70,
-                          side: BorderSide(
-                            color: isLight ? Colors.black26 : Colors.white38,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _sentryStatusLabel(),
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11,
-                        color: isLight ? Colors.black45 : Colors.white54,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    VersionControlWidget(
-                      textColor: isLight ? Colors.black54 : Colors.white70,
-                      hoverColor: isLight ? Colors.black : Colors.white,
-                    ),
-                  ],
+                child: VersionControlWidget(
+                  textColor: isLight ? Colors.black54 : Colors.white70,
+                  hoverColor: isLight ? Colors.black : Colors.white,
                 ),
               ),
             ),
@@ -245,56 +201,6 @@ class _LandingScreenState extends State<LandingScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  String _sentryStatusLabel() {
-    if (!sentryEnabled) {
-      return 'Sentry: off — set FRONTEND_DSN in CI or run with --dart-define';
-    }
-    return 'Sentry: on · $sentryEnvironment · $sentryRelease';
-  }
-
-  Future<void> _sendSentryTestError() async {
-    if (!sentryEnabled) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Sentry is off. Add FRONTEND_DSN to GitHub secrets and redeploy, '
-            'or run locally with --dart-define=FRONTEND_DSN=your-dsn',
-            style: TextStyle(fontFamily: 'Poppins'),
-          ),
-          duration: Duration(seconds: 6),
-        ),
-      );
-      return;
-    }
-
-    final testError = StateError(
-      'KhonoBuzz landing screen Sentry test error (${DateTime.now().toUtc().toIso8601String()})',
-    );
-    debugPrint('[LandingScreen] Sending Sentry test error');
-    final eventId = await Sentry.captureException(
-      testError,
-      stackTrace: StackTrace.current,
-      hint: Hint.withMap({
-        'source': 'landing_screen_test_button',
-        'release': sentryRelease,
-        'environment': sentryEnvironment,
-      }),
-    );
-    // Give the web SDK time to POST to ingest before the snackbar dismisses.
-    await Future<void>.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Sent to Sentry ($sentryEnvironment) · event ${eventId.toString()}',
-          style: const TextStyle(fontFamily: 'Poppins'),
-        ),
-        duration: const Duration(seconds: 5),
       ),
     );
   }

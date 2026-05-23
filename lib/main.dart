@@ -120,55 +120,62 @@ Future<void> main() async {
     '[Sentry] Enabled env=$sentryEnvironment release=$sentryRelease',
   );
 
-  await SentryFlutter.init(
-    (options) {
-      options.dsn = sentryDsn;
-      options.environment = sentryEnvironment;
-      options.tracesSampleRate = sentryTracesSampleRate;
-      options.sendDefaultPii = true;
-      options.attachStacktrace = true;
-      options.enableAutoSessionTracking = true;
-      options.debug = kDebugMode;
-      // Release tracking — ties errors to a specific git commit/deploy.
-      options.release = sentryRelease;
-      options.autoAppStart = true;
+  try {
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = sentryDsn;
+        options.environment = sentryEnvironment;
+        options.tracesSampleRate = sentryTracesSampleRate;
+        options.sendDefaultPii = true;
+        options.attachStacktrace = true;
+        options.enableAutoSessionTracking = true;
+        options.debug = kDebugMode;
+        // Release tracking — ties errors to a specific git commit/deploy.
+        options.release = sentryRelease;
+        options.autoAppStart = true;
 
-      // Performance — Flutter frame rendering, screen load times,
-      // user interaction response times.
-      options.enableAutoPerformanceTracing = true;
-      options.enableUserInteractionTracing = true;
-      options.enableTimeToFullDisplayTracing = true;
+        // Performance — Flutter frame rendering, screen load times,
+        // user interaction response times.
+        options.enableAutoPerformanceTracing = true;
+        options.enableUserInteractionTracing = true;
+        options.enableTimeToFullDisplayTracing = true;
 
-      // Session Replay — records what the user was doing when an error hit.
-      // Replay is under options.experimental until a stable SDK release.
-      _configureSentryReplay(options);
-    },
-    appRunner: () {
-      // Flutter framework errors (widget build failures, rendering errors).
-      FlutterError.onError = (FlutterErrorDetails details) {
-        if (sentryEnabled) {
-          Sentry.captureException(
-            details.exception,
-            stackTrace: details.stack,
-            hint: Hint.withMap({
-              'flutter_error_details': details.toString(),
-            }),
-          );
-        }
-        FlutterError.presentError(details);
-      };
+        // Session Replay — records what the user was doing when an error hit.
+        // Replay is under options.experimental until a stable SDK release.
+        _configureSentryReplay(options);
+      },
+      appRunner: () {
+        // Flutter framework errors (widget build failures, rendering errors).
+        FlutterError.onError = (FlutterErrorDetails details) {
+          if (sentryEnabled) {
+            Sentry.captureException(
+              details.exception,
+              stackTrace: details.stack,
+              hint: Hint.withMap({
+                'flutter_error_details': details.toString(),
+              }),
+            );
+          }
+          FlutterError.presentError(details);
+        };
 
-      // Dart isolate errors that Flutter cannot catch via FlutterError.
-      PlatformDispatcher.instance.onError = (error, stack) {
-        if (sentryEnabled) {
-          Sentry.captureException(error, stackTrace: stack);
-        }
-        return true;
-      };
+        // Dart isolate errors that Flutter cannot catch via FlutterError.
+        PlatformDispatcher.instance.onError = (error, stack) {
+          if (sentryEnabled) {
+            Sentry.captureException(error, stackTrace: stack);
+          }
+          return true;
+        };
 
-      unawaited(_runApp(initialThemeMode: initialThemeMode));
-    },
-  );
+        unawaited(_runApp(initialThemeMode: initialThemeMode));
+      },
+    );
+  } catch (e, stack) {
+    debugPrint('[Sentry] Init failed — starting app without Sentry: $e');
+    debugPrint('$stack');
+    setRuntimeSentryDsn('');
+    await _runApp(initialThemeMode: initialThemeMode);
+  }
 }
 
 Future<void> _runApp({required ThemeMode initialThemeMode}) async {
