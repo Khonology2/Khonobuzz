@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../config/env.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
@@ -124,14 +125,24 @@ class _LandingScreenState extends State<LandingScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (kDebugMode && sentryEnabled) ...[
-                      ElevatedButton(
-                        onPressed: () {
-                          throw StateError('This is test exception');
-                        },
-                        child: const Text(
-                          'Verify Sentry Setup',
-                          style: TextStyle(fontFamily: 'Poppins'),
+                    if (sentryEnabled) ...[
+                      Semantics(
+                        label: 'Test Sentry error',
+                        button: true,
+                        child: OutlinedButton.icon(
+                          onPressed: _sendSentryTestError,
+                          icon: const Icon(Icons.bug_report_outlined, size: 18),
+                          label: const Text(
+                            'Test Sentry Error',
+                            style: TextStyle(fontFamily: 'Poppins'),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor:
+                                isLight ? Colors.black87 : Colors.white70,
+                            side: BorderSide(
+                              color: isLight ? Colors.black26 : Colors.white38,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -221,6 +232,34 @@ class _LandingScreenState extends State<LandingScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Future<void> _sendSentryTestError() async {
+    final testError = StateError(
+      'KhonoBuzz landing screen Sentry test error (${DateTime.now().toUtc().toIso8601String()})',
+    );
+    debugPrint('[LandingScreen] Sending Sentry test error');
+    await Sentry.captureException(
+      testError,
+      stackTrace: StackTrace.current,
+      hint: Hint.withMap({
+        'source': 'landing_screen_test_button',
+        'release': sentryRelease,
+        'environment': sentryEnvironment,
+      }),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          kDebugMode
+              ? 'Test error sent to Sentry ($sentryEnvironment)'
+              : 'Test error sent to Sentry — check your Sentry dashboard',
+          style: const TextStyle(fontFamily: 'Poppins'),
+        ),
+        duration: const Duration(seconds: 4),
       ),
     );
   }
