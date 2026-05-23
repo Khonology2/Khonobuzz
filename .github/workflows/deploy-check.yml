@@ -29,6 +29,7 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   version-control:
@@ -505,6 +506,9 @@ jobs:
     name: Flutter CI, web build, Render deploy
     needs: [version-monitor]
     runs-on: ubuntu-latest
+    outputs:
+      frontend_changed: ${{ steps.changes.outputs.frontend_changed }}
+      backend_changed: ${{ steps.changes.outputs.backend_changed }}
     env:
       FRONTEND_DSN: ${{ secrets['FRONTEND_DSN'] }}
       SENTRY_ENVIRONMENT: ${{ secrets['SENTRY_ENVIRONMENT'] }}
@@ -663,3 +667,34 @@ jobs:
           echo "- **Branch:** ${{ steps.branch.outputs.name }} at \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Frontend deploy hook triggered:** ${{ steps.changes.outputs.frontend_changed }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Backend deploy hook triggered:** ${{ steps.changes.outputs.backend_changed }}" >> "$GITHUB_STEP_SUMMARY"
+
+  open-release-pr:
+    name: Open release PR to main
+    needs: [checks-build-deploy]
+    if: |
+      needs.checks-build-deploy.result == 'success' &&
+      (github.ref == 'refs/heads/khono_v4' || github.ref == 'refs/heads/khono-v4') &&
+      github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Open khono_v4 → main PR (manual merge only)
+        uses: ./.github/actions/open-release-pr
+        with:
+          deploy_check_run_id: ${{ github.run_id }}
+          frontend_changed: ${{ needs.checks-build-deploy.outputs.frontend_changed }}
+          backend_changed: ${{ needs.checks-build-deploy.outputs.backend_changed }}
+
+      - name: Release PR summary
+        if: always()
+        run: |
+          {
+            echo "## Release PR"
+            echo "- **Integration branch:** khono_v4"
+            echo "- **Target:** main (manual merge only)"
+            echo "- **deploy-check run:** ${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"

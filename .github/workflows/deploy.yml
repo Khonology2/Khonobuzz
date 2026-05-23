@@ -5,7 +5,8 @@
 #   2. deploy-khono-v4 runs immediately after merge (same workflow run)
 #      — also runs on direct pushes to khono_v4
 #      — triggers deploy-check (version/build pipeline), then Render hooks
-#   3. After deploy hooks → open PR khono_v4 → main (never auto-merged)
+#   3. deploy-check on khono_v4 deploys to Render, then opens PR khono_v4 → main
+#      (deploy.yml also opens the PR as a fallback after deploy-check succeeds)
 #
 # Required GitHub Actions secrets:
 #   FRONTEND_DSN                  — Flutter Sentry DSN
@@ -229,6 +230,9 @@ jobs:
       - name: Detect changes for release PR summary
         id: changes
         run: |
+          git fetch origin khono_v4 main
+          AHEAD=$(git rev-list --count origin/main..origin/khono_v4 || echo 0)
+          echo "ahead_of_main=$AHEAD" >> "$GITHUB_OUTPUT"
           git fetch origin khono_v4
           git checkout khono_v4
           git pull origin khono_v4 --rebase
@@ -255,66 +259,16 @@ jobs:
           fi
 
       - name: Open PR khono_v4 → main (manual merge only — never auto-merged)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          INTEGRATION_BRANCH: ${{ env.INTEGRATION_BRANCH }}
-          PRODUCTION_BRANCH: ${{ env.PRODUCTION_BRANCH }}
-          PR_ASSIGNEES: Nathi66,tebza176
-        run: |
-          assign_release_pr() {
-            local pr_num="$1"
-            if gh pr edit "$pr_num" --add-assignee "$PR_ASSIGNEES" 2>/tmp/pr-assign.err; then
-              echo "Assigned $PR_ASSIGNEES to PR #$pr_num"
-            else
-              echo "::warning::Could not assign users to PR #$pr_num"
-              cat /tmp/pr-assign.err || true
-            fi
-          }
+        if: steps.changes.outputs.ahead_of_main != '0'
+        uses: ./.github/actions/open-release-pr
+        with:
+          deploy_check_run_id: ${{ steps.deploy_check.outputs.run_id }}
+          frontend_changed: ${{ steps.changes.outputs.frontend_changed }}
+          backend_changed: ${{ steps.changes.outputs.backend_changed }}
 
-          EXISTING=$(gh pr list \
-            --base "$PRODUCTION_BRANCH" \
-            --head "$INTEGRATION_BRANCH" \
-            --state open \
-            --json number,url \
-            --jq '.[0] // empty' 2>/dev/null || true)
-
-          if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ]; then
-            PR_NUM=$(echo "$EXISTING" | jq -r '.number')
-            PR_URL=$(echo "$EXISTING" | jq -r '.url')
-            assign_release_pr "$PR_NUM"
-            echo "Release PR #$PR_NUM already open — merge manually: $PR_URL"
-            exit 0
-          fi
-
-          BODY="deploy-check finished and Render hooks were triggered. Merge this PR manually on GitHub.
-
-          - Commit: $(git rev-parse HEAD)
-          - deploy-check run: ${{ steps.deploy_check.outputs.run_id }}
-          - Frontend deploy: ${{ steps.changes.outputs.frontend_changed }}
-          - Backend deploy: ${{ steps.changes.outputs.backend_changed }}
-          - Assignees: $PR_ASSIGNEES"
-
-          if gh pr create \
-            --base "$PRODUCTION_BRANCH" \
-            --head "$INTEGRATION_BRANCH" \
-            --title "Release: ${INTEGRATION_BRANCH} → ${PRODUCTION_BRANCH}" \
-            --body "$BODY" \
-            --assignee "$PR_ASSIGNEES" > /tmp/pr-create.out 2>&1; then
-            PR_NUM=$(gh pr list \
-              --base "$PRODUCTION_BRANCH" \
-              --head "$INTEGRATION_BRANCH" \
-              --state open \
-              --limit 1 \
-              --json number \
-              --jq '.[0].number')
-            echo "Opened release PR #$PR_NUM (manual merge required): $(cat /tmp/pr-create.out)"
-            assign_release_pr "$PR_NUM"
-            exit 0
-          fi
-
-          echo "::warning::Could not open PR automatically. Enable Settings → Actions → 'Allow GitHub Actions to create and approve pull requests', or open khono_v4 → main manually."
-          cat /tmp/pr-create.out || true
-          # Never run gh pr merge — manual merge only.
+      - name: Skip PR — khono_v4 not ahead of main
+        if: steps.changes.outputs.ahead_of_main == '0'
+        run: echo "khono_v4 has no commits ahead of main — release PR not needed"
 
       - name: Deploy summary
         if: always()
@@ -325,5 +279,5 @@ jobs:
             echo "- **deploy-check run:** ${{ steps.deploy_check.outputs.run_id }}"
             echo "- **Frontend deploy:** ${{ steps.changes.outputs.frontend_changed }}"
             echo "- **Backend deploy:** ${{ steps.changes.outputs.backend_changed }}"
-            echo "- **Release PR:** opened for manual merge into main (never auto-merged)"
+            echo "- **Release PR:** opened by deploy-check after successful deploy (manual merge into main)"
           } >> "$GITHUB_STEP_SUMMARY"
