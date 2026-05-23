@@ -1,0 +1,290 @@
+# KhonoBuzz integration & deploy pipeline
+#
+# Flow:
+#   1. Push to any feature branch → squash-integrate into khono_v4 via direct git push
+#   2. Push to khono_v4 → detect backend/frontend changes, build web, trigger Render hooks
+#   3. After deploy → open PR khono_v4 → main (manual merge only)
+#
+# Required GitHub Actions secrets:
+#   FRONTEND_DSN                  — Flutter Sentry DSN
+#   BACKEND_DSN                   — FastAPI Sentry DSN (also set on Render backend service)
+#   SENTRY_AUTH_TOKEN             — sentry.io auth token for source map uploads
+#   SENTRY_ORG                    — e.g. khonology-2w
+#   SENTRY_PROJECT_FRONTEND       — e.g. khonobuzz_frontend
+#   SENTRY_PROJECT_BACKEND        — e.g. khonobuzz-backend
+#   SENTRY_ENVIRONMENT            — e.g. production
+#   SENTRY_TRACES_SAMPLE_RATE     — e.g. 0.1
+#   SENTRY_PROFILES_SAMPLE_RATE   — e.g. 0.1  (backend profiling)
+#   SENTRY_REPLAY_SESSION_RATE    — e.g. 0.1  (Flutter session replay)
+#   SENTRY_REPLAY_ON_ERROR_RATE   — e.g. 1.0
+#   RENDER_DEPLOY_HOOK            — Render static site (frontend)
+#   RENDER_BACKEND_DEPLOY_HOOK    — Render web service (backend)
+#   Also enable: Settings → Actions → "Allow GitHub Actions to create and approve pull requests"
+#   (required for the khono_v4 → main release PR step)
+
+name: deploy
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: 'Branch to integrate into khono_v4 (workflow_dispatch only)'
+        required: false
+        default: ''
+
+concurrency:
+  group: deploy-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  INTEGRATION_BRANCH: khono_v4
+  PRODUCTION_BRANCH: main
+
+jobs:
+  merge-into-khono-v4:
+    name: Integrate branch into khono_v4
+    if: |
+      (github.event_name == 'workflow_dispatch' && inputs.source_branch != '') ||
+      (github.event_name == 'push' &&
+       github.ref != 'refs/heads/khono_v4' &&
+       github.ref != 'refs/heads/main' &&
+       !contains(github.event.head_commit.message || '', '[skip ci]'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve source branch
+        id: source
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BRANCH="${{ inputs.source_branch }}"
+          else
+            BRANCH="${{ github.ref_name }}"
+          fi
+          if [ "$BRANCH" = "${{ env.INTEGRATION_BRANCH }}" ] || [ "$BRANCH" = "${{ env.PRODUCTION_BRANCH }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        if: steps.source.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Squash-merge into khono_v4 (direct git, incoming wins on conflict)
+        if: steps.source.outputs.skip != 'true'
+        env:
+          SOURCE_BRANCH: ${{ steps.source.outputs.branch }}
+          INTEGRATION_BRANCH: ${{ env.INTEGRATION_BRANCH }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin "$INTEGRATION_BRANCH" "$SOURCE_BRANCH"
+          git checkout -B "$INTEGRATION_BRANCH" "origin/$INTEGRATION_BRANCH"
+
+          SOURCE_SHA=$(git rev-parse "origin/$SOURCE_BRANCH")
+          echo "Integrating ${SOURCE_BRANCH}@${SOURCE_SHA} into ${INTEGRATION_BRANCH}"
+
+          # Skip when khono_v4 already contains the source tip.
+          if git merge-base --is-ancestor "$SOURCE_SHA" HEAD; then
+            echo "Source branch is already integrated into ${INTEGRATION_BRANCH}"
+            exit 0
+          fi
+
+          if ! git merge --squash "origin/$SOURCE_BRANCH" -X theirs; then
+            echo "Conflicts after -X theirs — forcing incoming (source branch) file versions"
+            git diff --name-only --diff-filter=U | while read -r file; do
+              [ -n "$file" ] || continue
+              git checkout --theirs -- "$file" || true
+              git add -- "$file"
+            done
+          fi
+
+          if git diff --cached --quiet; then
+            echo "No file changes to integrate from ${SOURCE_BRANCH}"
+            exit 0
+          fi
+
+          git commit -m "squash: integrate ${SOURCE_BRANCH} into ${INTEGRATION_BRANCH}
+
+          Source: ${SOURCE_SHA}
+          Automated integration — incoming branch wins on conflicts."
+
+          if ! git push origin "$INTEGRATION_BRANCH"; then
+            echo "Push rejected — rebasing onto latest ${INTEGRATION_BRANCH} and retrying"
+            git fetch origin "$INTEGRATION_BRANCH"
+            git rebase "origin/$INTEGRATION_BRANCH"
+            git push origin "$INTEGRATION_BRANCH"
+          fi
+
+          echo "Integrated ${SOURCE_BRANCH} into ${INTEGRATION_BRANCH}"
+
+  deploy-khono-v4:
+    name: Build, deploy, and open main PR
+    if: |
+      github.ref == 'refs/heads/khono_v4' &&
+      !contains(github.event.head_commit.message || '', '[skip ci]')
+    runs-on: ubuntu-latest
+    env:
+      FRONTEND_DSN: ${{ secrets['FRONTEND_DSN'] }}
+      SENTRY_ENVIRONMENT: ${{ secrets['SENTRY_ENVIRONMENT'] }}
+      SENTRY_TRACES_SAMPLE_RATE: ${{ secrets['SENTRY_TRACES_SAMPLE_RATE'] }}
+      SENTRY_REPLAY_SESSION_RATE: ${{ secrets['SENTRY_REPLAY_SESSION_RATE'] }}
+      SENTRY_REPLAY_ON_ERROR_RATE: ${{ secrets['SENTRY_REPLAY_ON_ERROR_RATE'] }}
+      SENTRY_AUTH_TOKEN: ${{ secrets['SENTRY_AUTH_TOKEN'] }}
+      SENTRY_ORG: ${{ secrets['SENTRY_ORG'] }}
+      SENTRY_PROJECT_FRONTEND: ${{ secrets['SENTRY_PROJECT_FRONTEND'] }}
+      RENDER_DEPLOY_HOOK: ${{ secrets['RENDER_DEPLOY_HOOK'] }}
+      RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets['RENDER_BACKEND_DEPLOY_HOOK'] }}
+    steps:
+      - name: Checkout khono_v4
+        uses: actions/checkout@v4
+        with:
+          ref: khono_v4
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Detect frontend/backend changes
+        id: changes
+        run: |
+          BEFORE_SHA="${{ github.event.before }}"
+          AFTER_SHA=$(git rev-parse HEAD)
+
+          if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE_SHA=$(git rev-parse HEAD~1 2>/dev/null) || BEFORE_SHA=""
+          fi
+
+          if [ -z "$BEFORE_SHA" ]; then
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED_FILES=$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" || true)
+          echo "Changed files since $BEFORE_SHA:"
+          echo "$CHANGED_FILES"
+
+          if echo "$CHANGED_FILES" | grep -Eq '^(lib/|web/|assets/|pubspec\.yaml|pubspec\.lock|\.github/workflows/|build/web/)'; then
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -Eq '^backend/'; then
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Flutter
+        if: steps.changes.outputs.frontend_changed == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter analyze & test
+        if: steps.changes.outputs.frontend_changed == 'true'
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - name: Build Flutter web with Sentry
+        if: steps.changes.outputs.frontend_changed == 'true'
+        uses: ./.github/actions/flutter-sentry-build
+        with:
+          github_sha: ${{ github.sha }}
+          include_traces_sample_rate: 'true'
+          frontend_dsn: ${{ env.FRONTEND_DSN }}
+          sentry_environment: ${{ env.SENTRY_ENVIRONMENT }}
+          sentry_traces_sample_rate: ${{ env.SENTRY_TRACES_SAMPLE_RATE }}
+          sentry_replay_session_rate: ${{ env.SENTRY_REPLAY_SESSION_RATE }}
+          sentry_replay_on_error_rate: ${{ env.SENTRY_REPLAY_ON_ERROR_RATE }}
+          sentry_auth_token: ${{ env.SENTRY_AUTH_TOKEN }}
+          sentry_org: ${{ env.SENTRY_ORG }}
+          sentry_project_frontend: ${{ env.SENTRY_PROJECT_FRONTEND }}
+
+      - name: Strip service worker & stamp build
+        if: steps.changes.outputs.frontend_changed == 'true'
+        run: |
+          python3 tool/strip_web_service_worker.py
+          mkdir -p build/web
+          SOURCE_SHA=$(git rev-parse HEAD)
+          printf '%s\n' "$SOURCE_SHA" > build/web/.ci-source-commit
+          printf '{"sha":"%s","run_id":"%s"}\n' "$SOURCE_SHA" "${GITHUB_RUN_ID}" > build/web/.ci-build-meta.json
+
+      - name: Commit build/web
+        if: steps.changes.outputs.frontend_changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build/web
+          if git diff --staged --quiet; then
+            echo "No build/web changes to commit"
+          else
+            git commit -m "chore: update Flutter web build [skip ci]"
+            git pull origin khono_v4 --rebase
+            git push origin khono_v4
+          fi
+
+      - name: Trigger Render deploy hooks
+        uses: ./.github/actions/render-deploy-hooks
+        with:
+          frontend_changed: ${{ steps.changes.outputs.frontend_changed }}
+          backend_changed: ${{ steps.changes.outputs.backend_changed }}
+          render_deploy_hook: ${{ env.RENDER_DEPLOY_HOOK }}
+          render_backend_deploy_hook: ${{ env.RENDER_BACKEND_DEPLOY_HOOK }}
+
+      - name: Open PR khono_v4 → main (manual merge)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INTEGRATION_BRANCH: ${{ env.INTEGRATION_BRANCH }}
+          PRODUCTION_BRANCH: ${{ env.PRODUCTION_BRANCH }}
+        run: |
+          EXISTING=$(gh pr list \
+            --base "$PRODUCTION_BRANCH" \
+            --head "$INTEGRATION_BRANCH" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty' 2>/dev/null || true)
+
+          if [ -n "$EXISTING" ]; then
+            echo "PR #$EXISTING already open ($INTEGRATION_BRANCH → $PRODUCTION_BRANCH)"
+            exit 0
+          fi
+
+          BODY="Integration branch \`${INTEGRATION_BRANCH}\` deployed to Render. Merge manually into \`${PRODUCTION_BRANCH}\` when ready. Commit: ${{ github.sha }}. Frontend: ${{ steps.changes.outputs.frontend_changed }}. Backend: ${{ steps.changes.outputs.backend_changed }}."
+
+          if gh pr create \
+            --base "$PRODUCTION_BRANCH" \
+            --head "$INTEGRATION_BRANCH" \
+            --title "Release: ${INTEGRATION_BRANCH} → ${PRODUCTION_BRANCH}" \
+            --body "$BODY"; then
+            echo "Opened release PR to ${PRODUCTION_BRANCH}"
+            exit 0
+          fi
+
+          echo "::warning::Could not open PR to ${PRODUCTION_BRANCH}. Enable Settings → Actions → 'Allow GitHub Actions to create and approve pull requests', then re-run this workflow or open the PR manually."
+          exit 0
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          {
+            echo "## deploy summary"
+            echo "- **Branch:** khono_v4 @ \`${{ github.sha }}\`"
+            echo "- **Frontend changed:** ${{ steps.changes.outputs.frontend_changed }}"
+            echo "- **Backend changed:** ${{ steps.changes.outputs.backend_changed }}"
+            echo "- **Main PR:** opened (manual merge only)"
+          } >> "$GITHUB_STEP_SUMMARY"

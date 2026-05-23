@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import '../models/managed_user.dart';
 import '../config/api_config.dart';
+import '../services/api_client.dart';
 
 class UserProvider extends ChangeNotifier {
   List<ManagedUser> _users = [];
@@ -77,7 +77,7 @@ class UserProvider extends ChangeNotifier {
     Exception? lastError;
     for (var attempt = 0; attempt <= retries; attempt++) {
       try {
-        final response = await http
+        final response = await apiClient
             .get(Uri.parse(ApiConfig.usersEndpoint))
             .timeout(
               timeout,

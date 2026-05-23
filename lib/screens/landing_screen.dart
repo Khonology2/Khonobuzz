@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/env.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_mode_provider.dart';
@@ -118,9 +120,27 @@ class _LandingScreenState extends State<LandingScreen> {
               left: 16,
               bottom: 16,
               child: SafeArea(
-                child: VersionControlWidget(
-                  textColor: isLight ? Colors.black54 : Colors.white70,
-                  hoverColor: isLight ? Colors.black : Colors.white,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (kDebugMode && sentryEnabled) ...[
+                      ElevatedButton(
+                        onPressed: () {
+                          throw StateError('This is test exception');
+                        },
+                        child: const Text(
+                          'Verify Sentry Setup',
+                          style: TextStyle(fontFamily: 'Poppins'),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    VersionControlWidget(
+                      textColor: isLight ? Colors.black54 : Colors.white70,
+                      hoverColor: isLight ? Colors.black : Colors.white,
+                    ),
+                  ],
                 ),
               ),
             ),

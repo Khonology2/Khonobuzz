@@ -15,6 +15,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from token_utils import generate_and_encrypt_token
+from sentry_setup import run_script
 
 # Test user: Sam Joe, Admin role for ARW
 USER_ID = "test-arw-sasa-zul-001"
@@ -22,7 +23,8 @@ EMAIL = "leo.cheng@khonology.com"
 FULL_NAME = "Leo Cheng"
 ROLES = ["ARW - Hiring Manager"]
 
-if __name__ == "__main__":
+
+def main() -> None:
     exp_hours = int(os.environ.get("JWT_EXPIRATION_HOURS", "24"))
     now = int(datetime.now(timezone.utc).timestamp())
     iat = now
@@ -46,3 +48,7 @@ if __name__ == "__main__":
     print("  roles:      %s" % ROLES)
     print("  iat:        %d  (issued at, Unix timestamp)" % iat)
     print("  exp:        %d  (expiration, Unix timestamp)" % exp)
+
+
+if __name__ == "__main__":
+    run_script(main, "generate_arw_test_token")

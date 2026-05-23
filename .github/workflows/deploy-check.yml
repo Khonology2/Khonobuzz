@@ -505,6 +505,16 @@ jobs:
     name: Flutter CI, web build, Render deploy
     needs: [version-monitor]
     runs-on: ubuntu-latest
+    env:
+      FRONTEND_DSN: ${{ secrets['FRONTEND_DSN'] }}
+      SENTRY_ENVIRONMENT: ${{ secrets['SENTRY_ENVIRONMENT'] }}
+      SENTRY_REPLAY_SESSION_RATE: ${{ secrets['SENTRY_REPLAY_SESSION_RATE'] }}
+      SENTRY_REPLAY_ON_ERROR_RATE: ${{ secrets['SENTRY_REPLAY_ON_ERROR_RATE'] }}
+      SENTRY_AUTH_TOKEN: ${{ secrets['SENTRY_AUTH_TOKEN'] }}
+      SENTRY_ORG: ${{ secrets['SENTRY_ORG'] }}
+      SENTRY_PROJECT_FRONTEND: ${{ secrets['SENTRY_PROJECT_FRONTEND'] }}
+      RENDER_DEPLOY_HOOK: ${{ secrets['RENDER_DEPLOY_HOOK'] }}
+      RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets['RENDER_BACKEND_DEPLOY_HOOK'] }}
     steps:
       - name: Resolve deploy branch eligibility
         id: branch
@@ -545,7 +555,16 @@ jobs:
 
       - name: Build web (for Render — not built on Render)
         if: steps.branch.outputs.deploy == 'true'
-        run: flutter build web --release --base-href /
+        uses: ./.github/actions/flutter-sentry-build
+        with:
+          github_sha: ${{ github.sha }}
+          frontend_dsn: ${{ env.FRONTEND_DSN }}
+          sentry_environment: ${{ env.SENTRY_ENVIRONMENT }}
+          sentry_replay_session_rate: ${{ env.SENTRY_REPLAY_SESSION_RATE }}
+          sentry_replay_on_error_rate: ${{ env.SENTRY_REPLAY_ON_ERROR_RATE }}
+          sentry_auth_token: ${{ env.SENTRY_AUTH_TOKEN }}
+          sentry_org: ${{ env.SENTRY_ORG }}
+          sentry_project_frontend: ${{ env.SENTRY_PROJECT_FRONTEND }}
 
       - name: Disable service worker in web bundle
         if: steps.branch.outputs.deploy == 'true'
@@ -628,27 +647,14 @@ jobs:
             echo "backend_changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Trigger Render frontend deploy hook
-        if: steps.branch.outputs.deploy == 'true' && steps.changes.outputs.frontend_changed == 'true'
-        env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
-        run: |
-          if [ -z "${RENDER_DEPLOY_HOOK}" ]; then
-            echo "::error::RENDER_DEPLOY_HOOK is not set"
-            exit 1
-          fi
-          curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
-
-      - name: Trigger Render backend deploy hook
-        if: steps.branch.outputs.deploy == 'true' && steps.changes.outputs.backend_changed == 'true'
-        env:
-          RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
-        run: |
-          if [ -z "${RENDER_BACKEND_DEPLOY_HOOK}" ]; then
-            echo "::error::RENDER_BACKEND_DEPLOY_HOOK is not set"
-            exit 1
-          fi
-          curl -fsS -X POST "$RENDER_BACKEND_DEPLOY_HOOK"
+      - name: Trigger Render deploy hooks
+        if: steps.branch.outputs.deploy == 'true'
+        uses: ./.github/actions/render-deploy-hooks
+        with:
+          frontend_changed: ${{ steps.changes.outputs.frontend_changed }}
+          backend_changed: ${{ steps.changes.outputs.backend_changed }}
+          render_deploy_hook: ${{ env.RENDER_DEPLOY_HOOK }}
+          render_backend_deploy_hook: ${{ env.RENDER_BACKEND_DEPLOY_HOOK }}
 
       - name: Deploy summary
         if: ${{ always() && steps.branch.outputs.deploy == 'true' }}

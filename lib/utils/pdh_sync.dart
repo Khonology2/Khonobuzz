@@ -1,14 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
+import '../services/api_client.dart';
 
 Future<void> updateOnboardingUserPartial(
   String uid,
   Map<String, dynamic> onboardingFields,
 ) async {
   try {
-    final response = await http.patch(
+    final response = await apiClient.patch(
       Uri.parse(ApiConfig.onboardingUpdateUserEndpoint(uid)),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -31,7 +31,7 @@ Future<void> syncUserToPDH(
   String uid,
 ) async {
   try {
-    final response = await http.post(
+    final response = await apiClient.post(
       Uri.parse(ApiConfig.pdhSyncUserEndpoint),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -56,7 +56,7 @@ Future<void> updatePDHUserPartial(
   Map<String, dynamic>? onboardingFields,
 }) async {
   try {
-    final response = await http.patch(
+    final response = await apiClient.patch(
       Uri.parse(ApiConfig.pdhUpdateUserEndpoint(uid)),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -80,7 +80,7 @@ Future<void> syncUserToSkillsHeatmap(
   String uid,
 ) async {
   try {
-    final response = await http.post(
+    final response = await apiClient.post(
       Uri.parse(ApiConfig.skillsHeatmapSyncUserEndpoint),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -111,7 +111,7 @@ Future<void> updateSkillsHeatmapUserPartial(
   Map<String, dynamic>? onboardingFields,
 }) async {
   try {
-    final response = await http.patch(
+    final response = await apiClient.patch(
       Uri.parse(ApiConfig.skillsHeatmapUpdateUserEndpoint(uid)),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
