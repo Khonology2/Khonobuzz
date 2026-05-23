@@ -1,7 +1,7 @@
 # KhonoBuzz integration & deploy pipeline
 #
 # Flow:
-#   1. Push to any feature branch → squash-integrate into khono_v4 (incoming wins on conflicts)
+#   1. Push to any feature branch → squash-integrate into khono_v4 via direct git push
 #   2. Push to khono_v4 → detect backend/frontend changes, build web, trigger Render hooks
 #   3. After deploy → open PR khono_v4 → main (manual merge only)
 #
@@ -19,6 +19,8 @@
 #   SENTRY_REPLAY_ON_ERROR_RATE   — e.g. 1.0
 #   RENDER_DEPLOY_HOOK            — Render static site (frontend)
 #   RENDER_BACKEND_DEPLOY_HOOK    — Render web service (backend)
+#   Also enable: Settings → Actions → "Allow GitHub Actions to create and approve pull requests"
+#   (required for the khono_v4 → main release PR step)
 
 name: deploy
 
@@ -76,77 +78,56 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Squash-merge into khono_v4 (PR first, incoming wins on conflict)
+      - name: Squash-merge into khono_v4 (direct git, incoming wins on conflict)
         if: steps.source.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SOURCE_BRANCH: ${{ steps.source.outputs.branch }}
           INTEGRATION_BRANCH: ${{ env.INTEGRATION_BRANCH }}
         run: |
           set -euo pipefail
 
-          git fetch origin "$INTEGRATION_BRANCH" "$SOURCE_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Ensure integration branch exists locally
+          git fetch origin "$INTEGRATION_BRANCH" "$SOURCE_BRANCH"
           git checkout -B "$INTEGRATION_BRANCH" "origin/$INTEGRATION_BRANCH"
 
-          PR_NUMBER=""
-          EXISTING_PR=$(gh pr list \
-            --base "$INTEGRATION_BRANCH" \
-            --head "$SOURCE_BRANCH" \
-            --state open \
-            --json number \
-            --jq '.[0].number // empty')
+          SOURCE_SHA=$(git rev-parse "origin/$SOURCE_BRANCH")
+          echo "Integrating ${SOURCE_BRANCH}@${SOURCE_SHA} into ${INTEGRATION_BRANCH}"
 
-          if [ -n "$EXISTING_PR" ]; then
-            PR_NUMBER="$EXISTING_PR"
-            echo "Reusing open PR #$PR_NUMBER ($SOURCE_BRANCH → $INTEGRATION_BRANCH)"
-          else
-            PR_NUMBER=$(gh pr create \
-              --base "$INTEGRATION_BRANCH" \
-              --head "$SOURCE_BRANCH" \
-              --title "deploy: integrate ${SOURCE_BRANCH} into ${INTEGRATION_BRANCH}" \
-              --body "Automated integration from \`${SOURCE_BRANCH}\` into \`${INTEGRATION_BRANCH}\`." \
-              | sed -n 's/.*\/pull\/\([0-9]*\).*/\1/p')
-            echo "Created PR #$PR_NUMBER"
+          # Skip when khono_v4 already contains the source tip.
+          if git merge-base --is-ancestor "$SOURCE_SHA" HEAD; then
+            echo "Source branch is already integrated into ${INTEGRATION_BRANCH}"
+            exit 0
           fi
 
-          MERGED=false
-          if gh pr merge "$PR_NUMBER" --squash --delete-branch=false 2>/tmp/pr-merge.err; then
-            MERGED=true
-            echo "Squash-merged PR #$PR_NUMBER via GitHub"
-          else
-            echo "PR squash merge failed — resolving with incoming (theirs) strategy"
-            cat /tmp/pr-merge.err || true
+          if ! git merge --squash "origin/$SOURCE_BRANCH" -X theirs; then
+            echo "Conflicts after -X theirs — forcing incoming (source branch) file versions"
+            git diff --name-only --diff-filter=U | while read -r file; do
+              [ -n "$file" ] || continue
+              git checkout --theirs -- "$file" || true
+              git add -- "$file"
+            done
           fi
 
-          if [ "$MERGED" = "false" ]; then
-            git fetch origin "$INTEGRATION_BRANCH" "$SOURCE_BRANCH"
-            git checkout "$INTEGRATION_BRANCH"
-            git reset --hard "origin/$INTEGRATION_BRANCH"
-
-            if ! git merge --squash "origin/$SOURCE_BRANCH" -X theirs; then
-              echo "Unresolved conflicts after -X theirs — forcing incoming file versions"
-              git diff --name-only --diff-filter=U | while read -r file; do
-                [ -n "$file" ] || continue
-                git checkout --theirs -- "$file" || true
-                git add -- "$file"
-              done
-            fi
-
-            if git diff --cached --quiet; then
-              echo "No changes to integrate from $SOURCE_BRANCH"
-            else
-              git commit -m "squash: integrate ${SOURCE_BRANCH} into ${INTEGRATION_BRANCH}
-
-            Automated conflict resolution: incoming branch wins."
-              git push origin "$INTEGRATION_BRANCH"
-            fi
-
-            if [ -n "$PR_NUMBER" ]; then
-              gh pr close "$PR_NUMBER" --comment "Closed: integrated via direct squash merge (incoming wins)." || true
-            fi
+          if git diff --cached --quiet; then
+            echo "No file changes to integrate from ${SOURCE_BRANCH}"
+            exit 0
           fi
+
+          git commit -m "squash: integrate ${SOURCE_BRANCH} into ${INTEGRATION_BRANCH}
+
+          Source: ${SOURCE_SHA}
+          Automated integration — incoming branch wins on conflicts."
+
+          if ! git push origin "$INTEGRATION_BRANCH"; then
+            echo "Push rejected — rebasing onto latest ${INTEGRATION_BRANCH} and retrying"
+            git fetch origin "$INTEGRATION_BRANCH"
+            git rebase "origin/$INTEGRATION_BRANCH"
+            git push origin "$INTEGRATION_BRANCH"
+          fi
+
+          echo "Integrated ${SOURCE_BRANCH} into ${INTEGRATION_BRANCH}"
 
   deploy-khono-v4:
     name: Build, deploy, and open main PR
@@ -271,13 +252,12 @@ jobs:
           INTEGRATION_BRANCH: ${{ env.INTEGRATION_BRANCH }}
           PRODUCTION_BRANCH: ${{ env.PRODUCTION_BRANCH }}
         run: |
-          set -euo pipefail
           EXISTING=$(gh pr list \
             --base "$PRODUCTION_BRANCH" \
             --head "$INTEGRATION_BRANCH" \
             --state open \
             --json number \
-            --jq '.[0].number // empty')
+            --jq '.[0].number // empty' 2>/dev/null || true)
 
           if [ -n "$EXISTING" ]; then
             echo "PR #$EXISTING already open ($INTEGRATION_BRANCH → $PRODUCTION_BRANCH)"
@@ -286,11 +266,17 @@ jobs:
 
           BODY="Integration branch \`${INTEGRATION_BRANCH}\` deployed to Render. Merge manually into \`${PRODUCTION_BRANCH}\` when ready. Commit: ${{ github.sha }}. Frontend: ${{ steps.changes.outputs.frontend_changed }}. Backend: ${{ steps.changes.outputs.backend_changed }}."
 
-          gh pr create \
+          if gh pr create \
             --base "$PRODUCTION_BRANCH" \
             --head "$INTEGRATION_BRANCH" \
             --title "Release: ${INTEGRATION_BRANCH} → ${PRODUCTION_BRANCH}" \
-            --body "$BODY"
+            --body "$BODY"; then
+            echo "Opened release PR to ${PRODUCTION_BRANCH}"
+            exit 0
+          fi
+
+          echo "::warning::Could not open PR to ${PRODUCTION_BRANCH}. Enable Settings → Actions → 'Allow GitHub Actions to create and approve pull requests', then re-run this workflow or open the PR manually."
+          exit 0
 
       - name: Deploy summary
         if: always()
