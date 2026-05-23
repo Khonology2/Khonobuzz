@@ -206,12 +206,17 @@ jobs:
             fi
 
             if [ -n "$RUN_ID" ] && [ "$STATUS" = "completed" ]; then
-              if [ "$CONCLUSION" = "success" ]; then
-                echo "deploy-check succeeded (run $RUN_ID)"
+              BUILD_CONCLUSION=$(gh run view "$RUN_ID" --json jobs --jq \
+                '[.jobs[] | select(.name == "Flutter CI, web build, Render deploy") | .conclusion][0] // empty')
+              if [ "$CONCLUSION" = "success" ] || [ "$BUILD_CONCLUSION" = "success" ]; then
+                if [ "$CONCLUSION" != "success" ] && [ "$BUILD_CONCLUSION" = "success" ]; then
+                  echo "::warning::deploy-check conclusion=$CONCLUSION but build/deploy job succeeded (e.g. release PR step failed)"
+                fi
+                echo "deploy-check build/deploy succeeded (run $RUN_ID)"
                 echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-              echo "::error::deploy-check failed (run $RUN_ID, conclusion=$CONCLUSION)"
+              echo "::error::deploy-check failed (run $RUN_ID, conclusion=$CONCLUSION, build=$BUILD_CONCLUSION)"
               gh run view "$RUN_ID" --log-failed || true
               exit 1
             fi
@@ -260,6 +265,7 @@ jobs:
 
       - name: Open PR khono_v4 → main (manual merge only — never auto-merged)
         if: steps.changes.outputs.ahead_of_main != '0'
+        continue-on-error: true
         uses: ./.github/actions/open-release-pr
         with:
           deploy_check_run_id: ${{ steps.deploy_check.outputs.run_id }}

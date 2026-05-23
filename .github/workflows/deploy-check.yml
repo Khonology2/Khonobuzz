@@ -7,6 +7,7 @@
 # 6) checks-build-deploy — Flutter analyze/test, web build, commit build/web, Render hook
 #
 # Render: Static Site with pre-built build/web. Secrets: RENDER_DEPLOY_HOOK
+# Release PR: enable Settings → Actions → "Allow GitHub Actions to create and approve pull requests"
 
 name: deploy-check
 
@@ -676,6 +677,8 @@ jobs:
       (github.ref == 'refs/heads/khono_v4' || github.ref == 'refs/heads/khono-v4') &&
       github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    # PR creation can fail when repo settings block GITHUB_TOKEN — do not fail deploy.
+    continue-on-error: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
