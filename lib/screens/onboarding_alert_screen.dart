@@ -9,6 +9,10 @@ import '../models/managed_user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import '../services/sound_system.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
 
 enum OnboardingAlertStage { pendingApproval, assignmentsNeeded }
 
@@ -57,7 +61,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
     if (fullName.isNotEmpty) {
       return fullName;
     }
-    return user.name;
+    return user.displayName;
   }
 
   Future<void> _approveUser(ManagedUser user) async {
@@ -108,7 +112,49 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
         final backendUser = decoded?['user'] as Map<String, dynamic>?;
         if (backendUser != null) {
-          updatedUser = ManagedUser.fromApi(backendUser);
+          final parsed = ManagedUser.fromApi(backendUser);
+          updatedUser = parsed.copyWith(
+            firstName: parsed.firstName.isNotEmpty
+                ? parsed.firstName
+                : user.firstName,
+            lastName: parsed.lastName.isNotEmpty
+                ? parsed.lastName
+                : user.lastName,
+            email: parsed.email.isNotEmpty ? parsed.email : user.email,
+            department: parsed.department.isNotEmpty
+                ? parsed.department
+                : user.department,
+            designation: parsed.designation.isNotEmpty
+                ? parsed.designation
+                : user.designation,
+            role: parsed.role.isNotEmpty ? parsed.role : user.role,
+            status: parsed.status.isNotEmpty ? parsed.status : 'Active',
+            entity: (parsed.entity ?? '').trim().isNotEmpty
+                ? parsed.entity
+                : user.entity,
+            manager: (parsed.manager ?? '').trim().isNotEmpty
+                ? parsed.manager
+                : user.manager,
+            moduleAccess: (parsed.moduleAccess ?? '').trim().isNotEmpty
+                ? parsed.moduleAccess
+                : user.moduleAccess,
+            moduleRole: (parsed.moduleRole ?? '').trim().isNotEmpty
+                ? parsed.moduleRole
+                : user.moduleRole,
+            moduleAccessRole: (parsed.moduleAccessRole ?? '').trim().isNotEmpty
+                ? parsed.moduleAccessRole
+                : user.moduleAccessRole,
+            phoneNumber: (parsed.phoneNumber ?? '').trim().isNotEmpty
+                ? parsed.phoneNumber
+                : user.phoneNumber,
+            profilePictureUrl: (parsed.profilePictureUrl ?? '').trim().isNotEmpty
+                ? parsed.profilePictureUrl
+                : user.profilePictureUrl,
+            createdAt: parsed.createdAt ?? user.createdAt,
+            updatedAt: parsed.updatedAt ?? DateTime.now(),
+            lastSignInAt: parsed.lastSignInAt ?? user.lastSignInAt,
+            loginCount: parsed.loginCount > 0 ? parsed.loginCount : user.loginCount,
+          );
         }
       } catch (_) {
         updatedUser = null;
@@ -130,9 +176,12 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
         SnackBar(
           content: Text(
             'User approved for $fullName. Assign module access and entity next.',
-            style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: appTextColor(context),
+            ),
           ),
-          backgroundColor: const Color(0xFFC10D00),
+          backgroundColor: AppThemes.light.primaryColor,
         ),
       );
     } catch (e) {
@@ -140,7 +189,10 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
         SnackBar(
           content: Text(
             'Failed to approve user. Please try again.',
-            style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: appTextColor(context),
+            ),
           ),
           backgroundColor: Colors.red.shade700,
         ),
@@ -156,6 +208,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<ThemeModeProvider>();
     final stage = _stage;
     final users = _displayUsers;
 
@@ -186,13 +239,15 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
           children: [
             Positioned.fill(
               child: Image.asset(
-                'assets/images/nathi_bg.png',
+                appBackgroundAsset(context),
                 fit: BoxFit.cover,
               ),
             ),
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A).withValues(alpha: 0.85),
+                color: Theme.of(context).brightness == Brightness.light
+                    ? Colors.white.withValues(alpha: 0.40)
+                    : const Color(0xFF1A1A1A).withValues(alpha: 0.85),
               ),
             ),
             Padding(
@@ -209,13 +264,13 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                             stage == OnboardingAlertStage.pendingApproval
                                 ? Icons.person_add
                                 : Icons.assignment,
-                            color: Colors.white,
+                            color: appTextColor(context),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             title,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: appTextColor(context),
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                               fontFamily: 'Poppins',
@@ -223,12 +278,21 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                           ),
                         ],
                       ),
-                      IconButton(
-                        onPressed: () {
-                          SoundSystem.playButtonClick();
-                          widget.onClose();
-                        },
-                        icon: const Icon(Icons.close, color: Colors.white70),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: () {
+                              SoundSystem.playButtonClick();
+                              widget.onClose();
+                            },
+                            icon: Icon(
+                              Icons.close,
+                              color: appTextColor(context)
+                                  .withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -237,8 +301,8 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                     stage == OnboardingAlertStage.pendingApproval
                         ? 'Review and approve new onboarded users so they can access the app.'
                         : 'These users are active but still need module access and entity assignments.',
-                    style: const TextStyle(
-                      color: Colors.white70,
+                    style: TextStyle(
+                      color: appTextColor(context).withValues(alpha: 0.72),
                       fontSize: 12,
                       fontFamily: 'Poppins',
                     ),
@@ -261,7 +325,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                               color:
                                   stage == OnboardingAlertStage.pendingApproval
                                   ? Colors.orangeAccent
-                                  : const Color(0xFFC10D00),
+                                  : AppThemes.light.primaryColor,
                             ),
                           ),
                           child: Column(
@@ -274,8 +338,8 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                                   Expanded(
                                     child: Text(
                                       fullName,
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                      style: TextStyle(
+                                        color: appTextColor(context),
                                         fontSize: 14,
                                         fontWeight: FontWeight.bold,
                                         fontFamily: 'Poppins',
@@ -301,7 +365,7 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                                       stage ==
                                               OnboardingAlertStage
                                                   .pendingApproval
-                                          ? 'Pending'
+                                          ? 'Inactive'
                                           : 'Active',
                                       style: const TextStyle(
                                         color: Colors.white,
@@ -315,8 +379,9 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                               const SizedBox(height: 4),
                               Text(
                                 user.email,
-                                style: const TextStyle(
-                                  color: Colors.white70,
+                                style: TextStyle(
+                                  color: appTextColor(context)
+                                      .withValues(alpha: 0.72),
                                   fontSize: 12,
                                   fontFamily: 'Poppins',
                                 ),
@@ -327,8 +392,9 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                                   Expanded(
                                     child: Text(
                                       user.department,
-                                      style: const TextStyle(
-                                        color: Colors.white60,
+                                      style: TextStyle(
+                                        color: appTextColor(context)
+                                            .withValues(alpha: 0.62),
                                         fontSize: 12,
                                         fontFamily: 'Poppins',
                                       ),
@@ -339,8 +405,9 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                                     child: Text(
                                       user.designation,
                                       textAlign: TextAlign.end,
-                                      style: const TextStyle(
-                                        color: Colors.white60,
+                                      style: TextStyle(
+                                        color: appTextColor(context)
+                                            .withValues(alpha: 0.62),
                                         fontSize: 12,
                                         fontFamily: 'Poppins',
                                       ),
@@ -361,18 +428,19 @@ class _OnboardingAlertPanelState extends State<OnboardingAlertPanel> {
                                             _approveUser(user);
                                           },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFC10D00),
-                                      foregroundColor: Colors.white,
+                                      backgroundColor:
+                                          AppThemes.light.primaryColor,
+                                      foregroundColor: appTextColor(context),
                                     ),
                                     child: _processingUserId == user.id
-                                        ? const SizedBox(
+                                        ? SizedBox(
                                             width: 16,
                                             height: 16,
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2,
                                               valueColor:
                                                   AlwaysStoppedAnimation<Color>(
-                                                    Colors.white,
+                                                    appTextColor(context),
                                                   ),
                                             ),
                                           )

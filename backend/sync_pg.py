@@ -1,10 +1,17 @@
 from __future__ import annotations
-import traceback
+import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
 
 from database import engine, SessionLocal, Base
 from models_pg import PGUser, PGOnboarding
+
+try:
+    from .sentry_setup import report_exception
+except ImportError:
+    from sentry_setup import report_exception
+
+logger = logging.getLogger(__name__)
 
 
 def ensure_pg_schema() -> None:
@@ -14,7 +21,8 @@ def ensure_pg_schema() -> None:
     try:
         Base.metadata.create_all(bind=engine)
     except Exception as e:
-        print(f"[ERROR] Failed to create PostgreSQL schema: {e}\n{traceback.format_exc()}")
+        logger.exception("Failed to create PostgreSQL schema: %s", e)
+        report_exception(e, context={"operation": "ensure_pg_schema"})
 
 
 def _safe_get(d: Optional[Dict[str, Any]], key: str, default=None):
@@ -91,7 +99,8 @@ def sync_user_to_postgres(uid: str, user_data: Optional[Dict[str, Any]], onboard
         db.commit()
     except Exception as e:
         db.rollback()
-        print(f"[ERROR] Failed to sync user {uid} to PostgreSQL: {e}\n{traceback.format_exc()}")
+        logger.exception("Failed to sync user %s to PostgreSQL: %s", uid, e)
+        report_exception(e, context={"uid": uid, "operation": "sync_user_to_postgres"})
     finally:
         db.close()
 
@@ -110,6 +119,7 @@ def delete_user_from_postgres(uid: str) -> None:
         db.commit()
     except Exception as e:
         db.rollback()
-        print(f"[WARNING] Failed to delete user {uid} from PostgreSQL: {e}")
+        logger.warning("Failed to delete user %s from PostgreSQL: %s", uid, e, exc_info=True)
+        report_exception(e, context={"uid": uid, "operation": "delete_user_from_postgres"}, level="warning")
     finally:
         db.close()

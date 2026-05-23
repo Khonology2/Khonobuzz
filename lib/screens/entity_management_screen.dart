@@ -1,3 +1,5 @@
+// ignore_for_file: unused_import
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -6,12 +8,17 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../models/managed_user.dart';
-import '../utils/pdh_firebase.dart'
+import '../utils/pdh_sync.dart'
     show updatePDHUserPartial, updateSkillsHeatmapUserPartial;
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/sound_system.dart';
+import '../services/admin_alert_service.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
 
 class EntityManagementScreen extends StatefulWidget {
   const EntityManagementScreen({super.key});
@@ -25,11 +32,44 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<String> _entityOptions = ['Khonology Internal'];
   static const String _notAssignedValue = 'Not Assigned';
+  static final Color entityDarkWidgetBg = Color.alphaBlend(
+    Colors.white.withValues(alpha: 0.10),
+    const Color(0xFF3D3F40).withValues(alpha: 0.40),
+  );
 
   String? expandedUserId;
   String? _updatingUserId;
+  String? _hoveredUserId;
   Timer? _debounceTimer;
   String _searchQuery = '';
+
+  Future<void> _publishAdminAlert({
+    required String title,
+    required String message,
+    Map<String, dynamic> details = const {},
+    bool requiresAck = false,
+  }) async {
+    final authProvider = context.read<AuthProvider>();
+    if ((authProvider.userRole ?? '').toLowerCase() != 'admin') {
+      return;
+    }
+    final actorEmail = (authProvider.userEmail ?? '').trim();
+    if (actorEmail.isEmpty) {
+      return;
+    }
+    try {
+      await AdminAlertService.publishAdminChange(
+        actorEmail: actorEmail,
+        title: title,
+        message: message,
+        area: 'entity_management',
+        details: details,
+        requiresAck: requiresAck,
+      );
+    } catch (e) {
+      debugPrint('[EntityManagement] alert publish failed: $e');
+    }
+  }
 
   Map<String, Color> get userStatusColors => {
     'Active': Colors.green.shade600,
@@ -51,7 +91,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     if (query.isEmpty) return users;
 
     return users.where((user) {
-      return user.name.toLowerCase().contains(query) ||
+      return user.displayName.toLowerCase().contains(query) ||
           user.email.toLowerCase().contains(query) ||
           user.department.toLowerCase().contains(query) ||
           user.designation.toLowerCase().contains(query) ||
@@ -64,11 +104,12 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     super.initState();
     final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-    userProvider.fetchUsers();
+    userProvider.fetchUsers(forceRefresh: true);
 
     if (userProvider.hasCachedData) {
       userProvider.refreshUsersInBackground();
     }
+    unawaited(_loadEntityOptions());
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -81,6 +122,172 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         });
       }
     });
+  }
+
+  Future<void> _refreshUsers() async {
+    SoundSystem.playButtonClick();
+    final userProvider = context.read<UserProvider>();
+    await userProvider.fetchUsers(forceRefresh: true);
+    if (!mounted) return;
+
+    if (userProvider.hasError) {
+      SoundSystem.playError();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userProvider.errorMessage ?? 'Failed to refresh users.',
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'User list refreshed.',
+          style: TextStyle(fontFamily: 'Poppins'),
+        ),
+        backgroundColor: Color(0xFFC10D00),
+      ),
+    );
+  }
+
+  Future<void> _loadEntityOptions() async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse(ApiConfig.entitiesEndpoint),
+            headers: {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 12));
+      if (response.statusCode != 200) return;
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final entities = (decoded['entities'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      if (!mounted) return;
+      setState(() {
+        _entityOptions
+          ..clear()
+          ..addAll(entities.isNotEmpty ? entities : ['Khonology Internal']);
+      });
+    } catch (_) {
+      // Keep existing options silently if API is unavailable.
+    }
+  }
+
+  Future<void> _showAddEntityDialog() async {
+    final controller = TextEditingController();
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color dialogBg = isDark
+        ? const Color(0xFF3D3F40)
+        : Colors.white;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: dialogBg,
+          title: Text(
+            'Add new entity',
+            style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
+          ),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
+            decoration: InputDecoration(
+              labelText: 'Entity name',
+              labelStyle: TextStyle(color: appTextColor(context)),
+            ),
+            onSubmitted: (v) => Navigator.of(dialogContext).pop(v.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                SoundSystem.playButtonClick();
+                Navigator.of(dialogContext).pop();
+              },
+              child: Text('Cancel', style: TextStyle(color: appTextColor(context))),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                SoundSystem.playButtonClick();
+                Navigator.of(dialogContext).pop(controller.text.trim());
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFC10D00),
+              ),
+              child: const Text('Add', style: TextStyle(fontFamily: 'Poppins')),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+
+    final entityName = result?.trim() ?? '';
+    if (entityName.isEmpty) return;
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse(ApiConfig.entitiesEndpoint),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'name': entityName}),
+          )
+          .timeout(const Duration(seconds: 12));
+      if (response.statusCode != 201 && response.statusCode != 200) {
+        throw Exception('Failed to add entity');
+      }
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final entities = (decoded['entities'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      if (!mounted) return;
+      setState(() {
+        _entityOptions
+          ..clear()
+          ..addAll(entities.isNotEmpty ? entities : ['Khonology Internal']);
+      });
+      SoundSystem.playSuccess();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Entity "$entityName" added successfully.',
+            style: const TextStyle(fontFamily: 'Poppins'),
+          ),
+          backgroundColor: const Color(0xFFC10D00),
+        ),
+      );
+      await _publishAdminAlert(
+        title: 'Entity list updated',
+        message: 'New entity "$entityName" was added.',
+        details: {'entity': entityName},
+      );
+    } catch (_) {
+      if (!mounted) return;
+      SoundSystem.playError();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Failed to add entity. Please try again.',
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+    }
   }
 
   @override
@@ -158,10 +365,10 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         if (mounted) {
           SoundSystem.playError();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
                 'Entity updated, but failed to sync with PDH.',
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                style: TextStyle(fontFamily: 'Poppins', color: appTextColor(context)),
               ),
               backgroundColor: Colors.orange,
             ),
@@ -187,16 +394,26 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Entity updated for ${user.name}.',
-              style: const TextStyle(
+              'Entity updated for ${user.displayName}.',
+              style: TextStyle(
                 fontFamily: 'Poppins',
-                color: Colors.white,
+                color: appTextColor(context),
               ),
             ),
             backgroundColor: const Color(0xFFC10D00),
           ),
         );
       }
+      await _publishAdminAlert(
+        title: 'User entity updated',
+        message:
+            'Entity for ${user.displayName} changed to ${updatedEntity ?? 'Not Assigned'}.',
+        details: {
+          'userId': user.id,
+          'userName': user.displayName,
+          'entity': updatedEntity ?? '',
+        },
+      );
     } catch (e) {
       if (mounted) {
         SoundSystem.playError();
@@ -204,7 +421,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           SnackBar(
             content: Text(
               'Failed to update entity. Please try again.',
-              style: const TextStyle(fontFamily: 'Poppins'),
+              style: TextStyle(fontFamily: 'Poppins'),
             ),
             backgroundColor: Colors.red.shade600,
           ),
@@ -223,12 +440,15 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset('assets/images/nathi_bg.png', fit: BoxFit.cover),
+            child: Image.asset(
+              appBackgroundAsset(context),
+              fit: BoxFit.cover,
+            ),
           ),
           Positioned.fill(
             child: ScrollbarTheme(
               data: ScrollbarThemeData(
-                thumbColor: WidgetStatePropertyAll<Color>(Colors.white),
+                thumbColor: WidgetStatePropertyAll<Color>(appTextColor(context)),
               ),
               child: Scrollbar(
                 controller: _scrollController,
@@ -259,22 +479,74 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   }
 
   Widget _buildHeader() {
+    final userProvider = context.watch<UserProvider>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Entity Management',
-          style: TextStyle(
-            fontSize: 28.0,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Poppins',
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Entity Management',
+                style: TextStyle(
+                  fontSize: 28.0,
+                  fontWeight: FontWeight.bold,
+                  color: appTextColor(context),
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+            Builder(
+              builder: (context) {
+                final isLight =
+                    Theme.of(context).brightness == Brightness.light;
+                return OutlinedButton.icon(
+                  onPressed: _showAddEntityDialog,
+                  icon: Icon(
+                    Icons.add,
+                    color: isLight ? Colors.black : Colors.white,
+                  ),
+                  label: Text(
+                    'Add Entity',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: isLight ? Colors.black : Colors.white,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor:
+                        isLight ? Colors.black : Colors.white,
+                    side: BorderSide(
+                      color: isLight
+                          ? Colors.black.withValues(alpha: 0.35)
+                          : Colors.white.withValues(alpha: 0.55),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Refresh users',
+              onPressed: userProvider.isLoading ? null : _refreshUsers,
+              icon: userProvider.isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFFC10D00),
+                      ),
+                    )
+                  : Icon(Icons.refresh, color: appTextColor(context)),
+            ),
+          ],
         ),
         const SizedBox(height: 4.0),
         Text(
           'Assign entities to keep user records up to date.',
           style: TextStyle(
-            color: Colors.white70,
+            color: appTextColor(context),
             fontSize: 14.0,
             fontFamily: 'Poppins',
           ),
@@ -284,17 +556,21 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   }
 
   Widget _buildSearch() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color filledBg = isDark
+        ? entityDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     return TextField(
       controller: _searchController,
       decoration: InputDecoration(
         hintText: 'Search users',
-        hintStyle: const TextStyle(
-          color: Colors.white54,
+        hintStyle: TextStyle(
+          color: appTextColor(context),
           fontFamily: 'Poppins',
         ),
-        prefixIcon: const Icon(Icons.search, color: Colors.white54),
+        prefixIcon: Icon(Icons.search, color: appTextColor(context)),
         suffixIcon: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white54),
+          icon: Icon(Icons.close, color: appTextColor(context)),
           onPressed: () {
             SoundSystem.playButtonClick();
             setState(() {
@@ -304,14 +580,14 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           },
         ),
         filled: true,
-        fillColor: const Color(0x801F2840),
+        fillColor: filledBg,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(25.0),
           borderSide: BorderSide.none,
         ),
         contentPadding: const EdgeInsets.symmetric(vertical: 12.0),
       ),
-      style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+      style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
     );
   }
 
@@ -342,7 +618,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
             Text(
               'Fetching user records...',
               style: TextStyle(
-                color: Colors.white,
+                color: appTextColor(context),
                 fontSize: 16.0,
                 fontFamily: 'Poppins',
               ),
@@ -352,11 +628,48 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       );
     }
 
+    if (userProvider.hasError && userProvider.users.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_off, size: 48, color: Colors.red.shade300),
+              const SizedBox(height: 16.0),
+              Text(
+                userProvider.errorMessage ??
+                    'Failed to load users. please try again later.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: appTextColor(context),
+                  fontSize: 14.0,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              const SizedBox(height: 24.0),
+              FilledButton.icon(
+                onPressed: () {
+                  SoundSystem.playButtonClick();
+                  userProvider.fetchUsers(forceRefresh: true);
+                },
+                icon: Icon(Icons.refresh),
+                label: const Text('Retry', style: TextStyle(fontFamily: 'Poppins')),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFC10D00),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (_filteredUsers.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No users found.',
-          style: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+          style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
         ),
       );
     }
@@ -378,20 +691,57 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
   }
 
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
-    return InkWell(
-      onTap: () {
-        SoundSystem.playButtonClick();
-        setState(() {
-          expandedUserId = isExpanded ? null : user.id;
-        });
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark
+        ? entityDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
+    final bool isHovered = _hoveredUserId == user.id;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hoveredUserId = user.id),
+      onExit: (_) {
+        if (_hoveredUserId == user.id) {
+          setState(() => _hoveredUserId = null);
+        }
       },
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0x801F2840),
+      child: AnimatedScale(
+        scale: isHovered ? 1.01 : 1.0,
+        duration: const Duration(milliseconds: 170),
+        curve: Curves.easeOut,
+        child: InkWell(
+          onTap: () {
+            SoundSystem.playButtonClick();
+            setState(() {
+              expandedUserId = isExpanded ? null : user.id;
+            });
+          },
           borderRadius: BorderRadius.circular(16.0),
-        ),
-        padding: const EdgeInsets.all(16.0),
-        child: LayoutBuilder(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 170),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: widgetBg,
+              borderRadius: BorderRadius.circular(16.0),
+              border: Border.all(
+                color: isHovered
+                    ? const Color(0xFFC10D00).withValues(alpha: 0.70)
+                    : appTextColor(context).withValues(alpha: 0.12),
+                width: isHovered ? 1.6 : 1.0,
+              ),
+              boxShadow: isHovered
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFC10D00).withValues(
+                          alpha: isDark ? 0.28 : 0.18,
+                        ),
+                        blurRadius: 16,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : null,
+            ),
+            padding: const EdgeInsets.all(16.0),
+            child: LayoutBuilder(
           builder: (context, constraints) {
             final availableWidth = constraints.maxWidth;
             final spacingWidth = 8.0 * 2;
@@ -414,8 +764,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              user.name,
-                              style: const TextStyle(
+                              user.displayName,
+                              style: TextStyle(
+                                color: appTextColor(context),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16.0,
                                 fontFamily: 'Poppins',
@@ -425,8 +776,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                             ),
                             Text(
                               user.email,
-                              style: const TextStyle(
-                                color: Colors.white60,
+                              style: TextStyle(
+                                color: appTextColor(context),
                                 fontSize: 12.0,
                                 fontFamily: 'Poppins',
                               ),
@@ -451,7 +802,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                       children: [
                         Text(
                           user.designation,
-                          style: const TextStyle(
+                          style: TextStyle(
+                            color: appTextColor(context),
                             fontWeight: FontWeight.w500,
                             fontSize: 14.0,
                             fontFamily: 'Poppins',
@@ -462,8 +814,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                         const SizedBox(height: 4.0),
                         Text(
                           user.department,
-                          style: const TextStyle(
-                            color: Colors.white60,
+                          style: TextStyle(
+                            color: appTextColor(context),
                             fontSize: 12.0,
                             fontFamily: 'Poppins',
                           ),
@@ -485,9 +837,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                       const SizedBox(width: 8.0),
                       Transform.rotate(
                         angle: isExpanded ? 3.14 : 0,
-                        child: const Icon(
+                        child: Icon(
                           Icons.keyboard_arrow_down,
-                          color: Colors.white54,
+                          color: appTextColor(context),
                         ),
                       ),
                     ],
@@ -496,12 +848,18 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
               ],
             );
           },
+            ),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildEntityChip(String? entity) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color chipBg = isDark
+        ? entityDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final displayText = (entity == null || entity.isEmpty)
         ? _notAssignedValue
         : entity;
@@ -509,16 +867,20 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
       decoration: BoxDecoration(
-        color: const Color(0x33FFFFFF),
+        color: chipBg,
         borderRadius: BorderRadius.circular(20.0),
+        border: Border.all(
+          color: appTextColor(context).withValues(alpha: 0.18),
+          width: 1,
+        ),
       ),
       child: Text(
         displayText,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12.0,
           fontWeight: FontWeight.bold,
           fontFamily: 'Poppins',
-          color: Colors.white,
+          color: appTextColor(context),
         ),
       ),
     );
@@ -529,19 +891,29 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     if (url != null && url.trim().isNotEmpty) {
       return CircleAvatar(
         radius: 20,
-        backgroundColor: Colors.white24,
+        backgroundColor: appTextColor(context).withValues(alpha: 0.24),
         backgroundImage: NetworkImage(url.trim()),
         onBackgroundImageError: (_, __) {},
       );
     }
-    return const CircleAvatar(
+    return CircleAvatar(
       radius: 20,
-      backgroundColor: Colors.white24,
-      child: Icon(Icons.person, size: 24, color: Colors.white54),
+      backgroundColor: appTextColor(context).withValues(alpha: 0.24),
+      child: Icon(Icons.person, size: 24, color: appTextColor(context)),
     );
   }
 
   Widget _buildEntityPanel(ManagedUser user) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color panelBg = isDark
+        ? entityDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
+    final Color popupBg = isDark
+        ? const Color(0xFF3D3F40)
+        : Colors.white;
+    final Color dividerColor = appTextColor(context).withValues(
+      alpha: isDark ? 0.22 : 0.30,
+    );
     String? selectedEntity = (user.entity == null || user.entity!.isEmpty)
         ? _notAssignedValue
         : user.entity;
@@ -549,8 +921,8 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
 
     return Container(
       padding: const EdgeInsets.all(16.0),
-      decoration: const BoxDecoration(
-        color: Color(0x801A1A1A),
+      decoration: BoxDecoration(
+        color: panelBg,
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(16.0),
           bottomRight: Radius.circular(16.0),
@@ -565,38 +937,40 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
               Text(
                 'Entity Assignment',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: appTextColor(context),
                   fontSize: 16.0,
                   fontWeight: FontWeight.w600,
                   fontFamily: 'Poppins',
                 ),
               ),
               if (isUpdating)
-                const SizedBox(
+                SizedBox(
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    valueColor: AlwaysStoppedAnimation<Color>(appTextColor(context)),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
           DropdownButtonHideUnderline(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12.0),
               decoration: BoxDecoration(
-                color: const Color(0xFF2C3E50),
+                color: panelBg,
                 borderRadius: BorderRadius.circular(8.0),
               ),
               child: DropdownButton<String?>(
                 value: selectedEntity,
                 isExpanded: true,
-                dropdownColor: const Color(0xFF2C3E50),
-                icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
-                style: const TextStyle(
-                  color: Colors.white,
+                dropdownColor: popupBg,
+                icon: Icon(Icons.arrow_drop_down, color: appTextColor(context)),
+                style: TextStyle(
+                  color: appTextColor(context),
                   fontFamily: 'Poppins',
                 ),
                 onChanged: isUpdating
@@ -613,12 +987,26 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                 items: <DropdownMenuItem<String?>>[
                   DropdownMenuItem<String?>(
                     value: _notAssignedValue,
-                    child: Text(_notAssignedValue),
+                    child: Text(
+                      _notAssignedValue,
+                      style: TextStyle(
+                        color: appTextColor(context),
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ),
                   ..._entityOptions.map(
                     (option) => DropdownMenuItem<String?>(
                       value: option,
-                      child: Text(option),
+                      child: Text(
+                        option,
+                        style: TextStyle(
+                          color: appTextColor(context),
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   ),
                 ],

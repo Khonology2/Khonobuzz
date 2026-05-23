@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import '../models/managed_user.dart';
 import '../config/api_config.dart';
+import '../services/api_client.dart';
 
 class UserProvider extends ChangeNotifier {
   List<ManagedUser> _users = [];
@@ -11,6 +11,9 @@ class UserProvider extends ChangeNotifier {
   String? _errorMessage;
   DateTime? _lastFetchTime;
   static const Duration _cacheValidDuration = Duration(minutes: 5);
+
+  /// When [fetchUsers] runs, concurrent callers with [forceRefresh] await this.
+  Future<void>? _fetchUsersInFlight;
 
   List<ManagedUser> get users => _users;
   bool get isLoading => _isLoading;
@@ -42,37 +45,63 @@ class UserProvider extends ChangeNotifier {
     final users = usersData
         .map((user) => ManagedUser.fromApi(user))
         .toList(growable: false);
+    _setUsersAndSort(users);
+  }
 
-    users.sort((a, b) {
-      final aKey =
-          a.updatedAt ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bKey =
-          b.updatedAt ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return bKey.compareTo(aKey);
-    });
+  DateTime _lastSignInSortKey(ManagedUser user) {
+    return user.lastSignInAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }
 
+  DateTime _updatedSortKey(ManagedUser user) {
+    return user.updatedAt ?? user.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  int _compareUsersForDisplay(ManagedUser a, ManagedUser b) {
+    // Most recently signed-in users should always float to top for admin screens.
+    final signInCompare = _lastSignInSortKey(b).compareTo(_lastSignInSortKey(a));
+    if (signInCompare != 0) return signInCompare;
+    return _updatedSortKey(b).compareTo(_updatedSortKey(a));
+  }
+
+  void _setUsersAndSort(List<ManagedUser> users) {
+    users.sort(_compareUsersForDisplay);
     _users = users;
     _lastFetchTime = DateTime.now();
   }
 
   Future<List<dynamic>> _fetchUsersPayload({
-    Duration timeout = const Duration(seconds: 20),
+    Duration timeout = const Duration(seconds: 90),
+    int retries = 2,
   }) async {
-    final response = await http
-        .get(Uri.parse(ApiConfig.usersEndpoint))
-        .timeout(
-          timeout,
-          onTimeout: () {
-            throw Exception('Request timeout. Please check your connection.');
-          },
-        );
+    // Render free tier cold start can take 50+ seconds; use 90s timeout and retries
+    Exception? lastError;
+    for (var attempt = 0; attempt <= retries; attempt++) {
+      try {
+        final response = await apiClient
+            .get(Uri.parse(ApiConfig.usersEndpoint))
+            .timeout(
+              timeout,
+              onTimeout: () {
+                throw Exception(
+                  'Request timeout. The server may be waking up—please try again.',
+                );
+              },
+            );
 
-    if (response.statusCode != 200) {
-      throw Exception('Failed to fetch users: ${response.statusCode}');
+        if (response.statusCode != 200) {
+          throw Exception('Failed to fetch users: ${response.statusCode}');
+        }
+
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        return decoded['users'] as List<dynamic>? ?? const [];
+      } catch (e) {
+        lastError = e is Exception ? e : Exception(e.toString());
+        if (attempt < retries) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+        }
+      }
     }
-
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    return decoded['users'] as List<dynamic>? ?? const [];
+    throw lastError ?? Exception('Failed to fetch users');
   }
 
   Future<void> prefetchUsersForLogin({bool forceRefresh = false}) async {
@@ -81,7 +110,11 @@ class UserProvider extends ChangeNotifier {
     }
 
     if (_isLoading) {
-      return;
+      if (forceRefresh && _fetchUsersInFlight != null) {
+        await _fetchUsersInFlight;
+      } else {
+        return;
+      }
     }
 
     try {
@@ -93,13 +126,14 @@ class UserProvider extends ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
     } catch (e) {
-      debugPrint('Login user prefetch failed: $e');
+      debugPrint('Login user prefetch API failed: $e');
     }
   }
 
   Future<void> fetchUsers({bool forceRefresh = false}) async {
     // Stale-while-revalidate: if we have cached data, show it and refresh in background
-    if (_users.isNotEmpty) {
+    // unless a hard refresh is explicitly requested.
+    if (!forceRefresh && _users.isNotEmpty) {
       refreshUsersInBackground();
       return;
     }
@@ -109,11 +143,26 @@ class UserProvider extends ChangeNotifier {
       return;
     }
 
-    // If already loading, don't start another request
     if (_isLoading) {
+      if (forceRefresh && _fetchUsersInFlight != null) {
+        await _fetchUsersInFlight;
+        return fetchUsers(forceRefresh: true);
+      }
       return;
     }
 
+    final Future<void> work = _executeFetchUsers();
+    _fetchUsersInFlight = work;
+    try {
+      await work;
+    } finally {
+      if (_fetchUsersInFlight == work) {
+        _fetchUsersInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _executeFetchUsers() async {
     _isLoading = true;
     _hasError = false;
     _errorMessage = null;
@@ -140,18 +189,7 @@ class UserProvider extends ChangeNotifier {
     if (index != -1) {
       final bumped = updatedUser.copyWith(updatedAt: DateTime.now());
       _users[index] = bumped;
-      // Re-sort by updatedAt/createdAt descending so most recently edited is at top
-      _users.sort((a, b) {
-        final aKey =
-            a.updatedAt ??
-            a.createdAt ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        final bKey =
-            b.updatedAt ??
-            b.createdAt ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        return bKey.compareTo(aKey);
-      });
+      _users.sort(_compareUsersForDisplay);
       notifyListeners();
     }
   }
@@ -184,7 +222,6 @@ class UserProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Background refresh failed: $e');
-      // Don't update error state for background refresh
     }
   }
 
@@ -192,6 +229,7 @@ class UserProvider extends ChangeNotifier {
   void clearCache() {
     _users = [];
     _lastFetchTime = null;
+    _fetchUsersInFlight = null;
     notifyListeners();
   }
 

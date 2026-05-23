@@ -1,0 +1,17 @@
+# Executive
+python generate_pdh_token.py --module skills_heatmap --role "Executive"
+
+# Delivery Manager
+python generate_pdh_token.py --module skills_heatmap --role "Delivery Manager"
+
+# HR
+python generate_pdh_token.py --module skills_heatmap --role "HR"
+
+# Sales Manager
+python generate_pdh_token.py --module skills_heatmap --role "Sales Manager"
+
+# Ops Manager
+python generate_pdh_token.py --module skills_heatmap --role "Ops Manager"
+
+# System Admin
+python generate_pdh_token.py --module skills_heatmap --role "System Admin"

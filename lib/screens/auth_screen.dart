@@ -1,6 +1,7 @@
+// ignore_for_file: unused_local_variable, unused_import
+
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
-import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
@@ -8,8 +9,11 @@ import '../services/sound_system.dart';
 import 'manual_login_screen.dart';
 import '../main.dart';
 import 'onboarding_screen.dart';
-import '../widgets/floating_circles_particle_animation.dart';
 import '../widgets/prefetch_overlay_dialog.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
 import '../widgets/version_control_widget.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -21,10 +25,6 @@ class AuthScreen extends StatefulWidget {
 
 class AuthScreenState extends State<AuthScreen> {
   double _discsOpacity = 0.0;
-  bool _isCheckingRedirect = false;
-  final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
-      GlobalKey();
-  VoidCallback? _pendingNavigation;
   bool _isAnimatingNavigation = false;
 
   @override
@@ -38,110 +38,15 @@ class AuthScreenState extends State<AuthScreen> {
     });
 
     if (kIsWeb) {
-      Future.delayed(const Duration(milliseconds: 100), () {
-        _handleRedirectResult();
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (mounted) {
+          setState(() {});
+        }
       });
     }
   }
 
-  Future<void> _handleRedirectResult() async {
-    if (_isCheckingRedirect) return;
-    _isCheckingRedirect = true;
-
-    try {
-      debugPrint('Checking for redirect result...');
-      final credential = await fb_auth.FirebaseAuth.instance
-          .getRedirectResult();
-
-      if (credential.user != null) {
-        debugPrint('Redirect result found, user: ${credential.user?.email}');
-        final email = credential.user?.email;
-        if (email != null && email.toLowerCase().endsWith('@khonology.com')) {
-          if (!mounted) {
-            _isCheckingRedirect = false;
-            return;
-          }
-          final authProvider = context.read<AuthProvider>();
-          final navigator = Navigator.of(context);
-          final messenger = ScaffoldMessenger.of(context);
-          final success = await authProvider.login(email, role: null);
-          if (!mounted) {
-            _isCheckingRedirect = false;
-            return;
-          }
-
-          if (success) {
-            if (!mounted) {
-              _isCheckingRedirect = false;
-              return;
-            }
-            final dialogContext = context;
-            showDialog<void>(
-              context: context,
-              barrierDismissible: false,
-              barrierColor: Colors.black54,
-              builder: (BuildContext _) => PrefetchOverlayDialog(
-                authProvider: authProvider,
-                onComplete: () {
-                  Navigator.of(dialogContext).pop();
-                  navigator.pushAndRemoveUntil(
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) => const MainScreen(initialIndex: 8),
-                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                        return FadeTransition(opacity: animation, child: child);
-                      },
-                      transitionDuration: const Duration(milliseconds: 350),
-                    ),
-                    (route) => false,
-                  );
-                },
-              ),
-            );
-          } else {
-            await fb_auth.FirebaseAuth.instance.signOut();
-            if (!mounted) {
-              _isCheckingRedirect = false;
-              return;
-            }
-            messenger.showSnackBar(
-              const SnackBar(
-                content: Text('Login failed. Please try again later.'),
-              ),
-            );
-          }
-        } else {
-          await fb_auth.FirebaseAuth.instance.signOut();
-          if (!mounted) {
-            _isCheckingRedirect = false;
-            return;
-          }
-          final messenger = ScaffoldMessenger.of(context);
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Only khonology.com accounts are allowed'),
-            ),
-          );
-        }
-      } else {
-        debugPrint('No redirect result found');
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Redirect result error: $e');
-      debugPrint('Stack trace: $stackTrace');
-      if (mounted) {
-        final messenger = ScaffoldMessenger.of(context);
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Authentication error: ${e.toString()}'),
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } finally {
-      _isCheckingRedirect = false;
-    }
-  }
-
+  // ignore: unused_element
   void _prepareManualLogin() {
     AuthProvider.warmUpBackendForLogin();
     context.read<UserProvider>().prefetchUsersForLogin();
@@ -149,30 +54,19 @@ class AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isLight = Theme.of(context).brightness == Brightness.light;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/nathi_bg.png'),
+            image: AssetImage(appBackgroundAsset(context)),
             fit: BoxFit.cover,
           ),
         ),
         child: Stack(
           children: [
-            FloatingCirclesParticleAnimation(
-              key: _animationKey,
-              onAnimationComplete: () {
-                if (_pendingNavigation != null) {
-                  final nav = _pendingNavigation!;
-                  _pendingNavigation = null;
-                  _isAnimatingNavigation = false;
-                  if (mounted) {
-                    nav();
-                  }
-                }
-              },
-            ),
             Center(
               child: SingleChildScrollView(
                 child: Padding(
@@ -184,133 +78,78 @@ class AuthScreenState extends State<AuthScreen> {
                       const SizedBox(height: 48),
 
                       const SizedBox(height: 32),
-                      const Text(
-                        'Select Login Preference',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white,
-                          fontSize: 20,
+                      Container(
+                        key: const Key('auth-title-container'),
+                        child: Semantics(
+                          label: 'Select Login Preference',
+                          header: true,
+                          child: ExcludeSemantics(
+                            excluding: false,
+                            child: Text(
+                              'Select Login Preference',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: appTextColor(context),
+                                fontSize: 20,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 32),
-                      // Microsoft login button hidden - only show Manual Login and Onboarding
-                      // _buildLoginButton(
-                      //   text: 'MICROSOFT LOGIN',
-                      //   color: const Color(0xFFC10D00),
-                      //   onPressed: () async {
-                      //     final messenger = ScaffoldMessenger.of(context);
-                      //     final navigator = Navigator.of(context);
-                      //     final authProvider = context.read<AuthProvider>();
-                      //     try {
-                      //       final provider = fb_auth.OAuthProvider(
-                      //         'microsoft.com',
-                      //       );
-
-                      //       fb_auth.UserCredential credential;
-                      //       if (kIsWeb) {
-                      //         debugPrint(
-                      //           'Initiating Microsoft sign-in redirect...',
-                      //         );
-                      //         await fb_auth.FirebaseAuth.instance
-                      //             .signInWithRedirect(provider);
-
-                      //         return;
-                      //       } else {
-                      //         credential = await fb_auth.FirebaseAuth.instance
-                      //             .signInWithProvider(provider);
-                      //       }
-
-                      //       final email = credential.user?.email;
-                      //       if (email == null ||
-                      //           !email.toLowerCase().endsWith(
-                      //             '@khonology.com',
-                      //           )) {
-                      //         await fb_auth.FirebaseAuth.instance.signOut();
-                      //         if (!mounted) return;
-                      //         messenger.showSnackBar(
-                      //           const SnackBar(
-                      //             content: Text(
-                      //               'Only khonology.com accounts are allowed',
-                      //             ),
-                      //           ),
-                      //         );
-                      //         return;
-                      //       }
-
-                      //       if (!mounted) return;
-                      //       final success = await authProvider.login(
-                      //         email,
-                      //         role: null,
-                      //       );
-                      //       if (!mounted) return;
-
-                      //       if (!success) {
-                      //         messenger.showSnackBar(
-                      //           const SnackBar(
-                      //             content: Text(
-                      //               'Login failed. Please try again later.',
-                      //             ),
-                      //           ),
-                      //         );
-                      //         return;
-                      //       }
-
-                      //       if (!mounted) return;
-                      //       navigator.pushAndRemoveUntil(
-                      //         MaterialPageRoute(
-                      //           builder: (context) =>
-                      //               const MainScreen(initialIndex: 8),
-                      //         ),
-                      //         (route) => false,
-                      //       );
-                      //     } catch (e) {
-                      //       if (!mounted) return;
-                      //       messenger.showSnackBar(
-                      //         SnackBar(
-                      //           content: Text('Microsoft sign-in failed: $e'),
-                      //         ),
-                      //       );
-                      //     }
-                      //   },
-                      // ),
-                      // const SizedBox(height: 16),
-                      _buildLoginButton(
-                        text: 'MANUAL LOGIN',
-                        color: const Color(0xFFC10D00),
-                        onPressed: () {
-                          if (_isAnimatingNavigation) {
-                            return;
-                          }
-                          _prepareManualLogin();
-                          _isAnimatingNavigation = true;
-                          final navigator = Navigator.of(context);
-                          _pendingNavigation = () {
-                            navigator.push(
-                              MaterialPageRoute(
-                                builder: (context) => const ManualLoginScreen(),
-                              ),
-                            );
-                          };
-                        },
+                      // Microsoft/Firebase login path removed; app now uses backend login only.
+                      Semantics(
+                        key: const ValueKey('e2e_manual_login_button'),
+                        label: 'MANUAL LOGIN',
+                        button: true,
+                        child: _buildLoginButton(
+                          text: 'MANUAL LOGIN',
+                          color: const Color(0xFFC10D00),
+                          onPressed: () {
+                            if (_isAnimatingNavigation) {
+                              return;
+                            }
+                            _isAnimatingNavigation = true;
+                            final navigator = Navigator.of(context);
+                            navigator
+                                .push(
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const ManualLoginScreen(),
+                                  ),
+                                )
+                                .then((_) {
+                                  _isAnimatingNavigation = false;
+                                });
+                          },
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      _buildLoginButton(
-                        text: 'ONBOARD WITH US',
-                        color: Colors.grey,
-                        onPressed: () {
-                          if (_isAnimatingNavigation) {
-                            return;
-                          }
-                          _isAnimatingNavigation = true;
-                          final navigator = Navigator.of(context);
-                          _pendingNavigation = () {
-                            navigator.push(
-                              MaterialPageRoute(
-                                builder: (context) => const OnboardingScreen(),
-                              ),
-                            );
-                          };
-                        },
+                      Semantics(
+                        key: const ValueKey('e2e_onboard_with_us_button'),
+                        label: 'ONBOARD WITH US',
+                        button: true,
+                        child: _buildLoginButton(
+                          text: 'ONBOARD WITH US',
+                          color: Colors.grey,
+                          onPressed: () {
+                            if (_isAnimatingNavigation) {
+                              return;
+                            }
+                            _isAnimatingNavigation = true;
+                            final navigator = Navigator.of(context);
+                            navigator
+                                .push(
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const OnboardingScreen(),
+                                  ),
+                                )
+                                .then((_) {
+                                  _isAnimatingNavigation = false;
+                                });
+                          },
+                        ),
                       ),
                       const SizedBox(height: 48),
 
@@ -318,8 +157,13 @@ class AuthScreenState extends State<AuthScreen> {
                         opacity: _discsOpacity,
                         duration: const Duration(milliseconds: 1000),
                         child: Image.asset(
-                          'assets/images/discs.png',
-                          height: 80,
+                          Theme.of(context).brightness == Brightness.dark
+                              ? 'assets/images/discs.png'
+                              : 'assets/images/red_disc.png',
+                          height:
+                              Theme.of(context).brightness == Brightness.dark
+                              ? 72
+                              : 110,
                         ),
                       ),
                     ],
@@ -328,12 +172,39 @@ class AuthScreenState extends State<AuthScreen> {
               ),
             ),
             Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Align(
-                alignment: Alignment.center,
-                child: const VersionControlWidget(),
+              left: 16,
+              bottom: 16,
+              child: SafeArea(
+                child: VersionControlWidget(
+                  textColor: isLight ? Colors.black54 : Colors.white70,
+                  hoverColor: isLight ? Colors.black : Colors.white,
+                ),
+              ),
+            ),
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: SafeArea(
+                child: Consumer<ThemeModeProvider>(
+                  builder: (context, themeMode, _) {
+                    return FloatingActionButton(
+                      mini: true,
+                      shape: const CircleBorder(),
+                      heroTag: 'auth_theme_toggle_fab',
+                      onPressed: () {
+                        SoundSystem.playButtonClick();
+                        themeMode.toggle();
+                      },
+                      backgroundColor: AppThemes.light.primaryColor,
+                      child: Icon(
+                        themeMode.isLight
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        color: appTextColor(context),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -355,12 +226,8 @@ class AuthScreenState extends State<AuthScreen> {
         if (onPressed == null) {
           return;
         }
-        if (_animationKey.currentState != null) {
-          _animationKey.currentState!.triggerParticleExplosion();
-        }
         onPressed();
       },
-      animationKey: null,
     );
   }
 }
@@ -589,12 +456,10 @@ class _ClickBubblyButton extends StatefulWidget {
   final String text;
   final Color color;
   final VoidCallback? onPressed;
-  final GlobalKey<FloatingCirclesParticleAnimationState>? animationKey;
   const _ClickBubblyButton({
     required this.text,
     required this.color,
     required this.onPressed,
-    this.animationKey,
   });
 
   @override

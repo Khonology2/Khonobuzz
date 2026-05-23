@@ -2,12 +2,20 @@
 Token generation and encryption utilities for secure authentication.
 """
 import jwt
+import logging
 from datetime import datetime, timedelta
 from cryptography.fernet import Fernet
 import os
 from dotenv import load_dotenv
 import base64
+
+try:
+    from .sentry_setup import report_exception
+except ImportError:
+    from sentry_setup import report_exception
+
 load_dotenv()
+logger = logging.getLogger(__name__)
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
 if not JWT_SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY environment variable is required for token signing and validation")
@@ -20,7 +28,22 @@ try:
     fernet = Fernet(ENCRYPTION_KEY.encode())
 except Exception as e:
     raise RuntimeError(f"Invalid ENCRYPTION_KEY: {e}")
-def generate_jwt_token(user_id: str, email: str, full_name: str = "", roles: list = None, expiration_hours: int = None) -> str:
+def _normalize_token_theme(theme_preference: str = None) -> str:
+    """Map stored theme preference to token theme label."""
+    raw = (theme_preference or "").strip().lower()
+    if raw == "light":
+        return "Light"
+    return "dark"
+
+
+def generate_jwt_token(
+    user_id: str,
+    email: str,
+    full_name: str = "",
+    roles: list = None,
+    expiration_hours: int = None,
+    theme_preference: str = None,
+) -> str:
     """
     Generate a JWT token containing user information for PDH auto-login.
     Args:
@@ -44,6 +67,7 @@ def generate_jwt_token(user_id: str, email: str, full_name: str = "", roles: lis
         'email': email,
         'full_name': full_name,
         'roles': roles,
+        'theme': _normalize_token_theme(theme_preference),
         'iat': iat,
         'exp': exp,
     }
@@ -61,7 +85,8 @@ def encrypt_token(token: str) -> str:
         encrypted_token = fernet.encrypt(token.encode())
         return encrypted_token.decode()
     except Exception as e:
-        print(f"[ERROR] Failed to encrypt token: {e}")
+        logger.exception("Failed to encrypt token: %s", e)
+        report_exception(e, context={"operation": "encrypt_token"})
         raise
 def decrypt_token(encrypted_token: str) -> str:
     """
@@ -77,7 +102,8 @@ def decrypt_token(encrypted_token: str) -> str:
         decrypted_token = fernet.decrypt(encrypted_token.encode())
         return decrypted_token.decode()
     except Exception as e:
-        print(f"[ERROR] Failed to decrypt token: {e}")
+        logger.exception("Failed to decrypt token: %s", e)
+        report_exception(e, context={"operation": "decrypt_token"})
         raise
 def verify_token(token: str) -> dict:
     """
@@ -110,6 +136,7 @@ def verify_token(token: str) -> dict:
                 'email': payload.get('email') or payload.get('e', ''),
                 'full_name': payload.get('full_name', ''),
                 'roles': payload.get('roles', []),
+                'theme': payload.get('theme', 'dark'),
                 'exp': payload.get('exp'),
                 'iat': payload.get('iat', payload.get('exp', 0) - 86400),
             }
@@ -158,12 +185,64 @@ def parse_module_access_role_to_arw_roles(module_access_role: str) -> list:
             if role_suffix:
                 result.append(f"ARW - {role_suffix}")
     return result
+
+
+def _parse_module_role_with_prefix(module_access_role: str, module_prefix: str) -> list:
+    """Extract role suffixes by prefix and return normalized single-role list."""
+    if not module_access_role or not isinstance(module_access_role, str):
+        return []
+    result = []
+    for part in module_access_role.split(','):
+        part = part.strip()
+        if part.startswith(module_prefix):
+            role_suffix = part[len(module_prefix):].strip()
+            if role_suffix:
+                result.append(role_suffix)
+    return result
+
+
+def parse_module_access_role_to_skills_heatmap_roles(module_access_role: str) -> list:
+    """
+    Extract Skills Heatmap role from moduleAccessRole and map to Skills Heatmap - X format.
+    """
+    role_suffixes = _parse_module_role_with_prefix(
+        module_access_role,
+        "Skills Heatmap - ",
+    )
+    return [f"Skills Heatmap - {role}" for role in role_suffixes]
+
+
+def parse_module_access_role_to_deliverables_roles(module_access_role: str) -> list:
+    """
+    Extract Deliverables role from moduleAccessRole and map to
+    Deliverables & Sprint Sign-Off Hub - X format.
+    """
+    role_suffixes = _parse_module_role_with_prefix(
+        module_access_role,
+        "Deliverables & Sprint Sign-Off Hub - ",
+    )
+    return [f"Deliverables & Sprint Sign-Off Hub - {role}" for role in role_suffixes]
+
+
+def parse_module_access_role_to_sow_builder_roles(module_access_role: str) -> list:
+    """
+    Extract Proposal & SOW Builder persona from moduleAccessRole and map to
+    Proposal & SOW Builder - X format.
+    """
+    role_suffixes = _parse_module_role_with_prefix(
+        module_access_role,
+        "Proposal & SOW Builder - ",
+    )
+    return [f"Proposal & SOW Builder - {role}" for role in role_suffixes]
+
+
 def generate_and_encrypt_token(
     user_id: str,
     email: str,
     full_name: str = "",
     roles: list = None,
     expiration_hours: int = None,
+    theme_preference: str = None,
 ) -> str:
     """
     Generate a JWT token and encrypt it for secure storage/transport.
@@ -176,9 +255,17 @@ def generate_and_encrypt_token(
     Returns:
         An encrypted token string
     """
-    plain_token = generate_jwt_token(user_id, email, full_name, roles, expiration_hours)
+    plain_token = generate_jwt_token(
+        user_id,
+        email,
+        full_name,
+        roles,
+        expiration_hours,
+        theme_preference,
+    )
     try:
         return encrypt_token(plain_token)
     except Exception as e:
-        print(f"[ERROR] Failed to encrypt token in generate_and_encrypt_token: {e}")
+        logger.exception("Failed to encrypt token in generate_and_encrypt_token: %s", e)
+        report_exception(e, context={"operation": "generate_and_encrypt_token"})
         raise

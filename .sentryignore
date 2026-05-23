@@ -1,0 +1,4 @@
+# Files to exclude from Sentry source map uploads
+*.dart
+flutter_service_worker.js
+version.json

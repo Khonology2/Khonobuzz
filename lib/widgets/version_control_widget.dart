@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:khonobuzz/services/version_service.dart';
@@ -26,11 +25,16 @@ class VersionControlWidget extends StatefulWidget {
 
 class _VersionControlWidgetState extends State<VersionControlWidget>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+  // Prevent multiple widgets/screens from repeatedly triggering version loads.
+  // This ensures we fetch the version only once per app process (with a few
+  // retries if the service throws).
+  static Future<VersionData>? _sessionVersionFuture;
+  static int _sessionVersionAttempts = 0;
+
   late AnimationController _animationController;
   late Animation<Color?> _colorAnimation;
   late Animation<double> _scaleAnimation;
-  late Timer _refreshTimer;
-  String _currentVersion = 'Ver 2026.03.BA1 SIT';
+  String _currentVersion = 'Ver ${VersionData.fallback.version} SIT';
   String _tooltipMessage = 'Loading version...';
   String? _rawVersion;
   bool _showAttentionCatcher = false;
@@ -64,11 +68,19 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      _loadVersion();
-    });
-
     _loadVersion();
+  }
+
+  @override
+  void didUpdateWidget(VersionControlWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.textColor != widget.textColor ||
+        oldWidget.hoverColor != widget.hoverColor) {
+      _colorAnimation = ColorTween(
+        begin: widget.textColor,
+        end: widget.hoverColor,
+      ).animate(_animationController);
+    }
   }
 
   @override
@@ -76,21 +88,20 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
     WidgetsBinding.instance.removeObserver(this);
     _animationController.dispose();
     _pulseController.dispose();
-    _refreshTimer.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      VersionService.clearCache();
+      _sessionVersionFuture = null;
       _loadVersion();
     }
   }
 
   Future<void> _loadVersion() async {
     try {
-      final data = await VersionService.loadVersion();
+      final data = await _getVersionOncePerSession();
       final prefs = await SharedPreferences.getInstance();
       final lastSeen = prefs.getString(_kVersionControlLastSeenKey);
       final isNewVersion = data.version != lastSeen;
@@ -112,6 +123,28 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
           _tooltipMessage = 'Failed to load version';
         });
       }
+    }
+  }
+
+  Future<VersionData> _getVersionOncePerSession() async {
+    // If we already kicked off a load (and it hasn't failed), reuse it.
+    final existing = _sessionVersionFuture;
+    if (existing != null) return existing;
+
+    // Retry a few times if the underlying service throws.
+    _sessionVersionAttempts++;
+    if (_sessionVersionAttempts > 3) {
+      // Give callers the best-effort fallback from the service.
+      return VersionService.loadVersion(forceRefresh: true);
+    }
+
+    try {
+      _sessionVersionFuture = VersionService.loadVersion(forceRefresh: true);
+      return await _sessionVersionFuture!;
+    } catch (_) {
+      // Allow a retry on the next widget attempt.
+      _sessionVersionFuture = null;
+      rethrow;
     }
   }
 
@@ -179,6 +212,11 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
   }
 
   Widget _buildVersionChild() {
+    final bool isLightMode = Theme.of(context).brightness == Brightness.light;
+    final Color effectiveVersionColor = isLightMode
+        ? Colors.black
+        : (_colorAnimation.value ?? widget.textColor);
+
     return MouseRegion(
       onEnter: (_) => _onHover(true),
       onExit: (_) => _onHover(false),
@@ -209,8 +247,8 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
                 _currentVersion,
                 style: TextStyle(
                   fontSize: widget.fontSize,
-                  color: _colorAnimation.value,
-                  fontWeight: FontWeight.w400,
+                  color: effectiveVersionColor,
+                  fontWeight: FontWeight.w500,
                   fontFamily: 'Poppins',
                   letterSpacing: 0.5,
                 ),
@@ -224,6 +262,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
 
   @override
   Widget build(BuildContext context) {
+    final bool isLightMode = Theme.of(context).brightness == Brightness.light;
     if (!_showAttentionCatcher) {
       return _buildVersionChild();
     }
@@ -239,7 +278,7 @@ class _VersionControlWidgetState extends State<VersionControlWidget>
                 "See what's new — hover here.",
                 style: TextStyle(
                   fontSize: 11,
-                  color: widget.textColor,
+                  color: isLightMode ? Colors.black : widget.textColor,
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w500,
                 ),

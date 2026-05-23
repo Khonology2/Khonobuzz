@@ -1,3 +1,14 @@
 {
-    "dart.analyzerPath": null
+    "dart.analyzerPath": null,
+    "cmake.sourceDirectory": "C:/khonoBUzz/KhonoBuzz/linux",
+    "yaml.schemas": {
+        "https://json.schemastore.org/github-action.json": [
+            ".github/actions/**/action.yml",
+            ".github/actions/**/action.yaml"
+        ],
+        "https://json.schemastore.org/github-workflow.json": [
+            ".github/workflows/*.yml",
+            ".github/workflows/*.yaml"
+        ]
+    }
 }

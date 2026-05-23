@@ -1,0 +1,289 @@
+# KhonoBuzz integration & deploy pipeline
+#
+# Flow (single pipeline):
+#   1. Push to feature branch → squash-integrate into khono_v4
+#   2. deploy-khono-v4 runs immediately after merge (same workflow run)
+#      — also runs on direct pushes to khono_v4
+#      — triggers deploy-check (version/build pipeline), then Render hooks
+#   3. deploy-check on khono_v4 deploys to Render, then opens PR khono_v4 → main
+#      (deploy.yml also opens the PR as a fallback after deploy-check succeeds)
+#
+# Required GitHub Actions secrets:
+#   FRONTEND_DSN                  — Flutter Sentry DSN
+#   BACKEND_DSN                   — FastAPI Sentry DSN (also set on Render backend service)
+#   SENTRY_AUTH_TOKEN             — sentry.io auth token for source map uploads
+#   SENTRY_ORG                    — e.g. khonology-2w
+#   SENTRY_PROJECT_FRONTEND       — e.g. khonobuzz_frontend
+#   SENTRY_PROJECT_BACKEND        — e.g. khonobuzz-backend
+#   SENTRY_ENVIRONMENT            — e.g. production
+#   SENTRY_TRACES_SAMPLE_RATE     — e.g. 0.1
+#   SENTRY_PROFILES_SAMPLE_RATE   — e.g. 0.1  (backend profiling)
+#   SENTRY_REPLAY_SESSION_RATE    — e.g. 0.1  (Flutter session replay)
+#   SENTRY_REPLAY_ON_ERROR_RATE   — e.g. 1.0
+#   RENDER_DEPLOY_HOOK            — Render static site (frontend)
+#   RENDER_BACKEND_DEPLOY_HOOK    — Render web service (backend)
+#   Also enable: Settings → Actions → "Allow GitHub Actions to create and approve pull requests"
+#   (required for the khono_v4 → main release PR step)
+
+name: deploy
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: 'Branch to integrate into khono_v4 (workflow_dispatch only)'
+        required: false
+        default: ''
+
+concurrency:
+  group: deploy-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+# Serialize khono_v4 deploy so merge-triggered and push-triggered runs don't double-deploy.
+# (merge job chains deploy in-run; the khono_v4 push may also start a second run — only one deploys at a time.)
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+env:
+  INTEGRATION_BRANCH: khono_v4
+  PRODUCTION_BRANCH: main
+
+jobs:
+  merge-into-khono-v4:
+    name: Integrate branch into khono_v4
+    if: |
+      (github.event_name == 'workflow_dispatch' && inputs.source_branch != '') ||
+      (github.event_name == 'push' &&
+       github.ref != 'refs/heads/khono_v4' &&
+       github.ref != 'refs/heads/main' &&
+       !contains(github.event.head_commit.message || '', '[skip ci]'))
+    runs-on: ubuntu-latest
+    outputs:
+      integrated: ${{ steps.merge.outputs.integrated }}
+      integration_sha: ${{ steps.merge.outputs.integration_sha }}
+    steps:
+      - name: Resolve source branch
+        id: source
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BRANCH="${{ inputs.source_branch }}"
+          else
+            BRANCH="${{ github.ref_name }}"
+          fi
+          if [ "$BRANCH" = "${{ env.INTEGRATION_BRANCH }}" ] || [ "$BRANCH" = "${{ env.PRODUCTION_BRANCH }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        if: steps.source.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Squash-merge into khono_v4 (direct git, incoming wins on conflict)
+        id: merge
+        if: steps.source.outputs.skip != 'true'
+        env:
+          SOURCE_BRANCH: ${{ steps.source.outputs.branch }}
+          INTEGRATION_BRANCH: ${{ env.INTEGRATION_BRANCH }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin "$INTEGRATION_BRANCH" "$SOURCE_BRANCH"
+          git checkout -B "$INTEGRATION_BRANCH" "origin/$INTEGRATION_BRANCH"
+
+          SOURCE_SHA=$(git rev-parse "origin/$SOURCE_BRANCH")
+          echo "Integrating ${SOURCE_BRANCH}@${SOURCE_SHA} into ${INTEGRATION_BRANCH}"
+
+          # Skip when khono_v4 already contains the source tip.
+          if git merge-base --is-ancestor "$SOURCE_SHA" HEAD; then
+            echo "Source branch is already integrated into ${INTEGRATION_BRANCH}"
+            echo "integrated=false" >> "$GITHUB_OUTPUT"
+            echo "integration_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! git merge --squash "origin/$SOURCE_BRANCH" -X theirs; then
+            echo "Conflicts after -X theirs — forcing incoming (source branch) file versions"
+            git diff --name-only --diff-filter=U | while read -r file; do
+              [ -n "$file" ] || continue
+              git checkout --theirs -- "$file" || true
+              git add -- "$file"
+            done
+          fi
+
+          if git diff --cached --quiet; then
+            echo "No file changes to integrate from ${SOURCE_BRANCH}"
+            echo "integrated=false" >> "$GITHUB_OUTPUT"
+            echo "integration_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git commit -m "squash: integrate ${SOURCE_BRANCH} into ${INTEGRATION_BRANCH}
+
+          Source: ${SOURCE_SHA}
+          Automated integration — incoming branch wins on conflicts."
+
+          if ! git push origin "$INTEGRATION_BRANCH"; then
+            echo "Push rejected — rebasing onto latest ${INTEGRATION_BRANCH} and retrying"
+            git fetch origin "$INTEGRATION_BRANCH"
+            git rebase "origin/$INTEGRATION_BRANCH"
+            git push origin "$INTEGRATION_BRANCH"
+          fi
+
+          echo "Integrated ${SOURCE_BRANCH} into ${INTEGRATION_BRANCH}"
+          echo "integrated=true" >> "$GITHUB_OUTPUT"
+          echo "integration_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  deploy-khono-v4:
+    name: Deploy khono_v4 and open main PR
+    needs: merge-into-khono-v4
+    if: |
+      always() &&
+      !cancelled() &&
+      !contains(github.event.head_commit.message || '', '[skip ci]') &&
+      (
+        (needs.merge-into-khono-v4.result == 'success' && needs.merge-into-khono-v4.outputs.integrated == 'true') ||
+        (
+          github.ref == 'refs/heads/khono_v4' &&
+          needs.merge-into-khono-v4.result == 'skipped'
+        )
+      )
+    concurrency:
+      group: deploy-khono-v4-pipeline
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout khono_v4
+        uses: actions/checkout@v4
+        with:
+          ref: khono_v4
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for deploy-check on khono_v4 (build + Render hooks)
+        id: deploy_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for deploy-check on khono_v4 (version, analyze, test, build, Render hooks)"
+          sleep 20
+          STARTED_AT=$(date -u -d '2 minutes ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
+          TRIGGERED=false
+
+          for _ in $(seq 1 90); do
+            RUN_JSON=$(gh run list \
+              --workflow=deploy-check.yml \
+              --branch=khono_v4 \
+              --limit=5 \
+              --json databaseId,status,conclusion,createdAt)
+
+            RUN_ID=$(echo "$RUN_JSON" | jq -r --arg since "$STARTED_AT" '
+              [.[] | select(.createdAt >= $since)][0].databaseId // empty')
+            STATUS=$(echo "$RUN_JSON" | jq -r --arg id "$RUN_ID" '
+              .[] | select((.databaseId | tostring) == $id) | .status // empty' 2>/dev/null | head -1)
+            CONCLUSION=$(echo "$RUN_JSON" | jq -r --arg id "$RUN_ID" '
+              .[] | select((.databaseId | tostring) == $id) | .conclusion // empty' 2>/dev/null | head -1)
+
+            if [ -z "$RUN_ID" ] && [ "$TRIGGERED" = "false" ]; then
+              echo "No recent deploy-check run — triggering deploy-check on khono_v4"
+              gh workflow run deploy-check.yml --ref khono_v4
+              TRIGGERED=true
+              sleep 15
+              continue
+            fi
+
+            if [ -n "$RUN_ID" ] && [ "$STATUS" = "completed" ]; then
+              BUILD_CONCLUSION=$(gh run view "$RUN_ID" --json jobs --jq \
+                '[.jobs[] | select(.name == "Flutter CI, web build, Render deploy") | .conclusion][0] // empty')
+              if [ "$CONCLUSION" = "success" ] || [ "$BUILD_CONCLUSION" = "success" ]; then
+                if [ "$CONCLUSION" != "success" ] && [ "$BUILD_CONCLUSION" = "success" ]; then
+                  echo "::warning::deploy-check conclusion=$CONCLUSION but build/deploy job succeeded (e.g. release PR step failed)"
+                fi
+                echo "deploy-check build/deploy succeeded (run $RUN_ID)"
+                echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              echo "::error::deploy-check failed (run $RUN_ID, conclusion=$CONCLUSION, build=$BUILD_CONCLUSION)"
+              gh run view "$RUN_ID" --log-failed || true
+              exit 1
+            fi
+
+            if [ -n "$RUN_ID" ]; then
+              echo "deploy-check run $RUN_ID status=$STATUS — waiting..."
+            else
+              echo "Waiting for deploy-check run to appear..."
+            fi
+            sleep 30
+          done
+
+          echo "::error::Timed out waiting for deploy-check on khono_v4"
+          exit 1
+
+      - name: Detect changes for release PR summary
+        id: changes
+        run: |
+          git fetch origin khono_v4 main
+          AHEAD=$(git rev-list --count origin/main..origin/khono_v4 || echo 0)
+          echo "ahead_of_main=$AHEAD" >> "$GITHUB_OUTPUT"
+          git fetch origin khono_v4
+          git checkout khono_v4
+          git pull origin khono_v4 --rebase
+          BEFORE_SHA="${{ github.event.before }}"
+          AFTER_SHA=$(git rev-parse HEAD)
+          if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE_SHA=$(git rev-parse HEAD~1 2>/dev/null) || BEFORE_SHA=""
+          fi
+          if [ -z "$BEFORE_SHA" ]; then
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" || true)
+          if echo "$CHANGED" | grep -Eq '^(lib/|web/|assets/|pubspec\.yaml|pubspec\.lock|\.github/workflows/|build/web/)'; then
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$CHANGED" | grep -Eq '^backend/'; then
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open PR khono_v4 → main (manual merge only — never auto-merged)
+        if: steps.changes.outputs.ahead_of_main != '0'
+        continue-on-error: true
+        uses: ./.github/actions/open-release-pr
+        with:
+          deploy_check_run_id: ${{ steps.deploy_check.outputs.run_id }}
+          frontend_changed: ${{ steps.changes.outputs.frontend_changed }}
+          backend_changed: ${{ steps.changes.outputs.backend_changed }}
+
+      - name: Skip PR — khono_v4 not ahead of main
+        if: steps.changes.outputs.ahead_of_main == '0'
+        run: echo "khono_v4 has no commits ahead of main — release PR not needed"
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          {
+            echo "## deploy summary"
+            echo "- **Branch:** khono_v4 @ \`${{ github.sha }}\`"
+            echo "- **deploy-check run:** ${{ steps.deploy_check.outputs.run_id }}"
+            echo "- **Frontend deploy:** ${{ steps.changes.outputs.frontend_changed }}"
+            echo "- **Backend deploy:** ${{ steps.changes.outputs.backend_changed }}"
+            echo "- **Release PR:** opened by deploy-check after successful deploy (manual merge into main)"
+          } >> "$GITHUB_STEP_SUMMARY"

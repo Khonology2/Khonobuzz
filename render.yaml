@@ -1,0 +1,38 @@
+# Render Blueprint — Static Site (pre-built Flutter web only)
+#
+# GitHub: .github/workflows/deploy-check.yml runs flutter build web, commits
+# build/web to khono-v2, then triggers your Deploy Hook. Render only uploads
+# those files — no Flutter SDK and no npm on Render.
+#
+# If the dashboard shows "Installing dependencies with npm" or clones Flutter,
+# the service is misconfigured. Fix in Render Dashboard:
+#   - Runtime: Static Site (not Node / Web Service)
+#   - Build Command: empty or: echo "Using pre-built build/web from GitHub"
+#   - Publish directory: build/web
+# Or re-link this blueprint so it matches the static service below.
+#
+# IMPORTANT: Do NOT run "flutter build web" on Render.
+
+services:
+  - type: web
+    name: khonobuzz
+    runtime: static
+    branch: khono-v2
+
+    buildCommand: "echo 'Pre-built assets from GitHub Actions (build/web)'"
+
+    # Flutter web output (committed by .github/workflows/deploy-check.yml)
+    staticPublishPath: ./build/web
+
+    # Browsers/CDN must revalidate so new deploys are not masked by aggressive caching
+    # (complements CI stripping the Flutter service worker in flutter_bootstrap.js).
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+
+    # SPA routing: serve index.html for all routes (Flutter web is a single-page app)
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

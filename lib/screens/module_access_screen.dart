@@ -1,3 +1,5 @@
+// ignore_for_file: unused_import
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -6,12 +8,17 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../models/managed_user.dart';
-import '../utils/pdh_firebase.dart'
+import '../utils/pdh_sync.dart'
     show updatePDHUserPartial, updateSkillsHeatmapUserPartial;
 import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/sound_system.dart';
+import '../services/admin_alert_service.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
 
 class ModuleAccessScreen extends StatefulWidget {
   const ModuleAccessScreen({super.key});
@@ -35,14 +42,24 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     'Finance',
   ];
   final List<String> _moduleRoleOptionsDeliverables = [
-    'System admin',
-    'Client',
+    'System Admin',
+    'Delivery Manager',
+    'Client Reviewer',
     'Team member',
+  ];
+  final List<String> _moduleRoleOptionsSkillsHeatmap = [
+    'Executive',
+    'Delivery Manager',
+    'HR',
+    'Sales Manager',
+    'Ops Manager',
+    'System Admin',
   ];
   static const String _notAssignedValue = 'Not Assigned';
 
   String? expandedUserId;
   String? _updatingUserId;
+  String? _hoveredUserId;
   Timer? _debounceTimer;
   String _searchQuery = '';
 
@@ -51,25 +68,59 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   String _sortOption = 'name';
 
+  Future<void> _publishAdminAlert({
+    required String title,
+    required String message,
+    Map<String, dynamic> details = const {},
+    bool requiresAck = false,
+  }) async {
+    final authProvider = context.read<AuthProvider>();
+    if ((authProvider.userRole ?? '').toLowerCase() != 'admin') {
+      return;
+    }
+    final actorEmail = (authProvider.userEmail ?? '').trim();
+    if (actorEmail.isEmpty) {
+      return;
+    }
+    try {
+      await AdminAlertService.publishAdminChange(
+        actorEmail: actorEmail,
+        title: title,
+        message: message,
+        area: 'module_access',
+        details: details,
+        requiresAck: requiresAck,
+      );
+    } catch (e) {
+      debugPrint('[ModuleAccess] alert publish failed: $e');
+    }
+  }
+
+  DateTime _lastSignInSortKey(ManagedUser user) {
+    return user.lastSignInAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
   List<ManagedUser> get _sortedFilteredUsers {
     final list = List<ManagedUser>.from(_filteredUsers);
-    switch (_sortOption) {
-      case 'department':
-        list.sort((a, b) => a.department.compareTo(b.department));
-        break;
-      case 'modules_desc':
-        list.sort((a, b) {
+    // Primary sort: latest sign-in first, so admins always see newest logins on top.
+    // Secondary sort: keep the selected sort option among users with same sign-in recency.
+    list.sort((a, b) {
+      final signInCompare = _lastSignInSortKey(b).compareTo(_lastSignInSortKey(a));
+      if (signInCompare != 0) return signInCompare;
+
+      switch (_sortOption) {
+        case 'department':
+          return a.department.compareTo(b.department);
+        case 'modules_desc':
           final aCount = _moduleCount(a);
           final bCount = _moduleCount(b);
           if (bCount != aCount) return bCount.compareTo(aCount);
           return a.name.compareTo(b.name);
-        });
-        break;
-      case 'name':
-      default:
-        list.sort((a, b) => a.name.compareTo(b.name));
-        break;
-    }
+        case 'name':
+        default:
+          return a.name.compareTo(b.name);
+      }
+    });
     return list;
   }
 
@@ -87,6 +138,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   final Map<String, String?> _selectedSOWBuilderRoles = {};
 
   final Map<String, String?> _selectedDeliverablesRoles = {};
+
+  final Map<String, String?> _selectedSkillsHeatmapRoles = {};
 
   Map<String, Color> get userStatusColors => {
     'Active': Colors.green.shade600,
@@ -116,14 +169,32 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     'Deliverables & Sprint Sign-Off Hub',
   ];
 
+  // Required for module-access user widgets:
+  // - Light mode: solid white containers
+  // - Dark mode: translucent dark surface + subtle white tint
+  static final Color moduleAccessDarkWidgetBg = Color.alphaBlend(
+    Colors.white.withValues(alpha: 0.10),
+    const Color(0xFF3D3F40).withValues(alpha: 0.40),
+  );
+
   String? _canonicalModuleName(String raw) {
     final t = raw.trim();
     if (t.isEmpty) return null;
-    if (t == 'PDH' || t == 'Personal Development Hub') return 'Personal Development Hub';
-    if (t == 'Skills Heatmap' || t == 'Resource & Capacity Skills Heatmap') return 'Resource & Capacity Skills Heatmap';
-    if (t == 'Automated Recruitment Workflow') return t;
-    if (t == 'SOW Builder' || t == 'Proposal & SOW Builder') return 'Proposal & SOW Builder';
-    if (t == 'Deliverables & Sprint Sign-Off Hub') return t;
+    if (t == 'PDH' || t == 'Personal Development Hub') {
+      return 'Personal Development Hub';
+    }
+    if (t == 'Skills Heatmap' || t == 'Resource & Capacity Skills Heatmap') {
+      return 'Resource & Capacity Skills Heatmap';
+    }
+    if (t == 'Automated Recruitment Workflow') {
+      return t;
+    }
+    if (t == 'SOW Builder' || t == 'Proposal & SOW Builder') {
+      return 'Proposal & SOW Builder';
+    }
+    if (t == 'Deliverables & Sprint Sign-Off Hub') {
+      return t;
+    }
     return t;
   }
 
@@ -135,14 +206,14 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           height: 10,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white24,
+            color: appTextColor(context).withValues(alpha: 0.24),
           ),
         ),
         const SizedBox(width: 8.0),
         Text(
           'No modules assigned · Tap to assign',
           style: TextStyle(
-            color: Colors.white54,
+            color: appTextColor(context),
             fontSize: 12.0,
             fontFamily: 'Poppins',
           ),
@@ -162,14 +233,14 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           height: 10,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white24,
+            color: appTextColor(context).withValues(alpha: 0.24),
           ),
         ),
         const SizedBox(width: 8.0),
         Text(
           'No modules assigned · Tap to assign',
           style: TextStyle(
-            color: Colors.white54,
+            color: appTextColor(context),
             fontSize: 12.0,
             fontFamily: 'Poppins',
           ),
@@ -177,7 +248,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       ];
     }
     return accessList.map((name) {
-      final color = _moduleDotColors[name] ?? Colors.white54;
+      final color = _moduleDotColors[name] ?? appTextColor(context);
       return Tooltip(
         message: name,
         child: Container(
@@ -213,7 +284,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           .map((e) => e.trim().toLowerCase())
           .toList();
 
-      return user.name.toLowerCase().contains(query) ||
+      return user.displayName.toLowerCase().contains(query) ||
           user.email.toLowerCase().contains(query) ||
           user.department.toLowerCase().contains(query) ||
           user.designation.toLowerCase().contains(query) ||
@@ -227,7 +298,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     super.initState();
     final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-    userProvider.fetchUsers();
+    userProvider.fetchUsers(forceRefresh: true);
 
     if (userProvider.hasCachedData) {
       userProvider.refreshUsersInBackground();
@@ -244,6 +315,37 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         });
       }
     });
+  }
+
+  Future<void> _refreshUsers() async {
+    SoundSystem.playButtonClick();
+    final userProvider = context.read<UserProvider>();
+    await userProvider.fetchUsers(forceRefresh: true);
+    if (!mounted) return;
+
+    if (userProvider.hasError) {
+      SoundSystem.playError();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userProvider.errorMessage ?? 'Failed to refresh users.',
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'User list refreshed.',
+          style: TextStyle(fontFamily: 'Poppins'),
+        ),
+        backgroundColor: Color(0xFFC10D00),
+      ),
+    );
   }
 
   void _refreshRecruitmentRoleCache(ManagedUser user) {
@@ -333,6 +435,39 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     _selectedDeliverablesRoles[user.id] = _notAssignedValue;
   }
 
+  void _refreshSkillsHeatmapRoleCache(ManagedUser user) {
+    if (user.moduleAccessRole != null && user.moduleAccessRole!.isNotEmpty) {
+      final parts = user.moduleAccessRole!.split(', ');
+      for (var part in parts) {
+        final trimmedPart = part.trim();
+        if (trimmedPart.startsWith('Skills Heatmap - ')) {
+          final extractedRole = trimmedPart
+              .replaceFirst('Skills Heatmap - ', '')
+              .trim();
+
+          final roleLower = extractedRole.toLowerCase();
+          for (var option in _moduleRoleOptionsSkillsHeatmap) {
+            if (option.toLowerCase() == roleLower) {
+              _selectedSkillsHeatmapRoles[user.id] = option;
+              return;
+            }
+          }
+
+          if (extractedRole.isNotEmpty && extractedRole != 'Manager') {
+            _selectedSkillsHeatmapRoles[user.id] = extractedRole;
+          } else if (extractedRole == 'Manager') {
+            // Default to first option for existing Manager roles
+            _selectedSkillsHeatmapRoles[user.id] =
+                _moduleRoleOptionsSkillsHeatmap.first;
+          }
+          return;
+        }
+      }
+    }
+
+    _selectedSkillsHeatmapRoles[user.id] = _notAssignedValue;
+  }
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
@@ -363,6 +498,65 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     user.moduleAccess = accessList.isEmpty ? null : accessList.join(',');
   }
 
+  Map<String, String> _parseModuleRoleMap(String? moduleAccessRole) {
+    final result = <String, String>{};
+    final raw = (moduleAccessRole ?? '').trim();
+    if (raw.isEmpty) {
+      return result;
+    }
+    for (final part in raw.split(', ')) {
+      final seg = part.trim();
+      if (seg.isEmpty) continue;
+      if (seg.startsWith('PDH - ')) {
+        result['Personal Development Hub'] =
+            seg.replaceFirst('PDH - ', '').trim();
+      } else if (seg == 'PDH') {
+        result['Personal Development Hub'] = 'Assigned';
+      } else if (seg.startsWith('Skills Heatmap - ')) {
+        result['Resource & Capacity Skills Heatmap'] =
+            seg.replaceFirst('Skills Heatmap - ', '').trim();
+      } else if (seg.startsWith('Automated Recruitment Workflow - ')) {
+        result['Automated Recruitment Workflow'] =
+            seg.replaceFirst('Automated Recruitment Workflow - ', '').trim();
+      } else if (seg == 'Automated Recruitment Workflow') {
+        result['Automated Recruitment Workflow'] = 'Assigned';
+      } else if (seg.startsWith('Proposal & SOW Builder - ')) {
+        result['Proposal & SOW Builder'] =
+            seg.replaceFirst('Proposal & SOW Builder - ', '').trim();
+      } else if (seg == 'Proposal & SOW Builder') {
+        result['Proposal & SOW Builder'] = 'Assigned';
+      } else if (seg.startsWith('Deliverables & Sprint Sign-Off Hub - ')) {
+        result['Deliverables & Sprint Sign-Off Hub'] =
+            seg.replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '').trim();
+      } else if (seg == 'Deliverables & Sprint Sign-Off Hub') {
+        result['Deliverables & Sprint Sign-Off Hub'] = 'Assigned';
+      }
+    }
+    return result;
+  }
+
+  List<String> _buildModuleChangeSummary({
+    required Map<String, String> before,
+    required Map<String, String> after,
+  }) {
+    const modules = <String>[
+      'Personal Development Hub',
+      'Resource & Capacity Skills Heatmap',
+      'Automated Recruitment Workflow',
+      'Proposal & SOW Builder',
+      'Deliverables & Sprint Sign-Off Hub',
+    ];
+    final changes = <String>[];
+    for (final module in modules) {
+      final oldRole = before[module] ?? 'Not assigned';
+      final newRole = after[module] ?? 'Not assigned';
+      if (oldRole != newRole) {
+        changes.add('$module role changed from "$oldRole" to "$newRole"');
+      }
+    }
+    return changes;
+  }
+
   Future<void> _updateUserModuleAccess(
     ManagedUser user,
     bool pdhSelected,
@@ -374,8 +568,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     String? newRecruitmentRole,
     String? newSOWBuilderRole,
     String? newDeliverablesRole,
+    String? newSkillsHeatmapRole,
   ) async {
     final adminEmail = context.read<AuthProvider>().userEmail?.trim() ?? '';
+    final beforeRoleMap = _parseModuleRoleMap(user.moduleAccessRole);
     setState(() {
       _updatingUserId = user.id;
     });
@@ -436,6 +632,16 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           : '';
     }
 
+    String sanitizedSkillsHeatmapRole = '';
+    if (skillsHeatmapSelected) {
+      sanitizedSkillsHeatmapRole =
+          (newSkillsHeatmapRole != null &&
+              newSkillsHeatmapRole.trim().isNotEmpty &&
+              newSkillsHeatmapRole != _notAssignedValue)
+          ? newSkillsHeatmapRole.trim()
+          : _moduleRoleOptionsSkillsHeatmap.first; // Default to first option
+    }
+
     List<String> combinedParts = [];
     if (pdhSelected && sanitizedModuleRole.isNotEmpty) {
       combinedParts.add('PDH - $sanitizedModuleRole');
@@ -443,7 +649,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       combinedParts.add('PDH');
     }
     if (skillsHeatmapSelected) {
-      combinedParts.add('Skills Heatmap - Manager');
+      combinedParts.add('Skills Heatmap - $sanitizedSkillsHeatmapRole');
     }
     if (recruitmentSelected && sanitizedRecruitmentRole.isNotEmpty) {
       combinedParts.add(
@@ -622,10 +828,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         if (mounted) {
           SoundSystem.playError();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
                 'Module access updated, but failed to sync with PDH.',
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                style: TextStyle(fontFamily: 'Poppins', color: appTextColor(context)),
               ),
               backgroundColor: Colors.orange,
             ),
@@ -658,16 +864,39 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Module access updated for ${user.name}.',
-              style: const TextStyle(
+              'Module access updated for ${user.displayName}.',
+              style: TextStyle(
                 fontFamily: 'Poppins',
-                color: Colors.white,
+                color: appTextColor(context),
               ),
             ),
             backgroundColor: const Color(0xFFC10D00),
           ),
         );
       }
+      await _publishAdminAlert(
+        title: 'Module access updated',
+        message: (() {
+          final afterRoleMap = _parseModuleRoleMap(updatedModuleAccessRole);
+          final changes = _buildModuleChangeSummary(
+            before: beforeRoleMap,
+            after: afterRoleMap,
+          );
+          if (changes.isEmpty) {
+            return 'Module access for ${user.displayName} was updated.';
+          }
+          return changes.join('; ');
+        })(),
+        details: {
+          'userId': user.id,
+          'userName': user.displayName,
+          'moduleAccess': updatedModuleAccess ?? '',
+          'moduleAccessRole': updatedModuleAccessRole ?? '',
+          'approvedBy': adminEmail,
+          'effectiveDateIso': DateTime.now().toUtc().toIso8601String(),
+        },
+        requiresAck: true,
+      );
     } catch (e) {
       if (mounted) {
         SoundSystem.playError();
@@ -675,7 +904,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           SnackBar(
             content: Text(
               'Failed to update module access. Please try again.',
-              style: const TextStyle(fontFamily: 'Poppins'),
+              style: TextStyle(fontFamily: 'Poppins'),
             ),
             backgroundColor: Colors.red.shade600,
           ),
@@ -704,16 +933,21 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         String? selectedRecruitmentRole = _notAssignedValue;
         String? selectedSOWBuilderRole = _notAssignedValue;
         String? selectedDeliverablesRole = _notAssignedValue;
+        String? selectedSkillsHeatmapRole = _notAssignedValue;
         bool isUpdating = false;
 
         return StatefulBuilder(
           builder: (context, setStateDialog) {
+            final bool isDark = Theme.of(context).brightness == Brightness.dark;
+            final Color dialogBg = isDark
+                ? const Color(0xFF3D3F40)
+                : Colors.white;
             return AlertDialog(
-              backgroundColor: const Color(0xFF2C3E50),
-              title: const Text(
+              backgroundColor: dialogBg,
+              title: Text(
                 'Update Module Access',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: appTextColor(context),
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.bold,
                 ),
@@ -732,20 +966,23 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               vertical: 8.0,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2C3E50),
+                              color:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? moduleAccessDarkWidgetBg
+                                      : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: CheckboxListTile(
-                              title: const Text(
+                              title: Text(
                                 'Personal Development Hub',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: appTextColor(context),
                                   fontFamily: 'Poppins',
                                 ),
                               ),
                               value: pdhSelected,
                               activeColor: const Color(0xFFC10D00),
-                              checkColor: Colors.white,
+                              checkColor: appTextColor(context),
                               onChanged: (bool? value) {
                                 SoundSystem.playButtonClick();
                                 setStateDialog(() {
@@ -768,9 +1005,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               vertical: 8.0,
                             ),
                             decoration: BoxDecoration(
-                              color: pdhSelected
-                                  ? const Color(0xFF2C3E50)
-                                  : const Color(0xFF1A1A1A),
+                              color:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? moduleAccessDarkWidgetBg
+                                      : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: DropdownButtonHideUnderline(
@@ -779,22 +1017,25 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                     ? selectedModuleRole
                                     : _notAssignedValue,
                                 isExpanded: true,
-                                dropdownColor: const Color(0xFF2C3E50),
-                                icon: const Icon(
+                              dropdownColor:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? const Color(0xFF3D3F40)
+                                      : Colors.white,
+                                icon: Icon(
                                   Icons.arrow_drop_down,
-                                  color: Colors.white70,
+                                  color: appTextColor(context),
                                 ),
-                                hint: const Text(
+                                hint: Text(
                                   'Module Role',
                                   style: TextStyle(
-                                    color: Colors.white60,
+                                    color: appTextColor(context),
                                     fontFamily: 'Poppins',
                                   ),
                                 ),
                                 style: TextStyle(
                                   color: pdhSelected
-                                      ? Colors.white
-                                      : Colors.white54,
+                                      ? appTextColor(context)
+                                      : appTextColor(context),
                                   fontFamily: 'Poppins',
                                 ),
                                 onChanged: pdhSelected
@@ -834,20 +1075,23 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               vertical: 8.0,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2C3E50),
+                              color:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? moduleAccessDarkWidgetBg
+                                      : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: CheckboxListTile(
-                              title: const Text(
+                              title: Text(
                                 'Resource & Capacity Skills Heatmap',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: appTextColor(context),
                                   fontFamily: 'Poppins',
                                 ),
                               ),
                               value: skillsHeatmapSelected,
                               activeColor: const Color(0xFFC10D00),
-                              checkColor: Colors.white,
+                              checkColor: appTextColor(context),
                               onChanged: (bool? value) {
                                 SoundSystem.playButtonClick();
                                 setStateDialog(() {
@@ -867,39 +1111,45 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               vertical: 8.0,
                             ),
                             decoration: BoxDecoration(
-                              color: skillsHeatmapSelected
-                                  ? const Color(0xFF2C3E50)
-                                  : const Color(0xFF1A1A1A),
+                              color:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? moduleAccessDarkWidgetBg
+                                      : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String?>(
                                 value: skillsHeatmapSelected
-                                    ? 'Manager'
+                                    ? selectedSkillsHeatmapRole
                                     : _notAssignedValue,
                                 isExpanded: true,
-                                dropdownColor: const Color(0xFF2C3E50),
-                                icon: const Icon(
+                              dropdownColor:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? const Color(0xFF3D3F40)
+                                      : Colors.white,
+                                icon: Icon(
                                   Icons.arrow_drop_down,
-                                  color: Colors.white70,
+                                  color: appTextColor(context),
                                 ),
-                                hint: const Text(
+                                hint: Text(
                                   'Module Role',
                                   style: TextStyle(
-                                    color: Colors.white60,
+                                    color: appTextColor(context),
                                     fontFamily: 'Poppins',
                                   ),
                                 ),
                                 style: TextStyle(
                                   color: skillsHeatmapSelected
-                                      ? Colors.white
-                                      : Colors.white54,
+                                      ? appTextColor(context)
+                                      : appTextColor(context),
                                   fontFamily: 'Poppins',
                                 ),
                                 onChanged: skillsHeatmapSelected
                                     ? (value) {
                                         SoundSystem.playButtonClick();
-                                        setStateDialog(() {});
+                                        setStateDialog(() {
+                                          selectedSkillsHeatmapRole = value;
+                                        });
                                       }
                                     : null,
                                 items: <DropdownMenuItem<String?>>[
@@ -908,9 +1158,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                       value: _notAssignedValue,
                                       child: Text(_notAssignedValue),
                                     ),
-                                  DropdownMenuItem<String?>(
-                                    value: 'Manager',
-                                    child: Text('Manager'),
+                                  ..._moduleRoleOptionsSkillsHeatmap.map(
+                                    (option) => DropdownMenuItem<String?>(
+                                      value: option,
+                                      child: Text(option),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -930,20 +1182,23 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               vertical: 8.0,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2C3E50),
+                              color:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? moduleAccessDarkWidgetBg
+                                      : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: CheckboxListTile(
-                              title: const Text(
+                              title: Text(
                                 'Automated Recruitment Workflow',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: appTextColor(context),
                                   fontFamily: 'Poppins',
                                 ),
                               ),
                               value: recruitmentSelected,
                               activeColor: const Color(0xFFC10D00),
-                              checkColor: Colors.white,
+                              checkColor: appTextColor(context),
                               onChanged: (bool? value) {
                                 SoundSystem.playButtonClick();
                                 setStateDialog(() {
@@ -966,9 +1221,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               vertical: 8.0,
                             ),
                             decoration: BoxDecoration(
-                              color: recruitmentSelected
-                                  ? const Color(0xFF2C3E50)
-                                  : const Color(0xFF1A1A1A),
+                              color:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? moduleAccessDarkWidgetBg
+                                      : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: DropdownButtonHideUnderline(
@@ -977,22 +1233,25 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                     ? selectedRecruitmentRole
                                     : _notAssignedValue,
                                 isExpanded: true,
-                                dropdownColor: const Color(0xFF2C3E50),
-                                icon: const Icon(
+                              dropdownColor:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? const Color(0xFF3D3F40)
+                                      : Colors.white,
+                                icon: Icon(
                                   Icons.arrow_drop_down,
-                                  color: Colors.white70,
+                                  color: appTextColor(context),
                                 ),
-                                hint: const Text(
+                                hint: Text(
                                   'Module Role',
                                   style: TextStyle(
-                                    color: Colors.white60,
+                                    color: appTextColor(context),
                                     fontFamily: 'Poppins',
                                   ),
                                 ),
                                 style: TextStyle(
                                   color: recruitmentSelected
-                                      ? Colors.white
-                                      : Colors.white54,
+                                      ? appTextColor(context)
+                                      : appTextColor(context),
                                   fontFamily: 'Poppins',
                                 ),
                                 onChanged: recruitmentSelected
@@ -1032,20 +1291,23 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               vertical: 8.0,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2C3E50),
+                              color:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? moduleAccessDarkWidgetBg
+                                      : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: CheckboxListTile(
-                              title: const Text(
+                              title: Text(
                                 'Proposal & SOW Builder',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: appTextColor(context),
                                   fontFamily: 'Poppins',
                                 ),
                               ),
                               value: sowBuilderSelected,
                               activeColor: const Color(0xFFC10D00),
-                              checkColor: Colors.white,
+                              checkColor: appTextColor(context),
                               onChanged: (bool? value) {
                                 SoundSystem.playButtonClick();
                                 setStateDialog(() {
@@ -1068,9 +1330,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               vertical: 8.0,
                             ),
                             decoration: BoxDecoration(
-                              color: sowBuilderSelected
-                                  ? const Color(0xFF2C3E50)
-                                  : const Color(0xFF1A1A1A),
+                              color:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? moduleAccessDarkWidgetBg
+                                      : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: DropdownButtonHideUnderline(
@@ -1079,22 +1342,25 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                     ? selectedSOWBuilderRole
                                     : _notAssignedValue,
                                 isExpanded: true,
-                                dropdownColor: const Color(0xFF2C3E50),
-                                icon: const Icon(
+                              dropdownColor:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? const Color(0xFF3D3F40)
+                                      : Colors.white,
+                                icon: Icon(
                                   Icons.arrow_drop_down,
-                                  color: Colors.white70,
+                                  color: appTextColor(context),
                                 ),
-                                hint: const Text(
+                                hint: Text(
                                   'Module Role',
                                   style: TextStyle(
-                                    color: Colors.white60,
+                                    color: appTextColor(context),
                                     fontFamily: 'Poppins',
                                   ),
                                 ),
                                 style: TextStyle(
                                   color: sowBuilderSelected
-                                      ? Colors.white
-                                      : Colors.white54,
+                                      ? appTextColor(context)
+                                      : appTextColor(context),
                                   fontFamily: 'Poppins',
                                 ),
                                 onChanged: sowBuilderSelected
@@ -1130,7 +1396,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         vertical: 8.0,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2C3E50),
+                        color:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? moduleAccessDarkWidgetBg
+                                : Colors.white,
                         borderRadius: BorderRadius.circular(8.0),
                       ),
                       child: Row(
@@ -1138,16 +1407,16 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         children: [
                           Expanded(
                             child: CheckboxListTile(
-                              title: const Text(
+                              title: Text(
                                 'Deliverables & Sprint Sign-Off Hub',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: appTextColor(context),
                                   fontFamily: 'Poppins',
                                 ),
                               ),
                               value: deliverablesSelected,
                               activeColor: const Color(0xFFC10D00),
-                              checkColor: Colors.white,
+                              checkColor: appTextColor(context),
                               onChanged: (bool? value) {
                                 SoundSystem.playButtonClick();
                                 setStateDialog(() {
@@ -1170,9 +1439,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 vertical: 8.0,
                               ),
                               decoration: BoxDecoration(
-                                color: deliverablesSelected
-                                    ? const Color(0xFF2C3E50)
-                                    : const Color(0xFF1A1A1A),
+                                color:
+                                    Theme.of(context).brightness == Brightness.dark
+                                        ? moduleAccessDarkWidgetBg
+                                        : Colors.white,
                                 borderRadius: BorderRadius.circular(8.0),
                               ),
                               child: DropdownButtonHideUnderline(
@@ -1181,22 +1451,26 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                       ? selectedDeliverablesRole
                                       : _notAssignedValue,
                                   isExpanded: true,
-                                  dropdownColor: const Color(0xFF2C3E50),
-                                  icon: const Icon(
+                                  dropdownColor:
+                                      Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? const Color(0xFF3D3F40)
+                                          : Colors.white,
+                                  icon: Icon(
                                     Icons.arrow_drop_down,
-                                    color: Colors.white70,
+                                    color: appTextColor(context),
                                   ),
-                                  hint: const Text(
+                                  hint: Text(
                                     'Module Role',
                                     style: TextStyle(
-                                      color: Colors.white60,
+                                      color: appTextColor(context),
                                       fontFamily: 'Poppins',
                                     ),
                                   ),
                                   style: TextStyle(
                                     color: deliverablesSelected
-                                        ? Colors.white
-                                        : Colors.white54,
+                                        ? appTextColor(context)
+                                        : appTextColor(context),
                                     fontFamily: 'Poppins',
                                   ),
                                   onChanged: deliverablesSelected
@@ -1237,10 +1511,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           SoundSystem.playButtonClick();
                           Navigator.of(dialogContext).pop();
                         },
-                  child: const Text(
+                  child: Text(
                     'Cancel',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: appTextColor(context),
                       fontFamily: 'Poppins',
                     ),
                   ),
@@ -1277,6 +1551,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedRecruitmentRole,
                                 selectedSOWBuilderRole,
                                 selectedDeliverablesRole,
+                                selectedSkillsHeatmapRole,
                               );
                             }
 
@@ -1300,23 +1575,23 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFC10D00),
-                    foregroundColor: Colors.white,
+                    foregroundColor: appTextColor(context),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(45.0),
                     ),
                   ),
                   child: isUpdating
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
+                              appTextColor(context),
                             ),
                           ),
                         )
-                      : const Text(
+                      : Text(
                           'Update Selected Users',
                           style: TextStyle(fontFamily: 'Poppins'),
                         ),
@@ -1336,7 +1611,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           ? Container(
               padding: const EdgeInsets.all(16.0),
               decoration: BoxDecoration(
-                color: const Color(0xFF2C3E50),
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? moduleAccessDarkWidgetBg
+                    : Colors.white,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.3),
@@ -1351,8 +1628,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   children: [
                     Text(
                       '${_selectedUserIds.length} user(s) selected',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                         fontSize: 16.0,
                         fontWeight: FontWeight.bold,
@@ -1368,10 +1645,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               _selectedUserIds.clear();
                             });
                           },
-                          child: const Text(
+                          child: Text(
                             'Cancel',
                             style: TextStyle(
-                              color: Colors.white70,
+                              color: appTextColor(context),
                               fontFamily: 'Poppins',
                             ),
                           ),
@@ -1395,10 +1672,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               }
                             });
                           },
-                          child: const Text(
+                          child: Text(
                             'Select all',
                             style: TextStyle(
-                              color: Colors.white70,
+                              color: appTextColor(context),
                               fontFamily: 'Poppins',
                             ),
                           ),
@@ -1411,12 +1688,12 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFC10D00),
-                            foregroundColor: Colors.white,
+                            foregroundColor: appTextColor(context),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(45.0),
                             ),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Update Access',
                             style: TextStyle(fontFamily: 'Poppins'),
                           ),
@@ -1431,12 +1708,15 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset('assets/images/nathi_bg.png', fit: BoxFit.cover),
+            child: Image.asset(
+              appBackgroundAsset(context),
+              fit: BoxFit.cover,
+            ),
           ),
           Positioned.fill(
             child: ScrollbarTheme(
               data: ScrollbarThemeData(
-                thumbColor: WidgetStatePropertyAll<Color>(Colors.white),
+                thumbColor: WidgetStatePropertyAll<Color>(appTextColor(context)),
               ),
               child: Scrollbar(
                 controller: _scrollController,
@@ -1470,22 +1750,44 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   }
 
   Widget _buildHeader() {
+    final userProvider = context.watch<UserProvider>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Module Access',
-          style: TextStyle(
-            fontSize: 28.0,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Poppins',
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Module Access',
+                style: TextStyle(
+                  fontSize: 28.0,
+                  fontWeight: FontWeight.bold,
+                  color: appTextColor(context),
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Refresh users',
+              onPressed: userProvider.isLoading ? null : _refreshUsers,
+              icon: userProvider.isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFFC10D00),
+                      ),
+                    )
+                  : Icon(Icons.refresh, color: appTextColor(context)),
+            ),
+          ],
         ),
         const SizedBox(height: 4.0),
         Text(
           'Assign module access and roles to manage user permissions.',
           style: TextStyle(
-            color: Colors.white70,
+            color: appTextColor(context),
             fontSize: 14.0,
             fontFamily: 'Poppins',
           ),
@@ -1495,17 +1797,21 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   }
 
   Widget _buildSearch() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color filledBg = isDark
+        ? moduleAccessDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     return TextField(
       controller: _searchController,
       decoration: InputDecoration(
         hintText: 'Search users',
-        hintStyle: const TextStyle(
-          color: Colors.white54,
+        hintStyle: TextStyle(
+          color: appTextColor(context),
           fontFamily: 'Poppins',
         ),
-        prefixIcon: const Icon(Icons.search, color: Colors.white54),
+        prefixIcon: Icon(Icons.search, color: appTextColor(context)),
         suffixIcon: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white54),
+          icon: Icon(Icons.close, color: appTextColor(context)),
           onPressed: () {
             SoundSystem.playButtonClick();
             setState(() {
@@ -1515,18 +1821,22 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           },
         ),
         filled: true,
-        fillColor: const Color(0x801F2840),
+        fillColor: filledBg,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(25.0),
           borderSide: BorderSide.none,
         ),
         contentPadding: const EdgeInsets.symmetric(vertical: 12.0),
       ),
-      style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+      style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
     );
   }
 
   Widget _buildLoadingSkeleton() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark
+        ? moduleAccessDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     return Column(
       children: List.generate(5, (_) {
         return Padding(
@@ -1534,7 +1844,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           child: Container(
             height: 100,
             decoration: BoxDecoration(
-              color: const Color(0x801F2840),
+              color: widgetBg,
               borderRadius: BorderRadius.circular(16.0),
             ),
             padding: const EdgeInsets.all(16.0),
@@ -1544,7 +1854,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: Colors.white12,
+                    color: appTextColor(context).withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -1558,7 +1868,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         height: 14,
                         width: 140,
                         decoration: BoxDecoration(
-                          color: Colors.white12,
+                          color: appTextColor(context).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
@@ -1567,21 +1877,24 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         height: 12,
                         width: 180,
                         decoration: BoxDecoration(
-                          color: Colors.white10,
+                          color: appTextColor(context).withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                       const SizedBox(height: 12.0),
                       Row(
-                        children: List.generate(4, (_) => Container(
-                          margin: const EdgeInsets.only(right: 6.0),
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white12,
+                        children: List.generate(
+                          4,
+                          (_) => Container(
+                            margin: const EdgeInsets.only(right: 6.0),
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: appTextColor(context).withValues(alpha: 0.12),
+                            ),
                           ),
-                        )),
+                        ),
                       ),
                     ],
                   ),
@@ -1615,11 +1928,48 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       return _buildLoadingSkeleton();
     }
 
+    if (userProvider.hasError && userProvider.users.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_off, size: 48, color: Colors.red.shade300),
+              const SizedBox(height: 16.0),
+              Text(
+                userProvider.errorMessage ??
+                    'Failed to load users. The server may be waking up.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: appTextColor(context),
+                  fontSize: 14.0,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              const SizedBox(height: 24.0),
+              FilledButton.icon(
+                onPressed: () {
+                  SoundSystem.playButtonClick();
+                  userProvider.fetchUsers(forceRefresh: true);
+                },
+                icon: Icon(Icons.refresh),
+                label: Text('Retry', style: TextStyle(fontFamily: 'Poppins')),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFC10D00),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (_filteredUsers.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No users found.',
-          style: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+          style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
         ),
       );
     }
@@ -1630,16 +1980,16 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         _buildSortBar(),
         const SizedBox(height: 12.0),
         ..._sortedFilteredUsers.map((user) {
-        final isExpanded = expandedUserId == user.id;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
-          child: Column(
-            children: [
-              _buildUserRow(user, isExpanded),
-              if (isExpanded) _buildModuleAccessPanel(user),
-            ],
-          ),
-        );
+          final isExpanded = expandedUserId == user.id;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Column(
+              children: [
+                _buildUserRow(user, isExpanded),
+                if (isExpanded) _buildModuleAccessPanel(user),
+              ],
+            ),
+          );
         }),
       ],
     );
@@ -1651,7 +2001,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         Text(
           'Sort by:',
           style: TextStyle(
-            color: Colors.white54,
+            color: appTextColor(context),
             fontSize: 12.0,
             fontFamily: 'Poppins',
           ),
@@ -1677,6 +2027,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
 
   Widget _sortChip(String label, String value) {
     final isSelected = _sortOption == value;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color normalChipBg = isDark
+        ? moduleAccessDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     return GestureDetector(
       onTap: () {
         SoundSystem.playButtonClick();
@@ -1686,8 +2040,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFFC10D00).withValues(alpha: 0.3)
-              : const Color(0x801F2840),
+              ? const Color(0xFFC10D00)
+              : normalChipBg,
           borderRadius: BorderRadius.circular(20.0),
           border: isSelected
               ? Border.all(color: const Color(0xFFC10D00), width: 1)
@@ -1696,7 +2050,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : Colors.white70,
+            color: isSelected ? Colors.white : appTextColor(context),
             fontSize: 12.0,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             fontFamily: 'Poppins',
@@ -1711,75 +2065,104 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     if (url != null && url.trim().isNotEmpty) {
       return CircleAvatar(
         radius: 20,
-        backgroundColor: Colors.white24,
+        backgroundColor: appTextColor(context).withValues(alpha: 0.24),
         backgroundImage: NetworkImage(url.trim()),
         onBackgroundImageError: (_, __) {},
       );
     }
-    return const CircleAvatar(
+    return CircleAvatar(
       radius: 20,
-      backgroundColor: Colors.white24,
-      child: Icon(Icons.person, size: 24, color: Colors.white54),
+      backgroundColor: appTextColor(context).withValues(alpha: 0.24),
+      child: Icon(Icons.person, size: 24, color: appTextColor(context)),
     );
   }
 
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color normalWidgetBg = isDark
+        ? moduleAccessDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     final moduleAccessDots = _buildModuleAccessDots(user.moduleAccess);
     final isSelected = _selectedUserIds.contains(user.id);
-    return GestureDetector(
-      onLongPress: () {
-        SoundSystem.playButtonClick();
-        if (!_isSelectionMode) {
-          setState(() {
-            _isSelectionMode = true;
-            _selectedUserIds.add(user.id);
-            expandedUserId = null;
-          });
+    final bool isHovered = _hoveredUserId == user.id;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hoveredUserId = user.id),
+      onExit: (_) {
+        if (_hoveredUserId == user.id) {
+          setState(() => _hoveredUserId = null);
         }
       },
-      onTap: () {
-        SoundSystem.playButtonClick();
-        if (_isSelectionMode) {
-          setState(() {
-            if (isSelected) {
-              _selectedUserIds.remove(user.id);
-              if (_selectedUserIds.isEmpty) {
-                _isSelectionMode = false;
-              }
-            } else {
-              _selectedUserIds.add(user.id);
+      child: AnimatedScale(
+        scale: isHovered ? 1.01 : 1.0,
+        duration: const Duration(milliseconds: 170),
+        curve: Curves.easeOut,
+        child: GestureDetector(
+          onLongPress: () {
+            SoundSystem.playButtonClick();
+            if (!_isSelectionMode) {
+              setState(() {
+                _isSelectionMode = true;
+                _selectedUserIds.add(user.id);
+                expandedUserId = null;
+              });
             }
-          });
-        } else {
-          setState(() {
-            if (!isExpanded) {
-              expandedUserId = user.id;
-              _refreshRecruitmentRoleCache(user);
-              _refreshSOWBuilderRoleCache(user);
-              _refreshDeliverablesRoleCache(user);
+          },
+          onTap: () {
+            SoundSystem.playButtonClick();
+            if (_isSelectionMode) {
+              setState(() {
+                if (isSelected) {
+                  _selectedUserIds.remove(user.id);
+                  if (_selectedUserIds.isEmpty) {
+                    _isSelectionMode = false;
+                  }
+                } else {
+                  _selectedUserIds.add(user.id);
+                }
+              });
             } else {
-              expandedUserId = null;
+              setState(() {
+                if (!isExpanded) {
+                  expandedUserId = user.id;
+                  _refreshRecruitmentRoleCache(user);
+                  _refreshSOWBuilderRoleCache(user);
+                  _refreshDeliverablesRoleCache(user);
+                  _refreshSkillsHeatmapRoleCache(user);
+                } else {
+                  expandedUserId = null;
+                }
+              });
             }
-          });
-        }
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0x80C10D00) : const Color(0x801F2840),
-          borderRadius: BorderRadius.circular(16.0),
-          border: isSelected
-              ? Border.all(color: const Color(0xFFC10D00), width: 2.0)
-              : null,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 170),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0x80C10D00) : normalWidgetBg,
+              borderRadius: BorderRadius.circular(16.0),
+              border: isSelected
+                  ? Border.all(color: const Color(0xFFC10D00), width: 2.0)
+                  : Border.all(
+                      color: isHovered
+                          ? const Color(0xFFC10D00).withValues(alpha: 0.70)
+                          : appTextColor(context).withValues(alpha: 0.12),
+                      width: isHovered ? 1.6 : 1.0,
+                    ),
+              boxShadow: [
+                BoxShadow(
+                  color: isHovered
+                      ? const Color(0xFFC10D00).withValues(
+                          alpha: isDark ? 0.28 : 0.18,
+                        )
+                      : Colors.black.withValues(alpha: 0.08),
+                  blurRadius: isHovered ? 18 : 12,
+                  spreadRadius: isHovered ? 1 : 0,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-          ],
-        ),
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1802,7 +2185,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       });
                     },
                     activeColor: const Color(0xFFC10D00),
-                    checkColor: Colors.white,
+                    checkColor: appTextColor(context),
                   ),
                   const SizedBox(width: 8.0),
                 ],
@@ -1817,8 +2200,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              user.name,
-                              style: const TextStyle(
+                              user.displayName,
+                              style: TextStyle(
+                                color: appTextColor(context),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16.0,
                                 fontFamily: 'Poppins',
@@ -1828,8 +2212,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                             ),
                             Text(
                               user.email,
-                              style: const TextStyle(
-                                color: Colors.white60,
+                              style: TextStyle(
+                                color: appTextColor(context),
                                 fontSize: 12.0,
                                 fontFamily: 'Poppins',
                               ),
@@ -1850,7 +2234,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     children: [
                       Text(
                         user.designation,
-                        style: const TextStyle(
+                        style: TextStyle(
+                          color: appTextColor(context),
                           fontWeight: FontWeight.w500,
                           fontSize: 14.0,
                           fontFamily: 'Poppins',
@@ -1861,8 +2246,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       const SizedBox(height: 4.0),
                       Text(
                         user.department,
-                        style: const TextStyle(
-                          color: Colors.white60,
+                        style: TextStyle(
+                          color: appTextColor(context),
                           fontSize: 12.0,
                           fontFamily: 'Poppins',
                         ),
@@ -1875,9 +2260,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                 if (!_isSelectionMode)
                   Transform.rotate(
                     angle: isExpanded ? 3.14 : 0,
-                    child: const Icon(
+                    child: Icon(
                       Icons.keyboard_arrow_down,
-                      color: Colors.white54,
+                      color: appTextColor(context),
                       size: 28,
                     ),
                   ),
@@ -1889,33 +2274,35 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                 Text(
                   'Modules:',
                   style: TextStyle(
-                    color: Colors.white54,
+                    color: appTextColor(context),
                     fontSize: 12.0,
                     fontFamily: 'Poppins',
                   ),
                 ),
                 const SizedBox(width: 8.0),
-                Wrap(
-                  spacing: 2.0,
-                  runSpacing: 4.0,
-                  children: moduleAccessDots,
-                ),
+                Wrap(spacing: 2.0, runSpacing: 4.0, children: moduleAccessDots),
               ],
             ),
           ],
+            ),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildModuleLegend() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color legendBg = isDark
+        ? moduleAccessDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: BoxDecoration(
-        color: const Color(0x801F2840),
+        color: legendBg,
         borderRadius: BorderRadius.circular(12.0),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: appTextColor(context).withValues(alpha: 0.08),
           width: 1,
         ),
       ),
@@ -1926,7 +2313,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           Text(
             'Module legend',
             style: TextStyle(
-              color: Colors.white70,
+              color: appTextColor(context),
               fontSize: 12.0,
               fontWeight: FontWeight.w600,
               fontFamily: 'Poppins',
@@ -1937,7 +2324,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             spacing: 16.0,
             runSpacing: 8.0,
             children: _moduleLegendOrder.map((name) {
-              final color = _moduleDotColors[name] ?? Colors.white54;
+              final color = _moduleDotColors[name] ?? appTextColor(context);
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1952,8 +2339,8 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   const SizedBox(width: 6.0),
                   Text(
                     name,
-                    style: const TextStyle(
-                      color: Colors.white70,
+                    style: TextStyle(
+                      color: appTextColor(context),
                       fontSize: 11.0,
                       fontFamily: 'Poppins',
                     ),
@@ -1968,6 +2355,14 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
   }
 
   Widget _buildModuleAccessPanel(ManagedUser user) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark
+        ? moduleAccessDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
+    final Color popupBg = isDark ? const Color(0xFF3D3F40) : Colors.white;
+    final Color dividerColor = appTextColor(context).withValues(
+      alpha: isDark ? 0.22 : 0.30,
+    );
     List<String> selectedModuleAccessList = [];
     if (user.moduleAccess != null && user.moduleAccess!.isNotEmpty) {
       selectedModuleAccessList = user.moduleAccess!
@@ -2099,27 +2494,68 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       _selectedDeliverablesRoles[user.id] = selectedDeliverablesRole;
     }
 
+    String? selectedSkillsHeatmapRole = _selectedSkillsHeatmapRoles[user.id];
+
+    if (selectedSkillsHeatmapRole == null) {
+      selectedSkillsHeatmapRole = _notAssignedValue;
+      if (user.moduleAccessRole != null && user.moduleAccessRole!.isNotEmpty) {
+        final parts = user.moduleAccessRole!.split(', ');
+        for (var part in parts) {
+          final trimmedPart = part.trim();
+          if (trimmedPart.startsWith('Skills Heatmap - ')) {
+            final extractedRole = trimmedPart
+                .replaceFirst('Skills Heatmap - ', '')
+                .trim();
+
+            final roleLower = extractedRole.toLowerCase();
+            for (var option in _moduleRoleOptionsSkillsHeatmap) {
+              if (option.toLowerCase() == roleLower) {
+                selectedSkillsHeatmapRole = option;
+                break;
+              }
+            }
+
+            if (selectedSkillsHeatmapRole == _notAssignedValue &&
+                extractedRole.isNotEmpty) {
+              selectedSkillsHeatmapRole = extractedRole;
+            }
+            break;
+          }
+        }
+      }
+
+      _selectedSkillsHeatmapRoles[user.id] = selectedSkillsHeatmapRole;
+    }
+
     final roleSummary = <String>[];
     if (pdhSelected) {
       roleSummary.add('PDH: ${selectedModuleRole ?? _notAssignedValue}');
     }
     if (skillsHeatmapSelected) {
-      roleSummary.add('Skills Heatmap: Manager');
+      roleSummary.add(
+        'Skills Heatmap: ${selectedSkillsHeatmapRole ?? _notAssignedValue}',
+      );
     }
     if (recruitmentSelected) {
-      roleSummary.add('Recruitment: ${selectedRecruitmentRole ?? _notAssignedValue}');
+      roleSummary.add(
+        'Recruitment: ${selectedRecruitmentRole ?? _notAssignedValue}',
+      );
     }
     if (sowBuilderSelected) {
-      roleSummary.add('SOW Builder: ${selectedSOWBuilderRole ?? _notAssignedValue}');
+      roleSummary.add(
+        'SOW Builder: ${selectedSOWBuilderRole ?? _notAssignedValue}',
+      );
     }
     if (deliverablesSelected) {
-      roleSummary.add('Deliverables: ${selectedDeliverablesRole ?? _notAssignedValue}');
+      roleSummary.add(
+        'Deliverables: ${selectedDeliverablesRole ?? _notAssignedValue}',
+      );
     }
 
     return Container(
       padding: const EdgeInsets.all(16.0),
-      decoration: const BoxDecoration(
-        color: Color(0x801A1A1A),
+      decoration: BoxDecoration(
+        color: widgetBg,
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(16.0),
           bottomRight: Radius.circular(16.0),
@@ -2138,26 +2574,31 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                   Text(
                     'Current roles:',
                     style: TextStyle(
-                      color: Colors.white54,
+                      color: appTextColor(context),
                       fontSize: 12.0,
                       fontFamily: 'Poppins',
                     ),
                   ),
-                  ...roleSummary.map((s) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                    decoration: BoxDecoration(
-                      color: const Color(0x1AFFFFFF),
-                      borderRadius: BorderRadius.circular(8.0),
-                    ),
-                    child: Text(
-                      s,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11.0,
-                        fontFamily: 'Poppins',
+                  ...roleSummary.map(
+                    (s) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                        vertical: 4.0,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0x1AFFFFFF),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: Text(
+                        s,
+                        style: TextStyle(
+                          color: appTextColor(context),
+                          fontSize: 11.0,
+                          fontFamily: 'Poppins',
+                        ),
                       ),
                     ),
-                  )),
+                  ),
                 ],
               ),
             ),
@@ -2173,20 +2614,20 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     vertical: 8.0,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2C3E50),
+                    color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: CheckboxListTile(
-                    title: const Text(
+                    title: Text(
                       'Personal Development Hub',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                     ),
                     value: pdhSelected,
                     activeColor: const Color(0xFFC10D00),
-                    checkColor: Colors.white,
+                    checkColor: appTextColor(context),
                     onChanged: (bool? value) {
                       SoundSystem.playButtonClick();
                       setState(() {
@@ -2225,9 +2666,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     vertical: 8.0,
                   ),
                   decoration: BoxDecoration(
-                    color: pdhSelected
-                        ? const Color(0xFF2C3E50)
-                        : const Color(0xFF1A1A1A),
+                    color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: DropdownButtonHideUnderline(
@@ -2236,20 +2675,20 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           ? selectedModuleRole
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: const Color(0xFF2C3E50),
-                      icon: const Icon(
+                      dropdownColor: popupBg,
+                      icon: Icon(
                         Icons.arrow_drop_down,
-                        color: Colors.white70,
+                        color: appTextColor(context),
                       ),
-                      hint: const Text(
+                      hint: Text(
                         'Module Role',
                         style: TextStyle(
-                          color: Colors.white60,
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
                       ),
                       style: TextStyle(
-                        color: pdhSelected ? Colors.white : Colors.white54,
+                        color: pdhSelected ? appTextColor(context) : appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                       onChanged: pdhSelected
@@ -2269,12 +2708,26 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       items: <DropdownMenuItem<String?>>[
                         DropdownMenuItem<String?>(
                           value: _notAssignedValue,
-                          child: Text(_notAssignedValue),
+                          child: Text(
+                            _notAssignedValue,
+                            style: TextStyle(
+                              color: appTextColor(context),
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                         ..._moduleRoleOptionsPDH.map(
                           (option) => DropdownMenuItem<String?>(
                             value: option,
-                            child: Text(option),
+                            child: Text(
+                              option,
+                              style: TextStyle(
+                                color: appTextColor(context),
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -2284,7 +2737,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2296,20 +2751,20 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     vertical: 8.0,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2C3E50),
+                    color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: CheckboxListTile(
-                    title: const Text(
+                    title: Text(
                       'Resource & Capacity Skills Heatmap',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                     ),
                     value: skillsHeatmapSelected,
                     activeColor: const Color(0xFFC10D00),
-                    checkColor: Colors.white,
+                    checkColor: appTextColor(context),
                     onChanged: (bool? value) {
                       setState(() {
                         skillsHeatmapSelected = value ?? false;
@@ -2337,50 +2792,71 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     vertical: 8.0,
                   ),
                   decoration: BoxDecoration(
-                    color: skillsHeatmapSelected
-                        ? const Color(0xFF2C3E50)
-                        : const Color(0xFF1A1A1A),
+                    color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String?>(
                       value: skillsHeatmapSelected
-                          ? 'Manager'
+                          ? (_selectedSkillsHeatmapRoles[user.id] ??
+                                selectedSkillsHeatmapRole)
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: const Color(0xFF2C3E50),
-                      icon: const Icon(
+                      dropdownColor: popupBg,
+                      icon: Icon(
                         Icons.arrow_drop_down,
-                        color: Colors.white70,
+                        color: appTextColor(context),
                       ),
-                      hint: const Text(
+                      hint: Text(
                         'Module Role',
                         style: TextStyle(
-                          color: Colors.white60,
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
                       ),
                       style: TextStyle(
                         color: skillsHeatmapSelected
-                            ? Colors.white
-                            : Colors.white54,
+                            ? appTextColor(context)
+                            : appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                       onChanged: skillsHeatmapSelected
                           ? (value) {
                               SoundSystem.playButtonClick();
-                              setState(() {});
+                              setState(() {
+                                if (value == _notAssignedValue) {
+                                  _selectedSkillsHeatmapRoles[user.id] =
+                                      _notAssignedValue;
+                                } else {
+                                  _selectedSkillsHeatmapRoles[user.id] = value;
+                                }
+                              });
                             }
                           : null,
                       items: <DropdownMenuItem<String?>>[
-                        if (!skillsHeatmapSelected)
-                          DropdownMenuItem<String?>(
-                            value: _notAssignedValue,
-                            child: Text(_notAssignedValue),
-                          ),
                         DropdownMenuItem<String?>(
-                          value: 'Manager',
-                          child: Text('Manager'),
+                          value: _notAssignedValue,
+                          child: Text(
+                            _notAssignedValue,
+                            style: TextStyle(
+                              color: appTextColor(context),
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        ..._moduleRoleOptionsSkillsHeatmap.map(
+                          (option) => DropdownMenuItem<String?>(
+                            value: option,
+                            child: Text(
+                              option,
+                              style: TextStyle(
+                                color: appTextColor(context),
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -2389,7 +2865,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2401,20 +2879,20 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     vertical: 8.0,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2C3E50),
+                    color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: CheckboxListTile(
-                    title: const Text(
+                    title: Text(
                       'Automated Recruitment Workflow',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                     ),
                     value: recruitmentSelected,
                     activeColor: const Color(0xFFC10D00),
-                    checkColor: Colors.white,
+                    checkColor: appTextColor(context),
                     onChanged: (bool? value) {
                       SoundSystem.playButtonClick();
                       setState(() {
@@ -2443,9 +2921,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     vertical: 8.0,
                   ),
                   decoration: BoxDecoration(
-                    color: recruitmentSelected
-                        ? const Color(0xFF2C3E50)
-                        : const Color(0xFF1A1A1A),
+                    color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: DropdownButtonHideUnderline(
@@ -2455,22 +2931,22 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedRecruitmentRole)
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: const Color(0xFF2C3E50),
-                      icon: const Icon(
+                      dropdownColor: popupBg,
+                      icon: Icon(
                         Icons.arrow_drop_down,
-                        color: Colors.white70,
+                        color: appTextColor(context),
                       ),
-                      hint: const Text(
+                      hint: Text(
                         'Module Role',
                         style: TextStyle(
-                          color: Colors.white60,
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
                       ),
                       style: TextStyle(
                         color: recruitmentSelected
-                            ? Colors.white
-                            : Colors.white54,
+                            ? appTextColor(context)
+                            : appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                       onChanged: recruitmentSelected
@@ -2489,12 +2965,26 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       items: <DropdownMenuItem<String?>>[
                         DropdownMenuItem<String?>(
                           value: _notAssignedValue,
-                          child: Text(_notAssignedValue),
+                          child: Text(
+                            _notAssignedValue,
+                            style: TextStyle(
+                              color: appTextColor(context),
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                         ..._moduleRoleOptionsRecruitment.map(
                           (option) => DropdownMenuItem<String?>(
                             value: option,
-                            child: Text(option),
+                            child: Text(
+                              option,
+                              style: TextStyle(
+                                color: appTextColor(context),
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -2504,7 +2994,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2516,20 +3008,20 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     vertical: 8.0,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2C3E50),
+                    color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: CheckboxListTile(
-                    title: const Text(
+                    title: Text(
                       'Deliverables & Sprint Sign-Off Hub',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                     ),
                     value: deliverablesSelected,
                     activeColor: const Color(0xFFC10D00),
-                    checkColor: Colors.white,
+                    checkColor: appTextColor(context),
                     onChanged: (bool? value) {
                       SoundSystem.playButtonClick();
                       setState(() {
@@ -2557,9 +3049,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     vertical: 8.0,
                   ),
                   decoration: BoxDecoration(
-                    color: deliverablesSelected
-                        ? const Color(0xFF2C3E50)
-                        : const Color(0xFF1A1A1A),
+                    color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: DropdownButtonHideUnderline(
@@ -2569,22 +3059,22 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedDeliverablesRole)
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: const Color(0xFF2C3E50),
-                      icon: const Icon(
+                      dropdownColor: popupBg,
+                      icon: Icon(
                         Icons.arrow_drop_down,
-                        color: Colors.white70,
+                        color: appTextColor(context),
                       ),
-                      hint: const Text(
+                      hint: Text(
                         'Module Role',
                         style: TextStyle(
-                          color: Colors.white60,
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
                       ),
                       style: TextStyle(
                         color: deliverablesSelected
-                            ? Colors.white
-                            : Colors.white54,
+                            ? appTextColor(context)
+                            : appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                       onChanged: deliverablesSelected
@@ -2603,12 +3093,26 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       items: <DropdownMenuItem<String?>>[
                         DropdownMenuItem<String?>(
                           value: _notAssignedValue,
-                          child: Text(_notAssignedValue),
+                          child: Text(
+                            _notAssignedValue,
+                            style: TextStyle(
+                              color: appTextColor(context),
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                         ..._moduleRoleOptionsDeliverables.map(
                           (option) => DropdownMenuItem<String?>(
                             value: option,
-                            child: Text(option),
+                            child: Text(
+                              option,
+                              style: TextStyle(
+                                color: appTextColor(context),
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -2618,7 +3122,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -2629,20 +3135,20 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     vertical: 8.0,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2C3E50),
+                    color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: CheckboxListTile(
-                    title: const Text(
+                    title: Text(
                       'Proposal & SOW Builder',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                     ),
                     value: sowBuilderSelected,
                     activeColor: const Color(0xFFC10D00),
-                    checkColor: Colors.white,
+                    checkColor: appTextColor(context),
                     onChanged: (bool? value) {
                       SoundSystem.playButtonClick();
                       setState(() {
@@ -2671,9 +3177,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     vertical: 8.0,
                   ),
                   decoration: BoxDecoration(
-                    color: sowBuilderSelected
-                        ? const Color(0xFF2C3E50)
-                        : const Color(0xFF1A1A1A),
+                    color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: DropdownButtonHideUnderline(
@@ -2683,22 +3187,22 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                 selectedSOWBuilderRole)
                           : _notAssignedValue,
                       isExpanded: true,
-                      dropdownColor: const Color(0xFF2C3E50),
-                      icon: const Icon(
+                      dropdownColor: popupBg,
+                      icon: Icon(
                         Icons.arrow_drop_down,
-                        color: Colors.white70,
+                        color: appTextColor(context),
                       ),
-                      hint: const Text(
+                      hint: Text(
                         'Module Role',
                         style: TextStyle(
-                          color: Colors.white60,
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
                       ),
                       style: TextStyle(
                         color: sowBuilderSelected
-                            ? Colors.white
-                            : Colors.white54,
+                            ? appTextColor(context)
+                            : appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                       onChanged: sowBuilderSelected
@@ -2717,12 +3221,26 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       items: <DropdownMenuItem<String?>>[
                         DropdownMenuItem<String?>(
                           value: _notAssignedValue,
-                          child: Text(_notAssignedValue),
+                          child: Text(
+                            _notAssignedValue,
+                            style: TextStyle(
+                              color: appTextColor(context),
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                         ..._moduleRoleOptionsSOWBuilder.map(
                           (option) => DropdownMenuItem<String?>(
                             value: option,
-                            child: Text(option),
+                            child: Text(
+                              option,
+                              style: TextStyle(
+                                color: appTextColor(context),
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -2751,26 +3269,29 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         selectedModuleRole,
                         _selectedRecruitmentRoles[user.id] ?? _notAssignedValue,
                         _selectedSOWBuilderRoles[user.id] ?? _notAssignedValue,
-                        _selectedDeliverablesRoles[user.id] ?? _notAssignedValue,
+                        _selectedDeliverablesRoles[user.id] ??
+                            _notAssignedValue,
+                        _selectedSkillsHeatmapRoles[user.id] ??
+                            _notAssignedValue,
                       );
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFC10D00),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0),
+                  borderRadius: BorderRadius.circular(24),
                 ),
               ),
               child: _updatingUserId == user.id
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
-                  : const Text(
+                  : Text(
                       'Update Module Access',
                       style: TextStyle(fontFamily: 'Poppins'),
                     ),

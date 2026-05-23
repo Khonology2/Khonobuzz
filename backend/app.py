@@ -34,6 +34,7 @@ if __name__ == "__main__":
     debug = os.environ.get("DEBUG", "True").lower() == "true"
     print("=" * 70)
     print("Starting Khonology Backend API")
+    # CI flow test marker: release-pr pipeline verification (2026-05-23)...
     print("=" * 70)
     print(f"Host: {host}")
     print(f"Port: {port}")
@@ -47,5 +48,7 @@ if __name__ == "__main__":
         port=port,
         reload=debug,
         log_level="info",
-        access_log=True,
+        # Your FastAPI middleware already logs requests. Disable Uvicorn's access log
+        # to avoid double-spam (especially for /api/version).
+        access_log=False,
     )

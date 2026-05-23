@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http; // Import for making HTTP requests
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'dart:convert'; // Import for JSON encoding/decoding
 import 'dart:async'; // Import for TimeoutException
-import '../utils/pdh_firebase.dart' show syncUserToPDH, syncUserToSkillsHeatmap;
+import '../utils/pdh_sync.dart' show syncUserToPDH, syncUserToSkillsHeatmap;
 import '../config/api_config.dart';
+import '../config/env.dart';
+import '../services/api_client.dart';
+import '../services/modules_ping_service.dart';
+import '../models/managed_user.dart';
 
 class AuthProvider extends ChangeNotifier {
+  static const String _fallbackBackendBaseUrl = String.fromEnvironment(
+    'BACKEND_FALLBACK_URL',
+    defaultValue: '',
+  );
+
   bool _isAuthenticated = false;
   String? _userEmail;
   String? _userRole; // New: To store the user's role
@@ -19,11 +29,24 @@ class AuthProvider extends ChangeNotifier {
   String? _userToken; // Store current user's encrypted token
   String? _userProfileImageUrl; // Store current user's profile image URL
   String? _userProfilePublicId; // Store current user's profile image public ID
+  String? _userThemePreference; // Preferred app theme: light | dark
   bool _isSpecialSession = false; // Track special session state
   Map<String, dynamic>? _cachedProfileData; // Cache for prefetched profile data
+  String? _lastLoginError;
+  String? _lastLoginStatus;
+  String? _userDisplayName;
 
   bool get isAuthenticated => _isAuthenticated;
   String? get userEmail => _userEmail;
+  /// Resolved from login/profile API when present; otherwise derived from email local-part.
+  String get userDisplayName {
+    final stored = _userDisplayName?.trim();
+    if (stored != null && stored.isNotEmpty) return stored;
+    return ManagedUser.displayLabelFromUserPayload({
+      'email': _userEmail ?? '',
+      'id': '',
+    });
+  }
   String? get userRole => _userRole; // New: Getter for user role
   bool get userAlreadyOnboarded =>
       _userAlreadyOnboarded; // New: Getter for onboarding status
@@ -37,9 +60,47 @@ class AuthProvider extends ChangeNotifier {
       _userProfileImageUrl; // Getter for profile image URL
   String? get userProfilePublicId =>
       _userProfilePublicId; // Getter for profile image public ID
+  String? get userThemePreference => _userThemePreference;
   bool get isSpecialSession => _isSpecialSession; // Getter for special session
   Map<String, dynamic>? get cachedProfileData =>
       _cachedProfileData; // Getter for cached profile data
+  String? get lastLoginError => _lastLoginError;
+  String? get lastLoginStatus => _lastLoginStatus;
+
+  void _clearLoginFeedback() {
+    _lastLoginError = null;
+    _lastLoginStatus = null;
+  }
+
+  void _setLoginFeedback({
+    String? error,
+    String? status,
+  }) {
+    _lastLoginError = error;
+    _lastLoginStatus = status;
+  }
+
+  Future<void> _applySentryUserContext({
+    required String id,
+    required String email,
+    required String role,
+  }) async {
+    if (sentryEnabled) {
+      await Sentry.configureScope((scope) {
+        scope.setUser(SentryUser(
+          id: id,
+          email: email,
+          data: {'role': role},
+        ));
+      });
+      await Sentry.addBreadcrumb(Breadcrumb(
+        message: 'User signed in',
+        category: 'auth',
+        level: SentryLevel.info,
+        data: {'role': role},
+      ));
+    }
+  }
 
   AuthProvider() {
     _loadAuthState();
@@ -49,7 +110,7 @@ class AuthProvider extends ChangeNotifier {
   static void warmUpBackendForLogin() {
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/health');
-      http.get(uri).timeout(const Duration(seconds: 5)).then((_) {}, onError: (_) {});
+      apiClient.get(uri).timeout(const Duration(seconds: 20)).then((_) {}, onError: (_) {});
     } catch (_) {}
   }
 
@@ -65,7 +126,7 @@ class AuthProvider extends ChangeNotifier {
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
       final attemptStart = DateTime.now().millisecondsSinceEpoch;
       try {
-        final response = await http
+        final response = await apiClient
             .post(url, headers: headers, body: body)
             .timeout(
               timeout,
@@ -115,10 +176,97 @@ class AuthProvider extends ChangeNotifier {
     throw Exception(lastError?.toString() ?? 'Request failed after retries');
   }
 
+  Future<http.Response> _getWithTimeoutAndRetry(
+    Uri url, {
+    Map<String, String>? headers,
+    int maxRetries = 2,
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    http.Response? lastResponse;
+    Object? lastError;
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      final attemptStart = DateTime.now().millisecondsSinceEpoch;
+      try {
+        final response = await apiClient
+            .get(url, headers: headers)
+            .timeout(
+              timeout,
+              onTimeout: () {
+                throw TimeoutException(
+                  'Request timed out after ${timeout.inSeconds} seconds.',
+                );
+              },
+            );
+        final elapsed = DateTime.now().millisecondsSinceEpoch - attemptStart;
+        debugPrint(
+          '[AuthProvider] GET ${url.path} attempt ${attempt + 1} '
+          'completed in ${elapsed}ms with status ${response.statusCode}',
+        );
+        lastResponse = response;
+        if (response.statusCode < 500) {
+          return response;
+        }
+      } on TimeoutException catch (e) {
+        lastError = e;
+        final elapsed = DateTime.now().millisecondsSinceEpoch - attemptStart;
+        debugPrint(
+          '[AuthProvider] GET ${url.path} attempt ${attempt + 1} '
+          'timed out after ${elapsed}ms: ${e.message}',
+        );
+      } catch (e) {
+        lastError = e;
+        final elapsed = DateTime.now().millisecondsSinceEpoch - attemptStart;
+        debugPrint(
+          '[AuthProvider] GET ${url.path} attempt ${attempt + 1} '
+          'failed after ${elapsed}ms: $e',
+        );
+      }
+      if (attempt < maxRetries) {
+        await Future.delayed(const Duration(milliseconds: 600));
+      }
+    }
+    if (lastResponse != null) {
+      return lastResponse;
+    }
+    if (lastError is TimeoutException) {
+      throw lastError;
+    }
+    throw Exception(lastError?.toString() ?? 'Request failed after retries');
+  }
+
+  List<Uri> _candidateAuthLoginUris() {
+    final primary = Uri.parse(ApiConfig.authLoginEndpoint);
+    final uris = <Uri>[primary];
+    if (_fallbackBackendBaseUrl.isNotEmpty) {
+      final fallback = Uri.parse(
+        '${_fallbackBackendBaseUrl.replaceAll(RegExp(r"/+$"), "")}/api/auth/login',
+      );
+      if (fallback.toString() != primary.toString()) {
+        uris.add(fallback);
+      }
+    }
+    return uris;
+  }
+
+  List<Uri> _candidateUserLookupUris(String email) {
+    final primary = Uri.parse(ApiConfig.userByEmailEndpoint(email));
+    final uris = <Uri>[primary];
+    if (_fallbackBackendBaseUrl.isNotEmpty) {
+      final fallback = Uri.parse(
+        '${_fallbackBackendBaseUrl.replaceAll(RegExp(r"/+$"), "")}/api/users/by-email?email=${Uri.encodeComponent(email)}',
+      );
+      if (fallback.toString() != primary.toString()) {
+        uris.add(fallback);
+      }
+    }
+    return uris;
+  }
+
   Future<void> _loadAuthState() async {
     final prefs = await SharedPreferences.getInstance();
     _isAuthenticated = prefs.getBool('isAuthenticated') ?? false;
     _userEmail = prefs.getString('userEmail');
+    _userDisplayName = prefs.getString('userDisplayName');
     _userRole = prefs.getString('userRole');
     _initialScreenIndex = prefs.getInt('initialScreenIndex');
     _currentScreenIndex = prefs.getInt('currentScreenIndex');
@@ -126,6 +274,7 @@ class AuthProvider extends ChangeNotifier {
     _userToken = prefs.getString('userToken');
     _userProfileImageUrl = prefs.getString('userProfileImageUrl');
     _userProfilePublicId = prefs.getString('userProfilePublicId');
+    _userThemePreference = prefs.getString('userThemePreference');
     _isSpecialSession = prefs.getBool('_spSess') ?? false;
 
     // Only keep profile image if it clearly belongs to the stored user (prevents showing another user's pic)
@@ -154,6 +303,10 @@ class AuthProvider extends ChangeNotifier {
     debugPrint(
       '[AuthProvider] _loadAuthState - userProfilePublicId: $_userProfilePublicId',
     );
+
+    if (_isAuthenticated) {
+      ModulesPingService.start();
+    }
 
     notifyListeners();
   }
@@ -215,7 +368,7 @@ class AuthProvider extends ChangeNotifier {
             'password': 'password',
             'name': '$firstName $lastName',
             'role': role ?? 'Staff',
-            'status': 'Pending',
+            'status': 'Inactive',
             'created_at': DateTime.now().toUtc().toIso8601String(),
             'updated_at': DateTime.now().toUtc().toIso8601String(),
             'entity': '',
@@ -230,7 +383,7 @@ class AuthProvider extends ChangeNotifier {
             'fullName': '$firstName $lastName'.trim(),
             'department': department ?? '',
             'designation': designation,
-            'status': 'Pending',
+            'status': 'Inactive',
             'role': role ?? 'Staff',
             'first_valid': DateTime.utc(2025, 9, 25).toIso8601String(),
             'inserted_by': email,
@@ -271,17 +424,24 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = true;
         _userEmail = email;
         _userRole = userPayload['role'] ?? role ?? 'Staff';
+        _userThemePreference =
+            (userPayload['themePreference'] as String?)?.trim().toLowerCase();
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
         _userAlreadyOnboarded = false;
+
+        _userDisplayName = ManagedUser.displayLabelFromUserPayload(userPayload);
 
         // Batch all writes
         await Future.wait([
           prefs.setBool('isAuthenticated', true),
           prefs.setString('userEmail', email),
           prefs.setString('userRole', _userRole!),
+          prefs.setString('userDisplayName', _userDisplayName!),
           prefs.setInt('initialScreenIndex', 9),
           prefs.setInt('currentScreenIndex', 9),
+          if (_userThemePreference != null && _userThemePreference!.isNotEmpty)
+            prefs.setString('userThemePreference', _userThemePreference!),
           if (tokenFromResponse != null)
             prefs.setString('userToken', tokenFromResponse),
         ]);
@@ -290,7 +450,14 @@ class AuthProvider extends ChangeNotifier {
           _userToken = tokenFromResponse;
         }
 
+        await _applySentryUserContext(
+          id: uid,
+          email: email,
+          role: _userRole ?? 'Staff',
+        );
         notifyListeners();
+
+        ModulesPingService.start();
 
         // Run these in parallel to speed up login
         await Future.wait([
@@ -301,7 +468,10 @@ class AuthProvider extends ChangeNotifier {
         return true; // Indicate success
       } else if (response.statusCode == 409) {
         // User already exists; attempt fallback login to fetch real role
-        final fallbackSuccess = await _attemptFallbackLogin(email);
+        final fallbackSuccess = await _attemptFallbackLogin(
+          email,
+          allowPendingStatus: true,
+        );
         return fallbackSuccess;
       } else {
         // Handle other errors
@@ -332,16 +502,19 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> manualLogin(String email, {bool isSpecialAccess = false}) async {
     final normalizedEmail = email.trim().toLowerCase();
-    final url = Uri.parse(ApiConfig.authLoginEndpoint);
+    _clearLoginFeedback();
 
     // Clear previous user's profile and cache as soon as login is attempted so we never show their data
     _cachedProfileData = null;
     _userProfileImageUrl = null;
     _userProfilePublicId = null;
+    _userThemePreference = null;
+    _userDisplayName = null;
     final prefsForClear = await SharedPreferences.getInstance();
     await Future.wait([
       prefsForClear.remove('userProfileImageUrl'),
       prefsForClear.remove('userProfilePublicId'),
+      prefsForClear.remove('userDisplayName'),
     ]);
     notifyListeners();
 
@@ -352,19 +525,47 @@ class AuthProvider extends ChangeNotifier {
         headers['X-Session-Type'] = 'special';
       }
 
-      final response = await _postWithTimeoutAndRetry(
-        url,
-        headers: headers,
-        body: json.encode({'email': normalizedEmail}),
-        maxRetries: 1,
-        timeout: const Duration(seconds: 18),
-      );
+      http.Response? response;
+      Object? lastError;
+      const int rounds = 2;
+      for (int round = 1; round <= rounds && response == null; round++) {
+        for (final url in _candidateAuthLoginUris()) {
+          try {
+            debugPrint('[AuthProvider] Trying login endpoint (round $round/$rounds): $url');
+            final candidateResponse = await _postWithTimeoutAndRetry(
+              url,
+              headers: headers,
+              body: json.encode({'email': normalizedEmail}),
+              maxRetries: 1,
+              timeout: const Duration(seconds: 35),
+            );
+            if (candidateResponse.statusCode < 500) {
+              response = candidateResponse;
+              break;
+            }
+            lastError = Exception(
+              'status ${candidateResponse.statusCode} from $url',
+            );
+          } catch (e) {
+            lastError = e;
+            debugPrint('[AuthProvider] Login endpoint failed ($url): $e');
+            continue;
+          }
+        }
+        if (response == null && round < rounds) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+        }
+      }
+      if (response == null) {
+        throw Exception(lastError?.toString() ?? 'All login endpoints failed');
+      }
       final elapsed = DateTime.now().millisecondsSinceEpoch - start;
       debugPrint(
         '[AuthProvider] manualLogin response ${response.statusCode} in ${elapsed}ms',
       );
 
       if (response.statusCode == 200) {
+        _clearLoginFeedback();
         final responseData = json.decode(response.body);
 
         final prefs = await SharedPreferences.getInstance();
@@ -387,6 +588,8 @@ class AuthProvider extends ChangeNotifier {
         _userRole = isSpecialAccess
             ? 'Admin'
             : (userPayload['role'] ?? 'Staff');
+        _userThemePreference =
+            (userPayload['themePreference'] as String?)?.trim().toLowerCase();
         _initialScreenIndex = 9;
         _currentScreenIndex = 9;
 
@@ -424,11 +627,14 @@ class AuthProvider extends ChangeNotifier {
           '[AuthProvider] Extracted profileImagePublicId: $_userProfilePublicId',
         );
 
+        _userDisplayName = ManagedUser.displayLabelFromUserPayload(userPayload);
+
         // Batch all SharedPreferences writes (clear old profile image if not set for new user)
         final writeTasks = <Future>[
           prefs.setBool('isAuthenticated', true),
           prefs.setString('userEmail', _userEmail!),
           prefs.setString('userRole', _userRole!),
+          prefs.setString('userDisplayName', _userDisplayName!),
           prefs.setInt('initialScreenIndex', 9),
           prefs.setInt('currentScreenIndex', 9),
           if (_userProfileImageUrl != null)
@@ -441,6 +647,10 @@ class AuthProvider extends ChangeNotifier {
             prefs.remove('userProfilePublicId'),
           if (_userModuleAccess != null)
             prefs.setString('userModuleAccess', _userModuleAccess!),
+          if (_userThemePreference != null && _userThemePreference!.isNotEmpty)
+            prefs.setString('userThemePreference', _userThemePreference!)
+          else
+            prefs.remove('userThemePreference'),
         ];
 
         // Get token from response if available
@@ -456,15 +666,48 @@ class AuthProvider extends ChangeNotifier {
         if (isSpecialAccess) {
           await prefs.setBool('_spSess', true);
         }
+        await _applySentryUserContext(
+          id: userPayload['id']?.toString() ?? _userEmail ?? email,
+          email: _userEmail ?? email,
+          role: _userRole ?? 'Staff',
+        );
         notifyListeners();
 
         _schedulePostLoginWarmup();
 
         return true;
+      } else if (!isSpecialAccess && response.statusCode >= 500) {
+        try {
+          final parsed = json.decode(response.body) as Map<String, dynamic>;
+          _setLoginFeedback(
+            error: parsed['error']?.toString(),
+            status: parsed['status']?.toString(),
+          );
+        } catch (_) {}
+        final success = await _attemptFallbackLogin(email);
+        if (success) {
+          return true;
+        }
+        _isAuthenticated = false;
+        notifyListeners();
+        return false;
       } else if (!isSpecialAccess &&
           (response.statusCode == 403 ||
               response.statusCode == 404 ||
               response.statusCode == 401)) {
+        try {
+          final parsed = json.decode(response.body) as Map<String, dynamic>;
+          _setLoginFeedback(
+            error: parsed['error']?.toString(),
+            status: parsed['status']?.toString(),
+          );
+          final statusLower = (_lastLoginStatus ?? '').trim().toLowerCase();
+          if (statusLower == 'pending' || statusLower == 'inactive') {
+            _isAuthenticated = false;
+            notifyListeners();
+            return false;
+          }
+        } catch (_) {}
         final success = await _attemptFallbackLogin(email);
         if (success) {
           return true;
@@ -473,6 +716,13 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return false;
       } else {
+        try {
+          final parsed = json.decode(response.body) as Map<String, dynamic>;
+          _setLoginFeedback(
+            error: parsed['error']?.toString(),
+            status: parsed['status']?.toString(),
+          );
+        } catch (_) {}
         _isAuthenticated = false;
         notifyListeners();
         return false;
@@ -485,6 +735,7 @@ class AuthProvider extends ChangeNotifier {
         }
       }
       _isAuthenticated = false;
+      _setLoginFeedback(error: 'Login timed out. Please try again.');
       notifyListeners();
       return false;
     } catch (e) {
@@ -492,7 +743,12 @@ class AuthProvider extends ChangeNotifier {
           (e.toString().contains('SocketException') ||
               e.toString().contains('Failed host lookup') ||
               e.toString().contains('Connection refused') ||
-              e.toString().contains('timeout'))) {
+              e.toString().contains('timeout') ||
+              e.toString().contains('TimeoutException') ||
+              e.toString().contains('XMLHttpRequest error') ||
+              e.toString().contains('ClientException') ||
+              e.toString().contains('net::ERR_FAILED') ||
+              e.toString().contains('CORS'))) {
         final success = await _attemptFallbackLogin(email);
         if (success) {
           return true;
@@ -500,12 +756,14 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _isAuthenticated = false;
+      _setLoginFeedback(error: 'Login failed. Please try again.');
       notifyListeners();
       return false;
     }
   }
 
   void _schedulePostLoginWarmup() {
+    ModulesPingService.start();
     Future<void>(() async {
       try {
         await Future.wait([
@@ -570,6 +828,14 @@ class AuthProvider extends ChangeNotifier {
 
         // Store other profile data for potential future use (only for this user; already validated email match)
         _cachedProfileData = userMap;
+
+        final label = ManagedUser.displayLabelFromUserPayload(userMap);
+        if (label != _userDisplayName) {
+          _userDisplayName = label;
+          final p = await SharedPreferences.getInstance();
+          await p.setString('userDisplayName', label);
+          notifyListeners();
+        }
       } else {
         debugPrint(
           '[AuthProvider] Failed to prefetch profile data: ${response.statusCode}',
@@ -580,32 +846,83 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> _attemptFallbackLogin(String email) async {
-    final userCheckUrl = Uri.parse(ApiConfig.userByEmailEndpoint(email));
+  Future<bool> _attemptFallbackLogin(
+    String email, {
+    bool allowPendingStatus = false,
+  }) async {
     try {
-      final userCheckResponse = await http
-          .get(userCheckUrl)
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () {
-              throw TimeoutException('Request timed out');
-            },
-          );
+      http.Response? userCheckResponse;
+      Object? lastError;
+      const int rounds = 2;
+      for (int round = 1; round <= rounds && userCheckResponse == null; round++) {
+        for (final userCheckUrl in _candidateUserLookupUris(email)) {
+          try {
+            debugPrint(
+              '[AuthProvider] Trying user lookup endpoint (round $round/$rounds): $userCheckUrl',
+            );
+            final candidateResponse = await _getWithTimeoutAndRetry(
+              userCheckUrl,
+              maxRetries: 2,
+              timeout: const Duration(seconds: 45),
+            );
+            if (candidateResponse.statusCode < 500) {
+              userCheckResponse = candidateResponse;
+              break;
+            }
+            lastError = Exception(
+              'status ${candidateResponse.statusCode} from $userCheckUrl',
+            );
+          } catch (e) {
+            lastError = e;
+            debugPrint('[AuthProvider] User lookup endpoint failed ($userCheckUrl): $e');
+            continue;
+          }
+        }
+        if (userCheckResponse == null && round < rounds) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+        }
+      }
+      if (userCheckResponse == null) {
+        throw Exception(lastError?.toString() ?? 'All user lookup endpoints failed');
+      }
 
       if (userCheckResponse.statusCode == 200) {
         final usersData = json.decode(userCheckResponse.body);
         final foundUser = usersData['user'] as Map<String, dynamic>?;
 
         if (foundUser != null) {
+          final status = (foundUser['status']?.toString() ?? '').trim();
+          final statusLower = status.toLowerCase();
+          final displayStatus = ManagedUser.normalizeAccountStatus(
+            status.isEmpty ? null : status,
+          );
+          final isAwaitingActivation =
+              statusLower == 'pending' ||
+              statusLower == 'inactive' ||
+              status.isEmpty;
+          if (statusLower != 'active' && !(allowPendingStatus && isAwaitingActivation)) {
+            _setLoginFeedback(
+              status: displayStatus,
+              error:
+                  "Your account status is '$displayStatus'. Please contact admin for access.",
+            );
+            _isAuthenticated = false;
+            notifyListeners();
+            return false;
+          }
           final prefs = await SharedPreferences.getInstance();
           _cachedProfileData = null;
           _userProfileImageUrl = null;
           _userProfilePublicId = null;
           _isAuthenticated = true;
+          _userAlreadyOnboarded = !isAwaitingActivation;
           _userEmail = foundUser['email'] ?? email;
           _userRole = foundUser['role'] ?? 'Staff';
+          _userThemePreference =
+              (foundUser['themePreference'] as String?)?.trim().toLowerCase();
           _initialScreenIndex = 9;
           _currentScreenIndex = 9;
+          _setLoginFeedback(status: displayStatus);
 
           final moduleAccessRaw = foundUser['moduleAccess'] as String?;
           final moduleAccessRoleRaw = foundUser['moduleAccessRole'] as String?;
@@ -616,10 +933,13 @@ class AuthProvider extends ChangeNotifier {
           _userProfileImageUrl = foundUser['profileImageUrl'] as String?;
           _userProfilePublicId = foundUser['profileImagePublicId'] as String?;
 
+          _userDisplayName = ManagedUser.displayLabelFromUserPayload(foundUser);
+
           final prefsWrites = <Future>[
             prefs.setBool('isAuthenticated', true),
             prefs.setString('userEmail', _userEmail!),
             prefs.setString('userRole', _userRole!),
+            prefs.setString('userDisplayName', _userDisplayName!),
             prefs.setInt('initialScreenIndex', 9),
             prefs.setInt('currentScreenIndex', 9),
           ];
@@ -636,9 +956,23 @@ class AuthProvider extends ChangeNotifier {
           } else {
             prefsWrites.add(prefs.remove('userProfilePublicId'));
           }
+          if (_userThemePreference != null && _userThemePreference!.isNotEmpty) {
+            prefsWrites.add(
+              prefs.setString('userThemePreference', _userThemePreference!),
+            );
+          } else {
+            prefsWrites.add(prefs.remove('userThemePreference'));
+          }
           await Future.wait(prefsWrites);
 
+          await _applySentryUserContext(
+            id: foundUser['id']?.toString() ?? _userEmail ?? email,
+            email: _userEmail ?? email,
+            role: _userRole ?? 'Staff',
+          );
           notifyListeners();
+
+          ModulesPingService.start();
 
           await Future.wait([
             if (_userModuleAccess == null) fetchCurrentUserModuleAccess(),
@@ -649,6 +983,7 @@ class AuthProvider extends ChangeNotifier {
         }
       } else if (userCheckResponse.statusCode == 404) {
         debugPrint('Fallback login: user not found for email $email');
+        _setLoginFeedback(error: 'User not found. Please check your email.');
         _isAuthenticated = false;
         notifyListeners();
         return false;
@@ -660,6 +995,15 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    if (sentryEnabled) {
+      await Sentry.addBreadcrumb(Breadcrumb(
+        message: 'User signed out',
+        category: 'auth',
+        level: SentryLevel.info,
+      ));
+      await Sentry.configureScope((scope) => scope.setUser(null));
+    }
+    ModulesPingService.stop();
     final prefs = await SharedPreferences.getInstance();
     _isAuthenticated = false;
     _userEmail = null;
@@ -670,18 +1014,22 @@ class AuthProvider extends ChangeNotifier {
     _userToken = null;
     _userProfileImageUrl = null;
     _userProfilePublicId = null;
+    _userThemePreference = null;
     _isSpecialSession = false;
     _cachedProfileData = null;
+    _userDisplayName = null;
     await Future.wait([
       prefs.remove('isAuthenticated'),
       prefs.remove('userEmail'),
       prefs.remove('userRole'),
+      prefs.remove('userDisplayName'),
       prefs.remove('initialScreenIndex'),
       prefs.remove('currentScreenIndex'),
       prefs.remove('userModuleAccess'),
       prefs.remove('userToken'),
       prefs.remove('userProfileImageUrl'),
       prefs.remove('userProfilePublicId'),
+      prefs.remove('userThemePreference'),
       prefs.remove('_spSess'),
     ]);
     notifyListeners();
@@ -843,6 +1191,72 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Re-fetches the signed-in user’s module list from [ApiConfig.usersEndpoint].
+  /// Used while the Modules screen is open so adds/removals by an admin show up without logging out.
+  /// On request failure, keeps the current access if [preserveStateOnFailure] is true (default).
+  Future<void> refreshModuleAccessFromServer({
+    bool preserveStateOnFailure = true,
+  }) async {
+    if (_userEmail == null) {
+      return;
+    }
+    try {
+      final response = await http
+          .get(Uri.parse(ApiConfig.userByEmailEndpoint(_userEmail!)))
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              throw Exception('Request timeout');
+            },
+          );
+
+      if (response.statusCode != 200) {
+        debugPrint(
+          '[AuthProvider] refreshModuleAccess: HTTP ${response.statusCode}',
+        );
+        if (!preserveStateOnFailure) {
+          _userModuleAccess = null;
+          notifyListeners();
+        }
+        return;
+      }
+
+      final usersData = json.decode(response.body) as Map<String, dynamic>;
+      final foundUser = usersData['user'] as Map<String, dynamic>?;
+
+      if (foundUser == null) {
+        debugPrint('[AuthProvider] refreshModuleAccess: user payload missing');
+        if (!preserveStateOnFailure) {
+          _userModuleAccess = null;
+          notifyListeners();
+        }
+        return;
+      }
+
+      final moduleAccessRaw = foundUser['moduleAccess'] as String?;
+      final moduleAccessRoleRaw = foundUser['moduleAccessRole'] as String?;
+      _userModuleAccess = _deriveModuleAccessFromRole(
+        moduleAccessRaw,
+        moduleAccessRoleRaw,
+      );
+      notifyListeners();
+      debugPrint('[AuthProvider] Module access refreshed from server (poll)');
+
+      final prefs = await SharedPreferences.getInstance();
+      if (_userModuleAccess != null && _userModuleAccess!.isNotEmpty) {
+        await prefs.setString('userModuleAccess', _userModuleAccess!);
+      } else {
+        await prefs.remove('userModuleAccess');
+      }
+    } catch (e) {
+      debugPrint('[AuthProvider] refreshModuleAccess: $e');
+      if (!preserveStateOnFailure) {
+        _userModuleAccess = null;
+        notifyListeners();
+      }
+    }
+  }
+
   // Check if user has specific module access
   // Supports both short names (PDH, Skills Heatmap) and full names (Personal Development Hub, Resource & Capacity Skills Heatmap)
   bool hasModuleAccess(String moduleName) {
@@ -890,7 +1304,7 @@ class AuthProvider extends ChangeNotifier {
 
   // Fetch user token from backend
   // This method now ALWAYS generates a fresh token (the backend endpoint has been updated)
-  Future<void> fetchUserToken() async {
+  Future<void> fetchUserToken({String? themePreference}) async {
     if (_userEmail == null) {
       _userToken = null;
       notifyListeners();
@@ -900,8 +1314,18 @@ class AuthProvider extends ChangeNotifier {
     try {
       // Call the backend endpoint which now always generates a fresh token
       // Reduced timeout for faster failure
+      final normalizedTheme = (themePreference ?? _userThemePreference ?? '')
+          .trim()
+          .toLowerCase();
       final response = await http
-          .get(Uri.parse(ApiConfig.authTokenEndpoint(_userEmail!)))
+          .get(
+            Uri.parse(
+              ApiConfig.authTokenEndpoint(
+                _userEmail!,
+                theme: normalizedTheme.isEmpty ? null : normalizedTheme,
+              ),
+            ),
+          )
           .timeout(
             const Duration(seconds: 15),
             onTimeout: () {
@@ -932,5 +1356,46 @@ class AuthProvider extends ChangeNotifier {
       _userToken = null;
       notifyListeners();
     }
+  }
+
+  Future<void> syncThemePreferenceAndRefreshToken(String themePreference) async {
+    final normalizedTheme = themePreference.trim().toLowerCase();
+    if (_userEmail == null || _userEmail!.isEmpty) {
+      _userThemePreference = normalizedTheme;
+      notifyListeners();
+      return;
+    }
+    if (normalizedTheme != 'light' && normalizedTheme != 'dark') {
+      return;
+    }
+
+    _userThemePreference = normalizedTheme;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('userThemePreference', normalizedTheme);
+
+    try {
+      final response = await http
+          .put(
+            Uri.parse('${ApiConfig.baseUrl}/api/admin/users/$_userEmail/profile'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({'themePreference': normalizedTheme}),
+          )
+          .timeout(const Duration(seconds: 12));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final token = (data is Map<String, dynamic>) ? data['token'] as String? : null;
+        if (token != null && token.isNotEmpty) {
+          _userToken = token;
+          await prefs.setString('userToken', token);
+          notifyListeners();
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('[AuthProvider] Theme sync endpoint failed, fallback token refresh: $e');
+    }
+
+    await fetchUserToken(themePreference: normalizedTheme);
   }
 }

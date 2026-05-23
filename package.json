@@ -1,10 +1,19 @@
 {
+  "name": "khonology-buzz-cypress",
+  "version": "1.0.0",
+  "description": "Cypress E2E tests for Khonology Buzz Flutter Web App",
+  "main": "index.js",
+  "scripts": {
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run"
+  },
   "devDependencies": {
-    "@badeball/cypress-cucumber-preprocessor": "^24.0.0",
-    "@bahmutov/cypress-esbuild-preprocessor": "^2.2.8",
-    "cypress": "^15.10.0"
+    "@badeball/cypress-cucumber-preprocessor": "^20.0.0",
+    "@cypress/webpack-preprocessor": "^6.0.0",
+    "cypress": "^13.0.0",
+    "multiple-cucumber-html-reporter": "^3.0.0"
   },
   "cypress-cucumber-preprocessor": {
-    "stepDefinitions": "cypress/step_definitions/**/*.js"
+    "stepDefinitions": "cypress/e2e/step_definitions/**/*.js"
   }
 }

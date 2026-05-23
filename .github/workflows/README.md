@@ -6,8 +6,7 @@ This directory contains GitHub Actions workflows for automatic version control m
 
 ### 1. Auto Version Update (`auto-version-update.yml`)
 **Triggers:**
-- Push to `main`, `develop`, `feature/*`, `hotfix/*` branches
-- Pull requests to `main` and `develop`
+- Push to `main`, `khono_v4`, and `khono-v4` branches
 - Manual workflow dispatch
 
 **Features:**
@@ -20,7 +19,7 @@ This directory contains GitHub Actions workflows for automatic version control m
 
 ### 2. Version API (`version-api.yml`)
 **Triggers:**
-- Push to `main` and `develop` branches
+- Push to `main`, `khono_v4`, and `khono-v4` branches
 - Manual workflow dispatch
 
 **Features:**
@@ -43,6 +42,7 @@ This directory contains GitHub Actions workflows for automatic version control m
 ### 4. Version Monitor (`version-monitor.yml`)
 **Triggers:**
 - Scheduled run every hour
+- Push to `main`, `khono_v4`, and `khono-v4` branches
 - Manual workflow dispatch
 
 **Features:**
@@ -103,7 +103,7 @@ No additional secrets required beyond the default `GITHUB_TOKEN`.
 ## 🚀 Usage
 
 ### Automatic Updates
-Version updates happen automatically on every push to supported branches. No manual intervention required.
+Version updates happen automatically on pushes to `main`, `khono_v4`, and `khono-v4`. No manual intervention required.
 
 ### Manual Triggers
 All workflows support manual triggering via GitHub Actions UI:

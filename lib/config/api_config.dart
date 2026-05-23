@@ -31,7 +31,7 @@ class ApiConfig {
       if (queryParams['backend'] == 'prod') {
         const hostedBackend = String.fromEnvironment(
           _backendUrlEnv,
-          defaultValue: 'https://khonology-buzz-backend.onrender.com',
+          defaultValue: 'https://khonobuzz-central-hub.onrender.com',
         );
         if (kDebugMode) {
           print(
@@ -53,15 +53,16 @@ class ApiConfig {
         return localBackend;
       }
 
-      // Hosted web builds (onrender) use the hosted backend
+      // Frontend is at khono-buzz-central-hub-web (Static Site);
+      // Backend is at khonobuzz-central-hub (Web Service) - separate Render services
       if (host.contains('onrender.com') || host.contains('khonobuzz-web')) {
         const hostedBackend = String.fromEnvironment(
           _backendUrlEnv,
-          defaultValue: 'https://khonology-buzz-backend.onrender.com',
+          defaultValue: 'https://khonobuzz-central-hub.onrender.com',
         );
         if (kDebugMode) {
           print(
-            '[ApiConfig] Web: detected hosted environment, using backend: $hostedBackend',
+            '[ApiConfig] Web: detected hosted frontend, using backend: $hostedBackend',
           );
         }
         return hostedBackend;
@@ -83,7 +84,7 @@ class ApiConfig {
     if (!kDebugMode) {
       final backendUrl = String.fromEnvironment(
         _backendUrlEnv,
-        defaultValue: 'https://khonology-buzz-backend.onrender.com',
+        defaultValue: 'https://khonobuzz-central-hub.onrender.com',
       );
       return backendUrl;
     }
@@ -120,11 +121,11 @@ class ApiConfig {
     }
   }
 
-  // CORS origin for reference (not used in frontend, but documented)
+  // CORS origin for reference (frontend URL for backend CORS config)
   static String get corsOrigin {
     return String.fromEnvironment(
       _corsOriginEnv,
-      defaultValue: 'https://khonobuzz-web-app-llfi.onrender.com',
+      defaultValue: 'https://khono-buzz-central-hub-web.onrender.com',
     );
   }
 
@@ -134,13 +135,26 @@ class ApiConfig {
   static String get authLoginEndpoint => '$baseUrl/api/auth/login';
   static String userByEmailEndpoint(String email) =>
       '$baseUrl/api/users/by-email?email=${Uri.encodeComponent(email)}';
-  static String authTokenEndpoint(String email, {String? module}) {
-    final base = '$baseUrl/api/auth/token?email=${Uri.encodeComponent(email)}';
+  static String authTokenEndpoint(
+    String email, {
+    String? module,
+    String? role,
+    String? theme,
+  }) {
+    var base = '$baseUrl/api/auth/token?email=${Uri.encodeComponent(email)}';
+    if (theme != null && theme.isNotEmpty) {
+      base = '$base&theme=${Uri.encodeComponent(theme)}';
+    }
     if (module != null && module.isNotEmpty) {
-      return '$base&module=${Uri.encodeComponent(module)}';
+      final encodedModule = Uri.encodeComponent(module);
+      if (role != null && role.isNotEmpty) {
+        return '$base&module=$encodedModule&role=${Uri.encodeComponent(role)}';
+      }
+      return '$base&module=$encodedModule';
     }
     return base;
   }
+
   static String get pdhSyncUserEndpoint => '$baseUrl/api/pdh/sync-user';
   static String pdhUpdateUserEndpoint(String uid) =>
       '$baseUrl/api/pdh/update-user/$uid';
@@ -155,4 +169,8 @@ class ApiConfig {
       '$baseUrl/api/onboarding/update-user/$userId';
   static String get departmentsEndpoint => '$baseUrl/api/departments';
   static String get designationsEndpoint => '$baseUrl/api/designations';
+  static String get entitiesEndpoint => '$baseUrl/api/entities';
+  static String get adminNotificationsEndpoint => '$baseUrl/api/admin/notifications';
+  static String get adminNotificationsClearEndpoint =>
+      '$baseUrl/api/admin/notifications/clear';
 }

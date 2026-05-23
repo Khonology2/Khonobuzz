@@ -1,9 +1,16 @@
+// ignore_for_file: unused_local_variable
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
+import '../config/env.dart';
 import '../providers/auth_provider.dart';
+import '../providers/user_provider.dart';
 import '../screens/landing_screen.dart';
 import '../services/sound_system.dart';
 import 'version_control_widget.dart'; // Added import for VersionControlWidget
+
+const Color _sideMenuDarkWidgetColor = Color(0xFF3D3F40);
 
 class MenuItemWidget extends StatefulWidget {
   final String unselectedIconPath;
@@ -12,6 +19,8 @@ class MenuItemWidget extends StatefulWidget {
   final bool isSelected;
   final bool isExpanded;
   final VoidCallback? onTap;
+  /// Optional key for E2E (e.g. Modules / Profile).
+  final Key? itemKey;
 
   const MenuItemWidget({
     super.key,
@@ -21,6 +30,7 @@ class MenuItemWidget extends StatefulWidget {
     required this.isSelected,
     required this.isExpanded,
     this.onTap,
+    this.itemKey,
   });
 
   @override
@@ -40,104 +50,120 @@ class _MenuItemWidgetState extends State<MenuItemWidget> {
       ? const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0)
       : const EdgeInsets.all(12.0);
 
-  // Text style
-  TextStyle get textStyle => const TextStyle(
-    fontFamily: 'Poppins', // Added Poppins font
-    color: Colors.white,
-    fontSize: 16.0,
-    fontWeight: FontWeight.w500,
-  );
-
   @override
   Widget build(BuildContext context) {
+    final bool isLight = Theme.of(context).brightness == Brightness.light;
+    final TextStyle itemTextStyle = TextStyle(
+      fontFamily: 'Poppins',
+      color: widget.isSelected
+          ? Colors.white
+          : (isLight ? Colors.black : Colors.white),
+      fontSize: 16.0,
+      fontWeight: FontWeight.bold,
+    );
+
     // Determine which icon to show based on selection state
     final String currentIconPath = widget.isSelected
         ? widget.selectedIconPath
         : widget.unselectedIconPath;
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _isHovering = true),
-      onExit: (_) => setState(() => _isHovering = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: EdgeInsets.zero,
-        decoration: BoxDecoration(
-          color: widget.isSelected
-              ? const Color(0xFFC10D00) // Solid red for selected
-              : _isHovering
-              ? const Color(0xFFC10D00).withAlpha(
-                  44,
-                ) // Light red for hover (doesn't override selected)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(
-            25,
-          ), // Fully rounded circular/pill design
-        ),
-        child: InkWell(
-          onTap: () {
-            SoundSystem.playButtonClick();
-            widget.onTap?.call();
-          },
-          borderRadius: BorderRadius.circular(
-            25,
-          ), // Fully rounded circular/pill design
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final bool showText =
-                  widget.isExpanded && constraints.maxWidth >= 150;
-              final EdgeInsets resolvedPadding = showText
-                  ? itemPadding
-                  : const EdgeInsets.all(8.0);
-              return Padding(
-                padding: resolvedPadding,
-                child: Row(
-                  mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: showText
-                      ? MainAxisAlignment.start
-                      : MainAxisAlignment.center,
-                  children: [
-                    // Icon container with dynamic icon switching
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: iconSize,
-                      height: iconSize,
-                      decoration: BoxDecoration(
-                        color: Colors
-                            .transparent, // Remove individual icon background
-                        borderRadius: BorderRadius.circular(
-                          25,
-                        ), // Fully rounded circular/pill design
-                      ),
-                      child: Center(
-                        child: AnimatedSwitcher(
+    return SizedBox(
+      width: double.infinity,
+      child: Semantics(
+        label: widget.title,
+        button: true,
+        child: KeyedSubtree(
+          key: widget.itemKey,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => setState(() => _isHovering = true),
+            onExit: (_) => setState(() => _isHovering = false),
+            child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: EdgeInsets.zero,
+            decoration: BoxDecoration(
+              color: widget.isSelected
+                  ? const Color(0xFFC10D00) // Solid red for selected
+                  : _isHovering
+                  ? const Color(0xFFC10D00).withAlpha(
+                      44,
+                    ) // Light red for hover (doesn't override selected)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(
+                25,
+              ), // Fully rounded circular/pill design
+            ),
+            child: InkWell(
+              onTap: () {
+                SoundSystem.playButtonClick();
+                widget.onTap?.call();
+              },
+              borderRadius: BorderRadius.circular(
+                25,
+              ), // Fully rounded circular/pill design
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final bool showText =
+                      widget.isExpanded && constraints.maxWidth >= 150;
+                  final EdgeInsets resolvedPadding = showText
+                      ? itemPadding
+                      : const EdgeInsets.all(8.0);
+                  return Padding(
+                    padding: resolvedPadding,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.max,
+                      mainAxisAlignment: showText
+                          ? MainAxisAlignment.start
+                          : MainAxisAlignment.center,
+                      children: [
+                        // Icon container with dynamic icon switching
+                        AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
-                          child: Image.asset(
-                            currentIconPath,
-                            key: ValueKey(
-                              currentIconPath,
-                            ), // Key for smooth animation
-                            fit: BoxFit.contain,
+                          width: iconSize,
+                          height: iconSize,
+                          decoration: BoxDecoration(
+                            color: Colors
+                                .transparent, // Remove individual icon background
+                            borderRadius: BorderRadius.circular(
+                              25,
+                            ), // Fully rounded circular/pill design
+                          ),
+                          child: Center(
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 200),
+                              child: Image.asset(
+                                currentIconPath,
+                                key: ValueKey(
+                                  currentIconPath,
+                                ), // Key for smooth animation
+                                fit: BoxFit.contain,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        if (showText) ...[
+                          const SizedBox(width: 16),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                widget.title,
+                                style: itemTextStyle,
+                                softWrap: false,
+                                maxLines: 1,
+                                overflow: TextOverflow.visible,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    if (showText) ...[
-                      const SizedBox(width: 16),
-                      Flexible(
-                        child: Text(
-                          widget.title,
-                          style: textStyle,
-                          softWrap: true,
-                          maxLines: 2,
-                          overflow: TextOverflow.visible,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            },
+                  );
+                },
+              ),
+            ),
+            ),
           ),
         ),
       ),
@@ -201,18 +227,22 @@ class _LogoutMenuItemState extends State<_LogoutMenuItem> {
     }
   }
 
-  // Responsive text style
-  TextStyle get textStyle {
-    double fontSize = isMobile ? 14.0 : (isTablet ? 15.0 : 16.0);
-    return TextStyle(
-      color: _isHovering ? const Color(0xFFC10D00) : Colors.white,
-      fontSize: fontSize,
-      fontWeight: FontWeight.w500,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final bool isLight = Theme.of(context).brightness == Brightness.light;
+    final Color normalText = isLight ? Colors.black : Colors.white;
+    final Color hoverText = const Color(0xFFC10D00);
+    final Color normalIcon = isLight ? Colors.black : Colors.white;
+    final Color hoverIcon = const Color(0xFFC10D00);
+
+    double fontSize = isMobile ? 14.0 : (isTablet ? 15.0 : 16.0);
+    final TextStyle logoutTextStyle = TextStyle(
+      fontFamily: 'Poppins',
+      color: _isHovering ? hoverText : normalText,
+      fontSize: fontSize,
+      fontWeight: FontWeight.bold,
+    );
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovering = true),
@@ -263,12 +293,9 @@ class _LogoutMenuItemState extends State<_LogoutMenuItem> {
                       child: Center(
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
-                          child: Icon(
-                            Icons.logout,
-                            color: _isHovering
-                                ? const Color(0xFFC10D00)
-                                : Colors.white, // Red on hover, white normally
-                            size: iconIconSize,
+                          child: Image.asset(
+                            'assets/images/siderbar/6.png',
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
@@ -278,8 +305,8 @@ class _LogoutMenuItemState extends State<_LogoutMenuItem> {
                       Flexible(
                         child: AnimatedDefaultTextStyle(
                           duration: const Duration(milliseconds: 200),
-                          style: textStyle,
-                          child: const Text(
+                          style: logoutTextStyle,
+                          child: Text(
                             'Logout',
                             softWrap: true,
                             maxLines: 2,
@@ -314,10 +341,29 @@ class SideMenu extends StatefulWidget {
 }
 
 class _SideMenuState extends State<SideMenu> {
-  bool _isExpanded = false;
+  static const double _sidebarWidth = 260;
 
-  // Fixed sidebar widths per design spec
-  double get sidebarWidth => _isExpanded ? 260 : 64;
+  static const Map<int, String> _sectionNames = {
+    0: 'User Management',
+    1: 'Entity Management',
+    2: 'Module Access',
+    3: 'Modules',
+    4: 'Profile',
+  };
+
+  Future<void> _navigateToSection(int index) async {
+    final sectionName = _sectionNames[index] ?? 'Section $index';
+    final portal = _isAdmin ? 'admin' : 'staff';
+    if (sentryEnabled) {
+      await Sentry.addBreadcrumb(Breadcrumb(
+        message: 'Navigated to $sectionName',
+        category: 'navigation',
+        level: SentryLevel.info,
+        data: {'portal': portal, 'section': sectionName},
+      ));
+    }
+    widget.onItemSelected(index);
+  }
 
   // Check if current user is Admin
   bool get _isAdmin {
@@ -328,151 +374,223 @@ class _SideMenuState extends State<SideMenu> {
 
   @override
   Widget build(BuildContext context) {
-    // No auto-collapse; fixed widths handle layout consistently
+    final bool isLight = Theme.of(context).brightness == Brightness.light;
+    final Color sidebarBg =
+        isLight ? Colors.white : _sideMenuDarkWidgetColor;
 
     return Container(
-      width: sidebarWidth,
-      color: const Color(0xFF1F2840),
-      child: Column(
-        children: [
-          // Header with toggle button
-          Container(
-            decoration: const BoxDecoration(color: Color(0xFF1F2840)),
-            child: Column(
-              children: [
-                // Toggle button row - Fixed overflow issue
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          // Wrap the Image.asset with InkWell
-                          onTap: () {
-                            SoundSystem.playButtonClick();
-                            setState(() {
-                              _isExpanded = !_isExpanded;
-                            });
-                          },
-                          child: Center(
-                            child: Image.asset(
-                              _isExpanded
-                                  ? 'assets/images/khono.png'
-                                  : 'assets/images/discs.png',
-                              height: _isExpanded ? 40 : 32,
-                              width: _isExpanded ? null : 32,
-                              fit: _isExpanded
-                                  ? BoxFit.contain
-                                  : BoxFit.contain,
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Removed IconButton
-                    ],
-                  ),
-                ),
-              ],
+      width: _sidebarWidth,
+      color: sidebarBg,
+      child: _buildSidebar(),
+    );
+  }
+
+  Widget _buildSidebar() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final isLight = !isDark;
+    final unselectedColor = isDark
+        ? Colors.white
+        : theme.colorScheme.onSurface.withValues(alpha: 0.84);
+    final welcomeTextColor = isDark
+        ? Colors.white
+        : theme.colorScheme.onSurface.withValues(alpha: 0.82);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isVeryCompact = constraints.maxHeight < 660;
+        final isUltraCompact = constraints.maxHeight < 580;
+
+        final double navVerticalPadding = isUltraCompact
+            ? 1.5
+            : (isVeryCompact ? 2 : 3);
+        final double sectionGap = isUltraCompact ? 2 : (isVeryCompact ? 4 : 6);
+        final double bottomGap = isUltraCompact ? 6 : (isVeryCompact ? 8 : 10);
+
+        return Column(
+          children: [
+            SizedBox(height: isUltraCompact ? 4 : 8),
+            Image.asset(
+              'assets/images/khono.png',
+              width: isUltraCompact ? 150 : (isVeryCompact ? 190 : 228),
+              height: isUltraCompact ? 28 : (isVeryCompact ? 35 : 44),
+              fit: BoxFit.contain,
             ),
-          ),
-          // Menu items
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                // User Management - Admin only
-                if (_isAdmin)
-                  MenuItemWidget(
-                    unselectedIconPath:
-                        'assets/images/HR_Team_Management/Management_White_Badge_Red.png',
-                    selectedIconPath:
-                        'assets/images/HR_Team_Management/red_Management_Red_Badge_White.png',
-                    title: 'User Management',
-                    isSelected: widget.selectedIndex == 0,
-                    isExpanded: _isExpanded,
-                    onTap: () => widget.onItemSelected(0),
-                  ),
-                // Entity Management - Admin only
-                if (_isAdmin)
-                  MenuItemWidget(
-                    unselectedIconPath:
-                        'assets/images/Task_Management/Task_White Badge_Red.png',
-                    selectedIconPath:
-                        'assets/images/Task_Management/Task_Red Badge_White.png',
-                    title: 'Entity Management',
-                    isSelected: widget.selectedIndex == 1,
-                    isExpanded: _isExpanded,
-                    onTap: () => widget.onItemSelected(1),
-                  ),
-                // Module Access - Admin only
-                if (_isAdmin)
-                  MenuItemWidget(
-                    unselectedIconPath:
-                        'assets/images/Concentration_Key_Focus/Concentration_Key_Focus_White_Badge_Red.png',
-                    selectedIconPath:
-                        'assets/images/Concentration_Key_Focus/Concentration_Key_Focus_Red_Badge_White.png',
-                    title: 'Module Access',
-                    isSelected: widget.selectedIndex == 2,
-                    isExpanded: _isExpanded,
-                    onTap: () => widget.onItemSelected(2),
-                  ),
-                // Modules - Available to all users (Staff and Admin)
-                MenuItemWidget(
-                  unselectedIconPath:
-                      'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
-                  selectedIconPath:
-                      'assets/images/Project Launch_Start/Project Launch_Start_White Badge_Red.png',
-                  title: 'Modules',
-                  isSelected: widget.selectedIndex == 3,
-                  isExpanded: _isExpanded,
-                  onTap: () => widget.onItemSelected(3),
+            SizedBox(height: isUltraCompact ? 4 : 6),
+            Text(
+              'Welcome to KhonoBuzz',
+              style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: sectionGap),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: navVerticalPadding,
                 ),
-                // Profile - Available to all users (Staff and Admin)
-                MenuItemWidget(
+                child: Column(
+                  children: [
+                    if (_isAdmin)
+                      MenuItemWidget(
+                        unselectedIconPath:
+                            'assets/images/siderbar/1.png',
+                        selectedIconPath:
+                            'assets/images/siderbar/1.png',
+                        title: 'User Management',
+                        isSelected: widget.selectedIndex == 0,
+                        isExpanded: true,
+                        onTap: () => _navigateToSection(0),
+                      ),
+                    if (_isAdmin)
+                      MenuItemWidget(
+                        unselectedIconPath:
+                            'assets/images/siderbar/2.png',
+                        selectedIconPath:
+                            'assets/images/siderbar/2.png',
+                        title: 'Entity Management',
+                        isSelected: widget.selectedIndex == 1,
+                        isExpanded: true,
+                        onTap: () => _navigateToSection(1),
+                      ),
+                    if (_isAdmin)
+                      MenuItemWidget(
+                        unselectedIconPath:
+                            'assets/images/siderbar/3.png',
+                        selectedIconPath:
+                            'assets/images/siderbar/3.png',
+                        title: 'Module Access',
+                        isSelected: widget.selectedIndex == 2,
+                        isExpanded: true,
+                        onTap: () => _navigateToSection(2),
+                      ),
+                    MenuItemWidget(
+                      itemKey: const ValueKey('e2e_nav_modules'),
+                      unselectedIconPath:
+                          'assets/images/siderbar/4.png',
+                      selectedIconPath:
+                          'assets/images/siderbar/4.png',
+                      title: 'Modules',
+                      isSelected: widget.selectedIndex == 3,
+                      isExpanded: true,
+                      onTap: () => _navigateToSection(3),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: bottomGap),
+            if (isLight || isDark)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: MenuItemWidget(
+                  itemKey: const ValueKey('e2e_nav_profile'),
                   unselectedIconPath:
-                      'assets/images/HR_Team_Management/Management_White_Badge_Red.png',
+                      'assets/images/siderbar/5.png',
                   selectedIconPath:
-                      'assets/images/HR_Team_Management/red_Management_Red_Badge_White.png',
+                      'assets/images/siderbar/5.png',
                   title: 'Profile',
                   isSelected: widget.selectedIndex == 4,
-                  isExpanded: _isExpanded,
-                  onTap: () => widget.onItemSelected(4),
+                  isExpanded: true,
+                  onTap: () => _navigateToSection(4),
                 ),
-                // Small spacing before logout button
-                const SizedBox(height: 260.0),
-                // Version Control Widget positioned above logout button - only show when expanded
-                if (_isExpanded)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 8.0,
+              ),
+            SizedBox(height: bottomGap),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _LogoutMenuItem(
+                isExpanded: true,
+                onTap: () async {
+                  SoundSystem.playButtonClick();
+                  final shouldLogout = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) {
+                      final bool dialogIsLight =
+                          Theme.of(dialogContext).brightness == Brightness.light;
+                      final Color dialogTextColor = dialogIsLight
+                          ? Colors.black
+                          : Colors.white;
+                      return AlertDialog(
+                        backgroundColor: dialogIsLight
+                            ? Colors.white
+                            : _sideMenuDarkWidgetColor,
+                        title: Text(
+                          'Confirm logout',
+                          style: TextStyle(
+                            color: dialogTextColor,
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        content: Text(
+                          'Are you sure you want to logout?',
+                          style: TextStyle(
+                            color: dialogTextColor,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        actions: [
+                          OutlinedButton(
+                            onPressed: () {
+                              Navigator.of(dialogContext).pop(false);
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: dialogTextColor,
+                              side: BorderSide(
+                                color: dialogTextColor.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(dialogContext).pop(true);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFC10D00),
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text(
+                              'Yes',
+                              style: TextStyle(fontFamily: 'Poppins'),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+
+                  if (shouldLogout != true || !context.mounted) {
+                    return;
+                  }
+
+                  await context.read<AuthProvider>().logout();
+                  if (!context.mounted) return;
+
+                  context.read<UserProvider>().clearCache();
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(
+                      builder: (context) => const LandingScreen(),
                     ),
-                    child: Center(
-                      child: const VersionControlWidget(
-                        fontSize: 10.0, // Smaller font for sidebar
-                      ),
-                    ),
-                  ),
-                // Logout item with hover functionality - directly below version control
-                _LogoutMenuItem(
-                  isExpanded: _isExpanded,
-                  onTap: () {
-                    SoundSystem.playButtonClick();
-                    context.read<AuthProvider>().logout();
-                    Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(
-                        builder: (context) => const LandingScreen(),
-                      ),
-                      (Route<dynamic> route) => false,
-                    );
-                  },
-                ),
-              ],
+                    (Route<dynamic> route) => false,
+                  );
+                },
+              ),
             ),
-          ),
-        ],
-      ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4),
+              child: Center(
+                child: VersionControlWidget(
+                  fontSize: 12.0,
+                  textColor: unselectedColor.withValues(alpha: 0.74),
+                  hoverColor: unselectedColor,
+                ),
+              ),
+            ),
+            SizedBox(height: bottomGap),
+          ],
+        );
+      },
     );
   }
 }

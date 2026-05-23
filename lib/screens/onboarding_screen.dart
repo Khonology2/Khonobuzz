@@ -1,14 +1,20 @@
 import 'dart:ui';
 import 'dart:math' as math;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'dart:async';
 import '../services/sound_system.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
+import '../config/api_config.dart';
 import '../widgets/animations/loading_button.dart';
-import '../widgets/floating_circles_particle_animation.dart';
 import '../widgets/version_control_widget.dart';
 import 'lobby_screen.dart';
 
@@ -22,29 +28,33 @@ class OnboardingScreen extends StatefulWidget {
 
 class OnboardingScreenState extends State<OnboardingScreen>
     with TickerProviderStateMixin {
+  static final Color onboardingDarkWidgetBg = Color.alphaBlend(
+    Colors.white.withValues(alpha: 0.10),
+    const Color(0xFF3D3F40).withValues(alpha: 0.40),
+  );
+
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
 
   double _discsOpacity = 0.0;
   bool _isLoading = false;
-  late AnimationController _blinkController;
-  late Animation<double> _blinkAnimation;
-  final GlobalKey<FloatingCirclesParticleAnimationState> _animationKey =
-      GlobalKey();
 
   late AudioPlayer _audioPlayer;
+  late AnimationController _blinkController;
+  late Animation<double> _blinkAnimation;
 
-  final List<String> _departments = const [
+  static const List<String> _fallbackDepartments = [
     'Management',
     'Operations',
     'Finance',
     'HR',
     'Sales',
   ];
+  final List<String> _departments = List<String>.from(_fallbackDepartments);
   String? _selectedDepartment;
 
-  final List<String> _designations = const [
+  static const List<String> _fallbackDesignations = [
     'Director',
     'Developer',
     'Support Analyst',
@@ -62,6 +72,7 @@ class OnboardingScreenState extends State<OnboardingScreen>
     'HR',
     'Junior Analyst',
   ];
+  final List<String> _designations = List<String>.from(_fallbackDesignations);
   String? _selectedDesignation;
 
   @override
@@ -84,6 +95,107 @@ class OnboardingScreenState extends State<OnboardingScreen>
         _discsOpacity = 1.0;
       });
     });
+    unawaited(_loadDepartmentAndDesignationOptions());
+  }
+
+  Future<void> _loadDepartmentAndDesignationOptions() async {
+    try {
+      final headers = {'Content-Type': 'application/json'};
+      final departmentsResponse = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/api/departments'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 12));
+      final designationsResponse = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/api/designations'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 12));
+
+      if (!mounted) return;
+
+      final List<String> loadedDepartments = _extractStringList(
+        departmentsResponse.statusCode == 200 ? departmentsResponse.body : null,
+        key: 'departments',
+      );
+      final List<String> loadedDesignations = _extractStringList(
+        designationsResponse.statusCode == 200 ? designationsResponse.body : null,
+        key: 'designations',
+      );
+
+      setState(() {
+        _departments
+          ..clear()
+          ..addAll(_mergeWithFallbackBottom(loadedDepartments, _fallbackDepartments));
+        _designations
+          ..clear()
+          ..addAll(_mergeWithFallbackBottom(loadedDesignations, _fallbackDesignations));
+        if (_selectedDepartment != null &&
+            !_departments.contains(_selectedDepartment)) {
+          _selectedDepartment = null;
+        }
+        if (_selectedDesignation != null &&
+            !_designations.contains(_selectedDesignation)) {
+          _selectedDesignation = null;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _departments
+          ..clear()
+          ..addAll(_fallbackDepartments);
+        _designations
+          ..clear()
+          ..addAll(_fallbackDesignations);
+      });
+    }
+  }
+
+  List<String> _extractStringList(String? responseBody, {required String key}) {
+    if (responseBody == null || responseBody.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(responseBody);
+      if (decoded is! Map<String, dynamic>) return const [];
+      final values = decoded[key];
+      if (values is! List) return const [];
+      final cleaned = values
+          .whereType<String>()
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList();
+      return cleaned;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  List<String> _mergeWithFallbackBottom(
+    List<String> dbOptions,
+    List<String> fallbackOptions,
+  ) {
+    final seen = <String>{};
+    final merged = <String>[];
+    for (final option in dbOptions) {
+      final value = option.trim();
+      if (value.isEmpty) continue;
+      final key = value.toLowerCase();
+      if (seen.add(key)) {
+        merged.add(value);
+      }
+    }
+    for (final option in fallbackOptions) {
+      final value = option.trim();
+      if (value.isEmpty) continue;
+      final key = value.toLowerCase();
+      if (seen.add(key)) {
+        merged.add(value);
+      }
+    }
+    return merged;
   }
 
   @override
@@ -97,20 +209,177 @@ class OnboardingScreenState extends State<OnboardingScreen>
     super.dispose();
   }
 
+  Future<String?> _showSearchableOptionsDialog({
+    required String title,
+    required List<String> options,
+  }) async {
+    final searchController = TextEditingController();
+    String query = '';
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
+        final dialogBg = isDark ? const Color(0xFF3D3F40) : Colors.white;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final normalizedQuery = query.trim().toLowerCase();
+            final filtered = options
+                .where(
+                  (opt) => opt.toLowerCase().contains(normalizedQuery),
+                )
+                .toList();
+            return AlertDialog(
+              backgroundColor: dialogBg,
+              title: Text(
+                title,
+                style: TextStyle(
+                  color: appTextColor(dialogContext),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: searchController,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          query = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search $title',
+                        hintStyle: TextStyle(
+                          color: appTextColor(dialogContext).withValues(alpha: 0.7),
+                          fontFamily: 'Poppins',
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: appTextColor(dialogContext),
+                        ),
+                        filled: true,
+                        fillColor: dialogBg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      style: TextStyle(
+                        color: appTextColor(dialogContext),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (filtered.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'No results found',
+                          style: TextStyle(
+                            color: appTextColor(dialogContext),
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: ((filtered.length < 10 ? filtered.length : 10) * 48)
+                              .toDouble(),
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final option = filtered[index];
+                            return ListTile(
+                              dense: true,
+                              title: Text(
+                                option,
+                                style: TextStyle(
+                                  color: appTextColor(dialogContext),
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              onTap: () => Navigator.of(dialogContext).pop(option),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    searchController.dispose();
+    return selected;
+  }
+
+  Widget _buildSearchableSelectField({
+    required String placeholder,
+    required String? valueText,
+    required Color widgetBg,
+    required Color hintColor,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        decoration: BoxDecoration(
+          color: widgetBg,
+          borderRadius: BorderRadius.circular(25.0),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                (valueText == null || valueText.isEmpty) ? placeholder : valueText,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: (valueText == null || valueText.isEmpty)
+                      ? hintColor
+                      : appTextColor(context),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_drop_down, color: appTextColor(context)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool isLight = !isDark;
+    final Color widgetBg = isDark
+        ? onboardingDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
+    final Color hintColor = isDark ? Colors.white70 : Colors.black54;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/nathi_bg.png'),
+            image: AssetImage(appBackgroundAsset(context)),
             fit: BoxFit.cover,
           ),
         ),
         child: Stack(
           children: [
-            FloatingCirclesParticleAnimation(key: _animationKey),
+
             Center(
               child: SingleChildScrollView(
                 child: Padding(
@@ -120,11 +389,11 @@ class OnboardingScreenState extends State<OnboardingScreen>
                     children: [
                       Image.asset('assets/images/khono.png', height: 100),
                       const SizedBox(height: 48),
-                      const Text(
+                      Text(
                         'Create Your Account',
                         style: TextStyle(
                           fontFamily: 'Poppins',
-                          color: Colors.white,
+                          color: appTextColor(context),
                           fontSize: 20,
                         ),
                       ),
@@ -179,70 +448,32 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.center,
                                             children: [
-                                              const Text(
+                                              Text(
                                                 'Department',
                                                 textAlign: TextAlign.center,
                                                 style: TextStyle(
-                                                  color: Colors.white,
+                                                  color: appTextColor(context),
                                                   fontSize: 16,
                                                   fontFamily: 'Poppins',
                                                 ),
                                               ),
                                               const SizedBox(height: 8),
-                                              DropdownButtonFormField<String>(
-                                                initialValue:
-                                                    _selectedDepartment,
-                                                dropdownColor: Colors.grey[800],
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontFamily: 'Poppins',
-                                                ),
-                                                decoration: InputDecoration(
-                                                  filled: true,
-                                                  fillColor: Colors.grey[800]!
-                                                      .withValues(alpha: 0.5),
-                                                  border: OutlineInputBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          25.0,
-                                                        ),
-                                                    borderSide: BorderSide.none,
-                                                  ),
-                                                  contentPadding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 16.0,
-                                                        vertical: 12.0,
-                                                      ),
-                                                ),
-                                                hint: Text(
-                                                  'Select Department',
-                                                  style: TextStyle(
-                                                    color: Colors.grey[600],
-                                                    fontFamily: 'Poppins',
-                                                  ),
-                                                ),
-                                                items: _departments.map((
-                                                  String department,
-                                                ) {
-                                                  return DropdownMenuItem<
-                                                    String
-                                                  >(
-                                                    value: department,
-                                                    child: Text(department),
-                                                  );
-                                                }).toList(),
-                                                onChanged: (String? newValue) {
+                                              _buildSearchableSelectField(
+                                                placeholder: 'Select Department',
+                                                valueText: _selectedDepartment,
+                                                widgetBg: widgetBg,
+                                                hintColor: hintColor,
+                                                onTap: () async {
+                                                  SoundSystem.playButtonClick();
+                                                  final selected =
+                                                      await _showSearchableOptionsDialog(
+                                                        title: 'Department',
+                                                        options: _departments,
+                                                      );
+                                                  if (selected == null) return;
                                                   setState(() {
-                                                    _selectedDepartment =
-                                                        newValue;
+                                                    _selectedDepartment = selected;
                                                   });
-                                                },
-                                                validator: (value) {
-                                                  if (value == null ||
-                                                      value.isEmpty) {
-                                                    return 'Please select a department';
-                                                  }
-                                                  return null;
                                                 },
                                               ),
                                             ],
@@ -292,70 +523,32 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.center,
                                             children: [
-                                              const Text(
+                                              Text(
                                                 'Department',
                                                 textAlign: TextAlign.center,
                                                 style: TextStyle(
-                                                  color: Colors.white,
+                                                  color: appTextColor(context),
                                                   fontSize: 16,
                                                   fontFamily: 'Poppins',
                                                 ),
                                               ),
                                               const SizedBox(height: 8),
-                                              DropdownButtonFormField<String>(
-                                                initialValue:
-                                                    _selectedDepartment,
-                                                dropdownColor: Colors.grey[800],
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontFamily: 'Poppins',
-                                                ),
-                                                decoration: InputDecoration(
-                                                  filled: true,
-                                                  fillColor: Colors.grey[800]!
-                                                      .withValues(alpha: 0.5),
-                                                  border: OutlineInputBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          25.0,
-                                                        ),
-                                                    borderSide: BorderSide.none,
-                                                  ),
-                                                  contentPadding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 16.0,
-                                                        vertical: 12.0,
-                                                      ),
-                                                ),
-                                                hint: Text(
-                                                  'Select Department',
-                                                  style: TextStyle(
-                                                    color: Colors.grey[600],
-                                                    fontFamily: 'Poppins',
-                                                  ),
-                                                ),
-                                                items: _departments.map((
-                                                  String department,
-                                                ) {
-                                                  return DropdownMenuItem<
-                                                    String
-                                                  >(
-                                                    value: department,
-                                                    child: Text(department),
-                                                  );
-                                                }).toList(),
-                                                onChanged: (String? newValue) {
+                                              _buildSearchableSelectField(
+                                                placeholder: 'Select Department',
+                                                valueText: _selectedDepartment,
+                                                widgetBg: widgetBg,
+                                                hintColor: hintColor,
+                                                onTap: () async {
+                                                  SoundSystem.playButtonClick();
+                                                  final selected =
+                                                      await _showSearchableOptionsDialog(
+                                                        title: 'Department',
+                                                        options: _departments,
+                                                      );
+                                                  if (selected == null) return;
                                                   setState(() {
-                                                    _selectedDepartment =
-                                                        newValue;
+                                                    _selectedDepartment = selected;
                                                   });
-                                                },
-                                                validator: (value) {
-                                                  if (value == null ||
-                                                      value.isEmpty) {
-                                                    return 'Please select a department';
-                                                  }
-                                                  return null;
                                                 },
                                               ),
                                             ],
@@ -383,65 +576,32 @@ class OnboardingScreenState extends State<OnboardingScreen>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  const Text(
+                                  Text(
                                     'Designation',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      color: Colors.white,
+                                      color: appTextColor(context),
                                       fontSize: 16,
                                       fontFamily: 'Poppins',
                                     ),
                                   ),
                                   const SizedBox(height: 8),
-                                  DropdownButtonFormField<String>(
-                                    initialValue: _selectedDesignation,
-                                    dropdownColor: Colors.grey[800],
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontFamily: 'Poppins',
-                                    ),
-                                    decoration: InputDecoration(
-                                      filled: true,
-                                      fillColor: Colors.grey[800]!.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(
-                                          25.0,
-                                        ),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 16.0,
-                                            vertical: 12.0,
-                                          ),
-                                    ),
-                                    hint: Text(
-                                      'Select Designation',
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontFamily: 'Poppins',
-                                      ),
-                                    ),
-                                    items: _designations.map((
-                                      String designation,
-                                    ) {
-                                      return DropdownMenuItem<String>(
-                                        value: designation,
-                                        child: Text(designation),
-                                      );
-                                    }).toList(),
-                                    onChanged: (String? newValue) {
+                                  _buildSearchableSelectField(
+                                    placeholder: 'Select Designation',
+                                    valueText: _selectedDesignation,
+                                    widgetBg: widgetBg,
+                                    hintColor: hintColor,
+                                    onTap: () async {
+                                      SoundSystem.playButtonClick();
+                                      final selected =
+                                          await _showSearchableOptionsDialog(
+                                            title: 'Designation',
+                                            options: _designations,
+                                          );
+                                      if (selected == null) return;
                                       setState(() {
-                                        _selectedDesignation = newValue;
+                                        _selectedDesignation = selected;
                                       });
-                                    },
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'Please select a designation';
-                                      }
-                                      return null;
                                     },
                                   ),
                                 ],
@@ -455,7 +615,6 @@ class OnboardingScreenState extends State<OnboardingScreen>
                       _LoadingConfirmButtonWrapper(
                         text: 'CONFIRM',
                         color: const Color(0xFFC10D00),
-                        animationKey: _animationKey,
                         onLoadingChanged: (isLoading) {
                           setState(() {
                             _isLoading = isLoading;
@@ -504,90 +663,14 @@ class OnboardingScreenState extends State<OnboardingScreen>
                             return;
                           }
 
-                          // Validate Email Domain
-                          if (!email.toLowerCase().endsWith('@khonology.com')) {
+                          final emailPattern = RegExp(
+                            r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                          );
+                          if (!emailPattern.hasMatch(email)) {
                             await _playErrorSound();
-                            final currentContext = context;
-                            if (!currentContext.mounted) return;
-                            showDialog(
-                              context: currentContext,
-                              barrierColor: Colors.black54,
-                              builder: (BuildContext context) {
-                                return Dialog(
-                                  backgroundColor: Colors.transparent,
-                                  child: BackdropFilter(
-                                    filter: ImageFilter.blur(
-                                      sigmaX: 10,
-                                      sigmaY: 10,
-                                    ),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: const Color(
-                                          0xFF2C3E50,
-                                        ).withValues(alpha: 0.85),
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(24.0),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Text(
-                                              'Please use your correct work email',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontFamily: 'Poppins',
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                            const SizedBox(height: 16),
-                                            const Text(
-                                              'Only Khonology work emails (@khonology.com) are allowed.',
-                                              style: TextStyle(
-                                                color: Colors.white70,
-                                                fontFamily: 'Poppins',
-                                                fontSize: 14,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                            const SizedBox(height: 24),
-                                            TextButton(
-                                              onPressed: () {
-                                                SoundSystem.playButtonClick();
-                                                Navigator.of(context).pop();
-                                              },
-                                              style: TextButton.styleFrom(
-                                                backgroundColor: const Color(
-                                                  0xFFC10D00,
-                                                ),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 32,
-                                                      vertical: 12,
-                                                    ),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                              ),
-                                              child: const Text(
-                                                'OK',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontFamily: 'Poppins',
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
+                            _showValidationError(
+                              'Email Address',
+                              'Please enter a valid email address to continue.',
                             );
                             return;
                           }
@@ -625,6 +708,12 @@ class OnboardingScreenState extends State<OnboardingScreen>
                           if (!mounted) return;
 
                           if (success) {
+                            if (!context.mounted) return;
+                            await context
+                                .read<ThemeModeProvider>()
+                                .applyThemePreference(
+                                  authProvider.userThemePreference,
+                                );
                             if (authProvider.userAlreadyOnboarded) {
                               await _playErrorSound();
                               _showValidationError(
@@ -670,8 +759,13 @@ class OnboardingScreenState extends State<OnboardingScreen>
                                 ? _blinkAnimation.value * _discsOpacity
                                 : _discsOpacity,
                             child: Image.asset(
-                              'assets/images/discs.png',
-                              height: 80,
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? 'assets/images/discs.png'
+                                  : 'assets/images/red_disc.png',
+                              height:
+                                  Theme.of(context).brightness == Brightness.dark
+                                  ? 72
+                                  : 110,
                             ),
                           );
                         },
@@ -682,12 +776,39 @@ class OnboardingScreenState extends State<OnboardingScreen>
               ),
             ),
             Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Align(
-                alignment: Alignment.center,
-                child: const VersionControlWidget(),
+              left: 16,
+              bottom: 16,
+              child: SafeArea(
+                child: VersionControlWidget(
+                  textColor: isLight ? Colors.black54 : Colors.white70,
+                  hoverColor: isLight ? Colors.black : Colors.white,
+                ),
+              ),
+            ),
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: SafeArea(
+                child: Consumer<ThemeModeProvider>(
+                  builder: (context, themeMode, _) {
+                    return FloatingActionButton(
+                      mini: true,
+                      shape: const CircleBorder(),
+                      heroTag: 'onboarding_theme_toggle_fab',
+                      onPressed: () {
+                        SoundSystem.playButtonClick();
+                        themeMode.toggle();
+                      },
+                      backgroundColor: AppThemes.light.primaryColor,
+                      child: Icon(
+                        themeMode.isLight
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        color: appTextColor(context),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -702,14 +823,20 @@ class OnboardingScreenState extends State<OnboardingScreen>
     String? hintText,
     required TextEditingController controller,
   }) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark
+        ? onboardingDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
+    final Color hintColor = isDark ? Colors.white70 : Colors.black54;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           label,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: appTextColor(context),
             fontSize: 16,
             fontFamily: 'Poppins',
           ),
@@ -717,12 +844,15 @@ class OnboardingScreenState extends State<OnboardingScreen>
         const SizedBox(height: 8),
         TextField(
           controller: controller,
-          style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+          style: TextStyle(
+            color: appTextColor(context),
+            fontFamily: 'Poppins',
+          ),
           decoration: InputDecoration(
             hintText: hintText ?? hint ?? _getHintText(label),
-            hintStyle: TextStyle(color: Colors.grey[600]),
+            hintStyle: TextStyle(color: hintColor),
             filled: true,
-            fillColor: Colors.grey[800]!.withValues(alpha: 0.5),
+            fillColor: widgetBg,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(25.0),
               borderSide: BorderSide.none,
@@ -750,13 +880,18 @@ class OnboardingScreenState extends State<OnboardingScreen>
       context: context,
       barrierColor: Colors.black54,
       builder: (BuildContext context) {
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
+        final Color dialogBg = isDark
+            ? const Color(0xFF3D3F40)
+            : Colors.white;
+        final Color dialogTextColor = isDark ? Colors.white : Colors.black;
         return Dialog(
           backgroundColor: Colors.transparent,
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF2C3E50).withValues(alpha: 0.85),
+                color: dialogBg,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Padding(
@@ -766,8 +901,8 @@ class OnboardingScreenState extends State<OnboardingScreen>
                   children: [
                     Text(
                       '$fieldName Required',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: dialogTextColor,
                         fontFamily: 'Poppins',
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -777,8 +912,8 @@ class OnboardingScreenState extends State<OnboardingScreen>
                     const SizedBox(height: 16),
                     Text(
                       message,
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: dialogTextColor,
                         fontFamily: 'Poppins',
                         fontSize: 14,
                       ),
@@ -800,10 +935,10 @@ class OnboardingScreenState extends State<OnboardingScreen>
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         'OK',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: dialogTextColor,
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.bold,
                         ),
@@ -855,7 +990,6 @@ class OnboardingScreenState extends State<OnboardingScreen>
       text: text,
       color: color,
       onPressed: onPressed,
-      animationKey: isBackButton ? null : _animationKey,
       isBackButton: isBackButton,
     );
   }
@@ -866,14 +1000,12 @@ class _LoadingConfirmButtonWrapper extends StatefulWidget {
   final Color color;
   final Future<void> Function() onPressed;
   final ValueChanged<bool> onLoadingChanged;
-  final GlobalKey<FloatingCirclesParticleAnimationState>? animationKey;
 
   const _LoadingConfirmButtonWrapper({
     required this.text,
     required this.color,
     required this.onPressed,
     required this.onLoadingChanged,
-    this.animationKey,
   });
 
   @override
@@ -896,13 +1028,7 @@ class _LoadingConfirmButtonWrapperState
           return;
         }
         _isAnimating = true;
-        if (widget.animationKey?.currentState != null && !_isAnimating) {
-          // Guard to avoid double trigger if state changed mid-frame
-          widget.animationKey!.currentState!.triggerParticleExplosion();
-        }
-        if (widget.animationKey?.currentState != null) {
-          widget.animationKey!.currentState!.triggerParticleExplosion();
-        }
+
         widget.onLoadingChanged(true);
         await widget.onPressed();
         if (mounted) {
@@ -918,13 +1044,11 @@ class _ClickBubblyButton extends StatefulWidget {
   final String text;
   final Color color;
   final VoidCallback onPressed;
-  final GlobalKey<FloatingCirclesParticleAnimationState>? animationKey;
   final bool isBackButton;
   const _ClickBubblyButton({
     required this.text,
     required this.color,
     required this.onPressed,
-    this.animationKey,
     this.isBackButton = false,
   });
 
@@ -1057,18 +1181,12 @@ class _ClickBubblyButtonState extends State<_ClickBubblyButton>
               SoundSystem.playButtonClick();
               if (widget.isBackButton) {
                 _triggerDissolve();
-                if (widget.animationKey?.currentState != null) {
-                  widget.animationKey!.currentState!.triggerDissolve();
-                }
                 Future.delayed(
                   const Duration(milliseconds: 600),
                   widget.onPressed,
                 );
               } else {
                 _clickController.forward(from: 0);
-                if (widget.animationKey?.currentState != null) {
-                  widget.animationKey!.currentState!.triggerParticleExplosion();
-                }
                 Future.delayed(
                   const Duration(milliseconds: 1200),
                   widget.onPressed,

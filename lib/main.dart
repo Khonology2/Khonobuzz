@@ -1,78 +1,297 @@
+import 'dart:async';
+import 'dart:ui';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'config/api_config.dart';
+import 'config/env.dart';
+import 'config/sentry_dsn_loader.dart';
 import 'screens/entity_management_screen.dart';
 import 'screens/user_management_screen.dart';
 import 'screens/module_access_screen.dart';
 import 'screens/module_screen.dart';
+import 'screens/auth_screen.dart';
 import 'screens/landing_screen.dart';
-import 'screens/onboarding_alert_screen.dart';
 import 'providers/auth_provider.dart';
+import 'providers/admin_alert_provider.dart';
+import 'providers/theme_mode_provider.dart';
 import 'providers/user_provider.dart';
+import 'theme/app_themes.dart';
 import 'services/sound_system.dart';
 import 'services/version_service.dart';
 import 'screens/admin_profile_screen.dart';
 import 'screens/staff_profile_screen.dart';
+import 'screens/notifications_screen.dart';
 import 'widgets/side_menu.dart';
-import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
-import 'firebase_options.dart'; // Import generated Firebase options
+import 'generated/app_localizations.dart';
 
-void main() async {
-  // Made main async
-  WidgetsFlutterBinding.ensureInitialized(); // Ensure Flutter is initialized
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  ); // Initialize Firebase
-  debugPrint('Firebase initialized successfully!'); // Debug print
+// Import for web-specific functionality
+import 'e2e_browser_query_stub.dart'
+    if (dart.library.html) 'e2e_browser_query_web.dart'
+    as e2e_browser_query;
+import 'flutter_ready_body_stub.dart'
+    if (dart.library.html) 'flutter_ready_body_web.dart'
+    as flutter_ready_body;
+import 'widgets/flutter_web_readiness.dart';
+
+/// Headless browsers (e.g. Cypress / Electron) sometimes report locales that
+/// break [Locale] construction ("Incorrect locale information provided").
+/// CI flow test marker: release-pr pipeline verification (2026-05-23)...
+/// 
+/// 
+/// 
+/// 
+
+
+
+Locale _resolveApplicationLocale(
+  List<Locale>? locales,
+  Iterable<Locale> supported,
+) {
+  const fallback = Locale('en');
+  if (locales == null || locales.isEmpty) {
+    return fallback;
+  }
+  for (final device in locales) {
+    final resolved = _trySupportedLocale(device, supported);
+    if (resolved != null) {
+      return resolved;
+    }
+  }
+  return fallback;
+}
+
+Locale? _trySupportedLocale(Locale device, Iterable<Locale> supported) {
+  try {
+    if (device.languageCode.isEmpty) {
+      return null;
+    }
+    // Dart [Locale] only allows ISO 3166-1 alpha-2 for country (2 letters).
+    // Headless Chrome/Electron may report "001", script subtags, etc. — those throw.
+    final cc = device.countryCode;
+    final country =
+        (cc != null && cc.length == 2 && RegExp(r'^[A-Za-z]{2}$').hasMatch(cc))
+        ? cc
+        : null;
+    final candidate = Locale(device.languageCode, country);
+    for (final s in supported) {
+      if (s.languageCode == candidate.languageCode) {
+        return candidate;
+      }
+    }
+  } catch (_) {
+    /* invalid device locale */
+  }
+  return null;
+}
+
+/// Configures Sentry session replay sample rates (sentry_flutter 8.x API).
+void _configureSentryReplay(SentryFlutterOptions options) {
+  // ignore: experimental_member_use
+  final replay = options.experimental.replay;
+  replay.sessionSampleRate = sentryReplaySessionRate;
+  replay.onErrorSampleRate = sentryReplayOnErrorRate;
+}
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final prefs = await SharedPreferences.getInstance();
+  final storedTheme = prefs.getString(ThemeModeProvider.prefsKey);
+  final ThemeMode initialThemeMode = storedTheme == 'light'
+      ? ThemeMode.light
+      : ThemeMode.dark;
+
+  await resolveSentryDsn();
+
+  if (!sentryEnabled) {
+    debugPrint(
+      '[Sentry] Disabled — no DSN. '
+      'Use --dart-define=FRONTEND_DSN=... locally or deploy with CI FRONTEND_DSN secret.',
+    );
+    await _runApp(initialThemeMode: initialThemeMode);
+    return;
+  }
+
+  debugPrint(
+    '[Sentry] Enabled env=$sentryEnvironment release=$sentryRelease',
+  );
+
+  try {
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = sentryDsn;
+        options.environment = sentryEnvironment;
+        options.tracesSampleRate = sentryTracesSampleRate;
+        options.sendDefaultPii = true;
+        options.attachStacktrace = true;
+        options.enableAutoSessionTracking = true;
+        options.debug = kDebugMode;
+        // Release tracking — ties errors to a specific git commit/deploy.
+        options.release = sentryRelease;
+        options.autoAppStart = true;
+
+        // Performance — Flutter frame rendering, screen load times,
+        // user interaction response times.
+        options.enableAutoPerformanceTracing = true;
+        options.enableUserInteractionTracing = true;
+        options.enableTimeToFullDisplayTracing = true;
+
+        // Session Replay — records what the user was doing when an error hit.
+        // Replay is under options.experimental until a stable SDK release.
+        _configureSentryReplay(options);
+      },
+      appRunner: () {
+        // Flutter framework errors (widget build failures, rendering errors).
+        FlutterError.onError = (FlutterErrorDetails details) {
+          if (sentryEnabled) {
+            Sentry.captureException(
+              details.exception,
+              stackTrace: details.stack,
+              hint: Hint.withMap({
+                'flutter_error_details': details.toString(),
+              }),
+            );
+          }
+          FlutterError.presentError(details);
+        };
+
+        // Dart isolate errors that Flutter cannot catch via FlutterError.
+        PlatformDispatcher.instance.onError = (error, stack) {
+          if (sentryEnabled) {
+            Sentry.captureException(error, stackTrace: stack);
+          }
+          return true;
+        };
+
+        unawaited(_runApp(initialThemeMode: initialThemeMode));
+      },
+    );
+  } catch (e, stack) {
+    debugPrint('[Sentry] Init failed — starting app without Sentry: $e');
+    debugPrint('$stack');
+    setRuntimeSentryDsn('');
+    await _runApp(initialThemeMode: initialThemeMode);
+  }
+}
+
+Future<void> _runApp({required ThemeMode initialThemeMode}) async {
   // So version widget can fetch latest from backend and stop being stuck on build-time version
   VersionService.versionBaseUrl = ApiConfig.baseUrl;
-  runApp(const MyApp());
+
+  if (kIsWeb) {
+    flutter_ready_body.setFlutterReadyAttribute(false);
+  }
+
+  runApp(
+    sentryEnabled
+        ? SentryWidget(child: MyApp(initialThemeMode: initialThemeMode))
+        : MyApp(initialThemeMode: initialThemeMode),
+  );
+
+  // Mark app as ready after first frame for Cypress E2E testing
+  if (kIsWeb) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      flutter_ready_body.setFlutterReadyAttribute(true);
+    });
+  }
+}
+
+/// Web-only: open `/?e2e=auth` to skip the landing screen and start on [AuthScreen]
+/// (manual login / onboarding). For automated tests; does not bypass authentication.
+bool _e2eStartAtAuthScreen() {
+  if (!kIsWeb) return false;
+  try {
+    if (Uri.base.queryParameters['e2e'] == 'auth') return true;
+    return e2e_browser_query.browserUrlHasE2eAuth();
+  } catch (_) {
+    return false;
+  }
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, this.initialThemeMode = ThemeMode.dark});
+
+  final ThemeMode initialThemeMode;
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => UserProvider()),
-      ],
-      child: MaterialApp(
-        title: 'Khonology',
-        theme: ThemeData(
-          fontFamily: 'Poppins', // Set Poppins as the default font
-          primaryColor: const Color(0xFFC10D00), // Use the specified red color
-          colorScheme: ColorScheme.fromSwatch().copyWith(
-            secondary: const Color(0xFFC10D00),
-          ), // Use the specified red color for accent
-          scaffoldBackgroundColor: const Color(0xFF1A1A1A),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF1A1A1A),
-            foregroundColor: Colors.white,
+    return FlutterWebReadiness(
+      child: MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+          ChangeNotifierProvider(create: (_) => UserProvider()),
+          ChangeNotifierProvider(create: (_) => AdminAlertProvider()),
+          ChangeNotifierProxyProvider<AuthProvider, ThemeModeProvider>(
+            create: (_) => ThemeModeProvider(initialMode: initialThemeMode),
+            update: (_, authProvider, themeProvider) {
+              final provider =
+                  themeProvider ?? ThemeModeProvider(initialMode: initialThemeMode);
+              provider.setThemeSyncCallback(
+                authProvider.syncThemePreferenceAndRefreshToken,
+              );
+              return provider;
+            },
           ),
-          textTheme: const TextTheme(
-            bodyLarge: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
-            bodyMedium: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
-            titleLarge: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
-          ),
-        ),
-        home: Consumer<AuthProvider>(
-          builder: (context, authProvider, child) {
-            // Always use Modules screen (index 3) for authenticated users on login
-            // This ensures both Staff and Admin users land on Modules screen
-            final initialIndex = authProvider.isAuthenticated ? 3 : null;
+        ],
+        child: Consumer<ThemeModeProvider>(
+          builder: (context, themeModeProvider, _) {
+            return MaterialApp(
+              title: 'Khonology',
+              navigatorObservers: [
+                if (sentryEnabled) SentryNavigatorObserver(),
+              ],
+              theme: AppThemes.light,
+              darkTheme: AppThemes.dark,
+              themeMode: themeModeProvider.themeMode,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              // Web: never trust navigator locale alone (some embedded browsers break Locale()).
+              locale: kIsWeb ? const Locale('en') : null,
+              localeListResolutionCallback: kIsWeb
+                  ? null
+                  : _resolveApplicationLocale,
+              // Enable accessibility for testing
+              debugShowCheckedModeBanner: false,
+              builder: (context, child) {
+                // Enable semantics for accessibility testing
+                return MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    accessibleNavigation: true,
+                    disableAnimations: true,
+                    invertColors: false,
+                    highContrast: false,
+                  ),
+                  child: DefaultTextStyle(
+                    style: const TextStyle(fontFamily: 'Poppins'),
+                    child: Semantics(child: child ?? const SizedBox.shrink()),
+                  ),
+                );
+              },
+              home: Consumer<AuthProvider>(
+                builder: (context, authProvider, child) {
+                  // Always use Modules screen (index 3) for authenticated users on login
+                  // This ensures both Staff and Admin users land on Modules screen
+                  final initialIndex = authProvider.isAuthenticated ? 3 : null;
 
-            return authProvider.isAuthenticated
-                ? MainScreen(
-                    role: authProvider.userRole,
-                    initialIndex: initialIndex,
-                  ) // Pass role and initialIndex to MainScreen
-                : LandingScreen(); // Start with LandingScreen
+                  if (authProvider.isAuthenticated) {
+                    return MainScreen(
+                      role: authProvider.userRole,
+                      initialIndex: initialIndex,
+                    );
+                  }
+                  if (_e2eStartAtAuthScreen()) {
+                    return const AuthScreen();
+                  }
+                  return LandingScreen();
+                },
+              ),
+            );
           },
         ),
-        debugShowCheckedModeBanner: false,
       ),
     );
   }
@@ -95,9 +314,13 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen>
+    with SingleTickerProviderStateMixin {
   int _selectedIndex = 3; // Initialize to Modules screen (index 3)
-  bool _isAlertPanelOpen = false;
+  AdminAlertProvider? _adminAlertProvider;
+  Timer? _staffBellShakeTimer;
+  late final AnimationController _bellShakeController;
+  late final Animation<double> _bellShakeAnimation;
 
   // Check if current user is Admin
   bool _isAdmin() {
@@ -124,6 +347,27 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
+    _bellShakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _bellShakeAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: -0.12), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -0.12, end: 0.12), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 0.12, end: -0.08), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -0.08, end: 0.08), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 0.08, end: 0.0), weight: 1),
+    ]).animate(
+      CurvedAnimation(parent: _bellShakeController, curve: Curves.easeInOut),
+    );
+    _staffBellShakeTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted) return;
+      final role = (context.read<AuthProvider>().userRole ?? '').toLowerCase();
+      final unread = context.read<AdminAlertProvider>().unreadCount;
+      if (role == 'staff' && unread > 0 && !_bellShakeController.isAnimating) {
+        _bellShakeController.forward(from: 0);
+      }
+    });
     // Both Staff and Admin users should ALWAYS land on Modules screen (index 3) on login
     // Ignore widget.initialIndex and always use Modules screen (index 3) to prevent
     // old stored screen indices from interfering with login redirects
@@ -144,12 +388,44 @@ class _MainScreenState extends State<MainScreen> {
       authProvider.clearInitialScreenIndex();
       if ((authProvider.userRole ?? '').toLowerCase() == 'admin') {
         final userProvider = context.read<UserProvider>();
-        userProvider.fetchUsers();
+        userProvider.fetchUsers(forceRefresh: true);
         if (userProvider.hasCachedData) {
           userProvider.refreshUsersInBackground();
         }
       }
+
+      final alertsProvider = context.read<AdminAlertProvider>();
+      _adminAlertProvider = alertsProvider;
+      alertsProvider.addListener(_onAdminAlertUpdate);
+      alertsProvider.start(
+        authProvider.userRole ?? '',
+        userEmail: authProvider.userEmail ?? '',
+      );
     });
+  }
+
+  @override
+  void dispose() {
+    _staffBellShakeTimer?.cancel();
+    _bellShakeController.dispose();
+    _adminAlertProvider?.removeListener(_onAdminAlertUpdate);
+    _adminAlertProvider?.stop();
+    super.dispose();
+  }
+
+  void _onAdminAlertUpdate() {
+    if (!mounted || _adminAlertProvider == null) {
+      return;
+    }
+    // Do not show bottom toasts; notifications are viewed in Notifications screen.
+    _adminAlertProvider!.takeNewAlerts();
+  }
+
+  Future<void> _openNotificationsScreen() async {
+    SoundSystem.playButtonClick();
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+    );
   }
 
   // Remove the getter since we now have persistent screens
@@ -189,10 +465,14 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final userProvider = context.watch<UserProvider>();
+    final adminAlertProvider = context.watch<AdminAlertProvider>();
+    final unreadAlerts = adminAlertProvider.unreadCount;
+    final role = (context.watch<AuthProvider>().userRole ?? '').toLowerCase();
+    final isStaff = role == 'staff';
     final users = userProvider.users;
 
     final pendingUsers = users
-        .where((u) => u.status.toLowerCase() == 'pending')
+        .where((u) => u.status == 'Inactive')
         .toList();
 
     final activeUsersWithoutAssignments = users
@@ -204,11 +484,13 @@ class _MainScreenState extends State<MainScreen> {
         )
         .toList();
 
-    final hasOnboardingAlerts =
-        _isAdmin() &&
-        (pendingUsers.isNotEmpty || activeUsersWithoutAssignments.isNotEmpty);
+    final onboardingAlertCount = _isAdmin()
+        ? pendingUsers.length + activeUsersWithoutAssignments.length
+        : 0;
+    final totalAlertCount = unreadAlerts + onboardingAlertCount;
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: PreferredSize(
         preferredSize: Size.zero,
         child: AppBar(
@@ -224,92 +506,97 @@ class _MainScreenState extends State<MainScreen> {
                 onItemSelected: _onItemTapped,
               ),
               Expanded(
-                child: IndexedStack(
-                  index: _selectedIndex,
-                  children: const [
-                    UserManagementScreen(),
-                    EntityManagementScreen(),
-                    ModuleAccessScreen(),
-                    ModuleScreen(),
-                    _ProfileScreenPlaceholder(),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  fit: StackFit.expand,
+                  children: [
+                    Positioned.fill(
+                      child: IndexedStack(
+                        index: _selectedIndex,
+                        children: const [
+                          UserManagementScreen(),
+                          EntityManagementScreen(),
+                          ModuleAccessScreen(),
+                          ModuleScreen(),
+                          _ProfileScreenPlaceholder(),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-          if (hasOnboardingAlerts)
-            Positioned(
-              top: 16,
-              right: 16,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        SoundSystem.playButtonClick();
-                        setState(() {
-                          _isAlertPanelOpen = !_isAlertPanelOpen;
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFC10D00),
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.4),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
+          Positioned(
+            top: 16,
+            right: 16,
+            child: SafeArea(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _openNotificationsScreen,
+                  borderRadius: BorderRadius.circular(22),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Center(
+                          child: AnimatedBuilder(
+                            animation: _bellShakeAnimation,
+                            builder: (context, child) {
+                              return Transform.rotate(
+                                angle: isStaff ? _bellShakeAnimation.value : 0.0,
+                                child: child,
+                              );
+                            },
+                            child: Image.asset(
+                              'assets/images/siderbar/7.png',
+                              width: 70,
+                              height: 70,
+                              fit: BoxFit.contain,
                             ),
-                          ],
+                          ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.notifications_active,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              pendingUsers.isNotEmpty
-                                  ? 'New user onboarded'
-                                  : 'Assign access and entity',
-                              style: const TextStyle(
+                        if (totalAlertCount > 0)
+                          Positioned(
+                            top: -4,
+                            right: -4,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
                                 color: Colors.white,
-                                fontSize: 12,
-                                fontFamily: 'Poppins',
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFFC10D00)),
+                              ),
+                              child: Text(
+                                totalAlertCount > 99
+                                    ? '99+'
+                                    : '$totalAlertCount',
+                                style: const TextStyle(
+                                  color: Color(0xFFC10D00),
+                                  fontSize: 10,
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
+                          ),
+                      ],
                     ),
                   ),
-                  if (_isAlertPanelOpen) ...[
-                    const SizedBox(height: 8),
-                    OnboardingAlertPanel(
-                      pendingUsers: pendingUsers,
-                      activeUsersWithoutAssignments:
-                          activeUsersWithoutAssignments,
-                      onClose: () {
-                        setState(() {
-                          _isAlertPanelOpen = false;
-                        });
-                      },
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
+          ),
         ],
       ),
     );

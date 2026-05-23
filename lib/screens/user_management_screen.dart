@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../utils/pdh_firebase.dart'
+import '../utils/pdh_sync.dart'
     show
         updatePDHUserPartial,
         updateSkillsHeatmapUserPartial,
@@ -17,6 +17,9 @@ import '../config/api_config.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/sound_system.dart';
+import '../services/admin_alert_service.dart';
+import '../theme/app_backgrounds.dart';
+import '../theme/app_text_colors.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -27,13 +30,50 @@ class UserManagementScreen extends StatefulWidget {
 
 const String _kAddNewDepartment = '__add_new_department__';
 const String _kAddNewDesignation = '__add_new_designation__';
+const String _kAllFilterOption = '__all_filter_option__';
 
-class _UserManagementScreenState extends State<UserManagementScreen> {
+class _UserManagementScreenState extends State<UserManagementScreen>
+    with WidgetsBindingObserver {
+  static const Color _filterPopupDarkBg = Color(0xFF3D3F40);
+  static final Color userMgmtDarkWidgetBg = Color.alphaBlend(
+    Colors.white.withValues(alpha: 0.10),
+    const Color(0xFF3D3F40).withValues(alpha: 0.40),
+  );
+
   String? _updatingUserId;
   Timer? _debounceTimer;
   String _searchQuery = '';
 
+  Future<void> _publishAdminAlert({
+    required String title,
+    required String message,
+    Map<String, dynamic> details = const {},
+    bool requiresAck = false,
+  }) async {
+    final authProvider = context.read<AuthProvider>();
+    if ((authProvider.userRole ?? '').toLowerCase() != 'admin') {
+      return;
+    }
+    final actorEmail = (authProvider.userEmail ?? '').trim();
+    if (actorEmail.isEmpty) {
+      return;
+    }
+    try {
+      await AdminAlertService.publishAdminChange(
+        actorEmail: actorEmail,
+        title: title,
+        message: message,
+        area: 'user_management',
+        details: details,
+        requiresAck: requiresAck,
+      );
+    } catch (e) {
+      debugPrint('[UserManagement] alert publish failed: $e');
+    }
+  }
+
   String? expandedUserId;
+  String? _hoveredUserId;
   bool _isSelectionMode = false;
   final Set<String> _selectedUserIds = <String>{};
 
@@ -47,14 +87,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   List<String> _designations = [];
 
   Set<String> get _availableStatuses {
-    final userProvider = Provider.of<UserProvider>(context);
-    return userProvider.users.map((user) => user.status).toSet();
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    return userProvider.users
+        .map((user) => ManagedUser.normalizeAccountStatus(user.status))
+        .toSet();
   }
 
   List<String> get _availableDepartments {
-    final userProvider = Provider.of<UserProvider>(context);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
     final users = userProvider.users;
-    final deptOrder = _departments.where((d) => d.isNotEmpty).toList();
+    final deptOrder = _departments
+        .where((d) => d.isNotEmpty)
+        .fold<List<String>>(<String>[], (acc, value) {
+          if (!acc.contains(value)) acc.add(value);
+          return acc;
+        });
     if (users.isEmpty) return List<String>.from(deptOrder);
     final fromUsers = users
         .map((user) => user.department)
@@ -66,9 +113,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   List<String> get _availableDesignations {
-    final userProvider = Provider.of<UserProvider>(context);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
     final users = userProvider.users;
-    final desigOrder = _designations.where((d) => d.isNotEmpty).toList();
+    final desigOrder = _designations
+        .where((d) => d.isNotEmpty)
+        .fold<List<String>>(<String>[], (acc, value) {
+          if (!acc.contains(value)) acc.add(value);
+          return acc;
+        });
     if (users.isEmpty) return List<String>.from(desigOrder);
     final fromUsers = users
         .map((user) => user.designation)
@@ -89,7 +141,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   final Map<String, Color> userStatusColors = {
     'Active': Colors.green.shade600,
     'Inactive': Colors.grey.shade600,
-    'Pending': Colors.orange.shade500,
   };
 
   final Map<String, Color> userRoleColors = {
@@ -101,10 +152,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   final Map<String, Color> userStatusCircleColors = {
     'Active': Colors.green.shade500,
     'Inactive': Colors.grey.shade500,
-    'Pending': Colors.orange.shade500,
   };
 
-  final List<String> userRoles = ['Staff', 'Manager', 'Admin'];
+  final List<String> userRoles = ['Staff', 'Admin'];
 
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -116,14 +166,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
     if (query.isNotEmpty) {
       users = users.where((user) {
-        return user.name.toLowerCase().contains(query) ||
+        return user.displayName.toLowerCase().contains(query) ||
+            user.email.toLowerCase().contains(query) ||
             user.department.toLowerCase().contains(query) ||
             user.designation.toLowerCase().contains(query);
       }).toList();
     }
 
     if (_selectedStatus != null) {
-      users = users.where((user) => user.status == _selectedStatus).toList();
+      users = users
+          .where(
+            (user) =>
+                ManagedUser.normalizeAccountStatus(user.status) ==
+                _selectedStatus,
+          )
+          .toList();
     }
 
     if (_selectedDepartment != null) {
@@ -146,6 +203,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     _debounceTimer?.cancel();
     _searchController.dispose();
     _scrollController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -154,14 +212,25 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     super.initState();
     final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-    userProvider.fetchUsers();
+    userProvider.fetchUsers(forceRefresh: true);
 
     if (userProvider.hasCachedData) {
       userProvider.refreshUsersInBackground();
     }
+    WidgetsBinding.instance.addObserver(this);
     _searchController.addListener(_onSearchChanged);
     _fetchDepartments();
     _fetchDesignations();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Ensure the screen reflects the newest backend tracking values
+      // (lastSignInAt/loginCount), even if this screen was already open.
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      userProvider.fetchUsers(forceRefresh: true);
+    }
   }
 
   Future<void> _fetchDepartments() async {
@@ -197,22 +266,26 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Future<void> _showAddDepartmentDialog({String? initialSelectForUser}) async {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color dialogBg = isDark
+        ? const Color(0xFF3D3F40)
+        : Colors.white;
     final controller = TextEditingController();
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF2C3E50),
-        title: const Text(
+        backgroundColor: dialogBg,
+        title: Text(
           'Add new department',
-          style: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+          style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
         ),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
-          decoration: const InputDecoration(
+          style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
+          decoration: InputDecoration(
             labelText: 'Department name',
-            labelStyle: TextStyle(color: Colors.white70),
+            labelStyle: TextStyle(color: appTextColor(context)),
           ),
           onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
         ),
@@ -222,7 +295,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               SoundSystem.playButtonClick();
               Navigator.of(ctx).pop();
             },
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: Text('Cancel', style: TextStyle(color: appTextColor(context))),
           ),
           ElevatedButton(
             onPressed: () {
@@ -230,7 +303,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               Navigator.of(ctx).pop(controller.text.trim());
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC10D00)),
-            child: const Text('Add', style: TextStyle(fontFamily: 'Poppins')),
+            child: Text('Add', style: TextStyle(fontFamily: 'Poppins')),
           ),
         ],
       ),
@@ -271,22 +344,26 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Future<void> _showAddDesignationDialog({String? initialSelectForUser}) async {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color dialogBg = isDark
+        ? const Color(0xFF3D3F40)
+        : Colors.white;
     final controller = TextEditingController();
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog( 
-        backgroundColor: const Color(0xFF2C3E50),
-        title: const Text(
+        backgroundColor: dialogBg,
+        title: Text(
           'Add new designation',
-          style: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+          style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
         ),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
-          decoration: const InputDecoration(
+          style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
+          decoration: InputDecoration(
             labelText: 'Designation name',
-            labelStyle: TextStyle(color: Colors.white70),
+            labelStyle: TextStyle(color: appTextColor(context)),
           ),
           onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
         ),
@@ -296,7 +373,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               SoundSystem.playButtonClick();
               Navigator.of(ctx).pop();
             },
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: Text('Cancel', style: TextStyle(color: appTextColor(context))),
           ),
           ElevatedButton(
             onPressed: () {
@@ -304,7 +381,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               Navigator.of(ctx).pop(controller.text.trim());
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC10D00)),
-            child: const Text('Add', style: TextStyle(fontFamily: 'Poppins')),
+            child: Text('Add', style: TextStyle(fontFamily: 'Poppins')),
           ),
         ],
       ),
@@ -355,10 +432,43 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     });
   }
 
+  Future<void> _refreshUsers() async {
+    SoundSystem.playButtonClick();
+    final userProvider = context.read<UserProvider>();
+    await userProvider.fetchUsers(forceRefresh: true);
+    if (!mounted) return;
+
+    if (userProvider.hasError) {
+      SoundSystem.playError();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userProvider.errorMessage ?? 'Failed to refresh users.',
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'User list refreshed.',
+          style: TextStyle(fontFamily: 'Poppins'),
+        ),
+        backgroundColor: Color(0xFFC10D00),
+      ),
+    );
+  }
+
   Future<void> _updateUserRoleAndStatus(
     String userId,
     String newRole,
     String newStatus, {
+    String? oldRole,
+    String? oldStatus,
     required String firstName,
     required String lastName,
     required String department,
@@ -404,15 +514,33 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           SnackBar(
             content: Text(
               'User updated for $firstName $lastName.',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Poppins',
-                color: Colors.white,
+                color: appTextColor(context),
               ),
             ),
             backgroundColor: const Color(0xFFC10D00),
           ),
         );
       }
+      await _publishAdminAlert(
+        title: 'Role/permission change feed',
+        message:
+            '$firstName $lastName role changed from "${oldRole ?? newRole}" to "$newRole"; status from "${oldStatus ?? newStatus}" to "$newStatus".',
+        details: {
+          'userId': userId,
+          'userName': '$firstName $lastName',
+          'oldRole': oldRole ?? newRole,
+          'role': newRole,
+          'oldStatus': oldStatus ?? newStatus,
+          'status': newStatus,
+          'approvedBy': adminEmail,
+          'effectiveDateIso': DateTime.now().toUtc().toIso8601String(),
+          'department': department,
+          'designation': designation,
+          'entity': entity ?? '',
+        },
+      );
 
       final adminField = adminEmail.isNotEmpty
           ? {
@@ -445,10 +573,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         if (mounted) {
           SoundSystem.playError();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
                 'User info updated, but failed to sync with PDH.',
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                style: TextStyle(fontFamily: 'Poppins', color: appTextColor(context)),
               ),
               backgroundColor: Colors.orange,
             ),
@@ -499,7 +627,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
           final backendUser = decoded?['user'] as Map<String, dynamic>?;
           if (backendUser != null) {
-            final updatedUser = ManagedUser.fromApi(backendUser);
+            final existingIndex = userProvider.users.indexWhere(
+              (u) => u.id == userId,
+            );
+            final existing = existingIndex >= 0
+                ? userProvider.users[existingIndex]
+                : null;
+            final updatedUser = _mergeBackendUserData(
+              existing,
+              backendUser,
+              fallbackDepartment: department,
+              fallbackDesignation: designation,
+              fallbackRole: newRole,
+              fallbackStatus: newStatus,
+              fallbackEntity: entity,
+            );
             userProvider.updateUser(updatedUser);
             _editedDepartments.remove(userId);
             _editedDesignations.remove(userId);
@@ -512,7 +654,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               if (entity != null) {
                 users[index].entity = entity;
               }
-              userProvider.updateUser(users[index]);
+              userProvider.updateUser(
+                users[index].copyWith(
+                  department: department,
+                  designation: designation,
+                ),
+              );
             }
           }
         } catch (_) {
@@ -524,7 +671,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             if (entity != null) {
               users[index].entity = entity;
             }
-            userProvider.updateUser(users[index]);
+            userProvider.updateUser(
+              users[index].copyWith(
+                department: department,
+                designation: designation,
+              ),
+            );
           }
         }
       }
@@ -541,23 +693,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark
+        ? userMgmtDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
+
     return Scaffold(
-      floatingActionButton: _isSelectionMode
-          ? null
-          : FloatingActionButton(
-              onPressed: () {
-                SoundSystem.playButtonClick();
-                _showAddUserDialog(context);
-              },
-              backgroundColor: const Color(0xFFC10D00),
-              shape: const CircleBorder(),
-              child: const Icon(Icons.add, color: Colors.white),
-            ),
       bottomNavigationBar: _isSelectionMode && _selectedUserIds.isNotEmpty
           ? Container(
               padding: const EdgeInsets.all(16.0),
               decoration: BoxDecoration(
-                color: const Color(0xFF2C3E50),
+                color: widgetBg,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.3),
@@ -572,8 +718,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   children: [
                     Text(
                       '${_selectedUserIds.length} user(s) selected',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                         fontSize: 16.0,
                         fontWeight: FontWeight.bold,
@@ -589,10 +735,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               _selectedUserIds.clear();
                             });
                           },
-                          child: const Text(
+                          child: Text(
                             'Cancel',
                             style: TextStyle(
-                              color: Colors.white70,
+                              color: appTextColor(context),
                               fontFamily: 'Poppins',
                             ),
                           ),
@@ -616,10 +762,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               }
                             });
                           },
-                          child: const Text(
+                          child: Text(
                             'Select all',
                             style: TextStyle(
-                              color: Colors.white70,
+                              color: appTextColor(context),
                               fontFamily: 'Poppins',
                             ),
                           ),
@@ -632,9 +778,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFC10D00),
-                            foregroundColor: Colors.white,
+                            foregroundColor: appTextColor(context),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Update',
                             style: TextStyle(fontFamily: 'Poppins'),
                           ),
@@ -647,9 +793,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
+                            foregroundColor: appTextColor(context),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Delete',
                             style: TextStyle(fontFamily: 'Poppins'),
                           ),
@@ -664,13 +810,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset('assets/images/nathi_bg.png', fit: BoxFit.cover),
+            child: Image.asset(
+              appBackgroundAsset(context),
+              fit: BoxFit.cover,
+            ),
           ),
 
           Positioned.fill(
             child: ScrollbarTheme(
               data: ScrollbarThemeData(
-                thumbColor: WidgetStatePropertyAll<Color>(Colors.white),
+                thumbColor: WidgetStatePropertyAll<Color>(appTextColor(context)),
               ),
               child: Scrollbar(
                 controller: _scrollController,
@@ -695,28 +844,72 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ),
             ),
           ),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!_isSelectionMode)
+                    FloatingActionButton(
+                      heroTag: 'user_management_add_fab',
+                      onPressed: () {
+                        SoundSystem.playButtonClick();
+                        _showAddUserDialog(context);
+                      },
+                      backgroundColor: const Color(0xFFC10D00),
+                      shape: const CircleBorder(),
+                      child: Icon(Icons.add, color: appTextColor(context)),
+                    ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildHeader() {
+    final userProvider = context.watch<UserProvider>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'User Management',
-          style: TextStyle(
-            fontSize: 28.0,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Poppins',
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'User Management',
+                style: TextStyle(
+                  fontSize: 28.0,
+                  fontWeight: FontWeight.bold,
+                  color: appTextColor(context),
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Refresh users',
+              onPressed: userProvider.isLoading ? null : _refreshUsers,
+              icon: userProvider.isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFFC10D00),
+                      ),
+                    )
+                  : Icon(Icons.refresh, color: appTextColor(context)),
+            ),
+          ],
         ),
         const SizedBox(height: 4.0),
         Text(
           'Empowering Your Workforce Through Management.',
           style: TextStyle(
-            color: Colors.white70,
+            color: appTextColor(context),
             fontSize: 14.0,
             fontFamily: 'Poppins',
           ),
@@ -726,162 +919,138 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Widget _buildFiltersAndSearch() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark
+        ? userMgmtDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
+    final Color popupBg = isDark ? _filterPopupDarkBg : Colors.white;
     return Column(
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             Expanded(
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedStatus,
-                  hint: const Text(
-                    'FILTER STATUS',
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: widgetBg,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: appTextColor(context).withValues(alpha: 0.25),
+                  ),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedStatus,
+                    hint: Text(
+                      'FILTER STATUS',
+                      style: TextStyle(
+                        color: appTextColor(context),
+                        fontFamily: 'Poppins',
+                        fontSize: 12.0,
+                      ),
+                    ),
+                    dropdownColor: popupBg,
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: appTextColor(context),
                       fontFamily: 'Poppins',
-                      fontSize: 12.0,
                     ),
-                  ),
-                  dropdownColor: const Color(0xFF2C3E50),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Poppins',
-                  ),
-                  isExpanded: true,
-                  icon: const Icon(
-                    Icons.arrow_drop_down,
-                    color: Colors.white70,
-                  ),
-                  onChanged: (String? newValue) {
-                    SoundSystem.playButtonClick();
-                    setState(() {
-                      _selectedStatus = newValue;
-                    });
-                  },
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('All Statuses'),
+                    isExpanded: true,
+                    icon: Icon(
+                      Icons.arrow_drop_down,
+                      color: appTextColor(context),
                     ),
-                    ..._availableStatuses.map<DropdownMenuItem<String>>((
-                      String value,
-                    ) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }),
-                  ],
+                    onChanged: (String? newValue) {
+                      SoundSystem.playButtonClick();
+                      setState(() {
+                        _selectedStatus = newValue;
+                      });
+                    },
+                    items: [
+                      DropdownMenuItem<String>(
+                        value: null,
+                        child: Text(
+                          'All Statuses',
+                          style: TextStyle(
+                            color: appTextColor(context),
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      ..._availableStatuses.map<DropdownMenuItem<String>>((
+                        String value,
+                      ) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(
+                            value,
+                            style: TextStyle(
+                              color: appTextColor(context),
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 8.0),
             Expanded(
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedDepartment,
-                  hint: const Text(
-                    'FILTER DEPARTMENT',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontFamily: 'Poppins',
-                      fontSize: 12.0,
-                    ),
-                  ),
-                  dropdownColor: const Color(0xFF2C3E50),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Poppins',
-                  ),
-                  isExpanded: true,
-                  icon: const Icon(
-                    Icons.arrow_drop_down,
-                    color: Colors.white70,
-                  ),
-                  onChanged: (String? newValue) async {
-                    SoundSystem.playButtonClick();
-                    if (newValue == _kAddNewDepartment) {
-                      await _showAddDepartmentDialog();
-                      return;
-                    }
-                    setState(() {
-                      _selectedDepartment = newValue;
-                    });
-                  },
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('All Departments'),
-                    ),
-                    const DropdownMenuItem<String>(
-                      value: _kAddNewDepartment,
-                      child: Text('➕ Add new department...'),
-                    ),
-                    ..._availableDepartments.map<DropdownMenuItem<String>>((
-                      String value,
-                    ) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }),
-                  ],
-                ),
+              child: _buildSearchableFilterField(
+                placeholder: 'FILTER DEPARTMENT',
+                valueText: _selectedDepartment ?? 'All Departments',
+                widgetBg: widgetBg,
+                onTap: () async {
+                  SoundSystem.playButtonClick();
+                  final selected = await _showSearchableFilterDialog(
+                    title: 'Department',
+                    allLabel: 'All Departments',
+                    options: _availableDepartments,
+                    addValue: _kAddNewDepartment,
+                    addLabel: 'Add new department...',
+                  );
+                  if (selected == null) return;
+                  if (selected == _kAddNewDepartment) {
+                    await _showAddDepartmentDialog();
+                    return;
+                  }
+                  setState(() {
+                    _selectedDepartment =
+                        selected == _kAllFilterOption ? null : selected;
+                  });
+                },
               ),
             ),
             const SizedBox(width: 8.0),
             Expanded(
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedDesignation,
-                  hint: const Text(
-                    'FILTER DESIGNATION',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontFamily: 'Poppins',
-                      fontSize: 12.0,
-                    ),
-                  ),
-                  dropdownColor: const Color(0xFF2C3E50),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Poppins',
-                  ),
-                  isExpanded: true,
-                  icon: const Icon(
-                    Icons.arrow_drop_down,
-                    color: Colors.white70,
-                  ),
-                  onChanged: (String? newValue) async {
-                    SoundSystem.playButtonClick();
-                    if (newValue == _kAddNewDesignation) {
-                      await _showAddDesignationDialog();
-                      return;
-                    }
-                    setState(() {
-                      _selectedDesignation = newValue;
-                    });
-                  },
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('All Designations'),
-                    ),
-                    const DropdownMenuItem<String>(
-                      value: _kAddNewDesignation,
-                      child: Text('➕ Add new designation...'),
-                    ),
-                    ..._availableDesignations.map<DropdownMenuItem<String>>((
-                      String value,
-                    ) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }),
-                  ],
-                ),
+              child: _buildSearchableFilterField(
+                placeholder: 'FILTER DESIGNATION',
+                valueText: _selectedDesignation ?? 'All Designations',
+                widgetBg: widgetBg,
+                onTap: () async {
+                  SoundSystem.playButtonClick();
+                  final selected = await _showSearchableFilterDialog(
+                    title: 'Designation',
+                    allLabel: 'All Designations',
+                    options: _availableDesignations,
+                    addValue: _kAddNewDesignation,
+                    addLabel: 'Add new designation...',
+                  );
+                  if (selected == null) return;
+                  if (selected == _kAddNewDesignation) {
+                    await _showAddDesignationDialog();
+                    return;
+                  }
+                  setState(() {
+                    _selectedDesignation =
+                        selected == _kAllFilterOption ? null : selected;
+                  });
+                },
               ),
             ),
           ],
@@ -891,13 +1060,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           controller: _searchController,
           decoration: InputDecoration(
             hintText: 'Search',
-            hintStyle: const TextStyle(
-              color: Colors.white54,
+            hintStyle: TextStyle(
+              color: appTextColor(context),
               fontFamily: 'Poppins',
             ),
-            prefixIcon: const Icon(Icons.search, color: Colors.white54),
+            prefixIcon: Icon(Icons.search, color: appTextColor(context)),
             suffixIcon: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white54),
+              icon: Icon(Icons.close, color: appTextColor(context)),
               onPressed: () {
                 SoundSystem.playButtonClick();
                 setState(() {
@@ -907,17 +1076,183 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               },
             ),
             filled: true,
-            fillColor: const Color(0x801F2840),
+            fillColor: widgetBg,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(25.0),
               borderSide: BorderSide.none,
             ),
             contentPadding: const EdgeInsets.symmetric(vertical: 12.0),
           ),
-          style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+          style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
         ),
       ],
     );
+  }
+
+  Widget _buildSearchableFilterField({
+    required String placeholder,
+    required String valueText,
+    required Color widgetBg,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: widgetBg,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: appTextColor(context).withValues(alpha: 0.25),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                valueText.isEmpty ? placeholder : valueText,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: appTextColor(context),
+                  fontFamily: 'Poppins',
+                  fontSize: 12.0,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_drop_down, color: appTextColor(context)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _showSearchableFilterDialog({
+    required String title,
+    required String allLabel,
+    required List<String> options,
+    String? addValue,
+    String? addLabel,
+  }) async {
+    final searchController = TextEditingController();
+    String query = '';
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
+        final dialogBg = isDark ? _filterPopupDarkBg : Colors.white;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filtered = options
+                .where(
+                  (option) =>
+                      option.toLowerCase().contains(query.trim().toLowerCase()),
+                )
+                .toList();
+            final rows = <Map<String, String>>[
+              {'value': _kAllFilterOption, 'label': allLabel},
+              if (addValue != null && addLabel != null)
+                {'value': addValue, 'label': '➕ $addLabel'},
+              ...filtered.map((value) => {'value': value, 'label': value}),
+            ];
+            final visibleItems = rows.length < 10 ? rows.length : 10;
+            return AlertDialog(
+              backgroundColor: dialogBg,
+              title: Text(
+                title,
+                style: TextStyle(
+                  color: appTextColor(dialogContext),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: searchController,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          query = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search $title',
+                        hintStyle: TextStyle(
+                          color: appTextColor(dialogContext).withValues(alpha: 0.7),
+                          fontFamily: 'Poppins',
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: appTextColor(dialogContext),
+                        ),
+                        filled: true,
+                        fillColor: dialogBg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                      style: TextStyle(
+                        color: appTextColor(dialogContext),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (rows.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'No results found',
+                          style: TextStyle(
+                            color: appTextColor(dialogContext),
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: (visibleItems * 48).toDouble(),
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: rows.length,
+                          itemBuilder: (context, index) {
+                            final row = rows[index];
+                            return ListTile(
+                              dense: true,
+                              title: Text(
+                                row['label'] ?? '',
+                                style: TextStyle(
+                                  color: appTextColor(dialogContext),
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              onTap: () => Navigator.of(dialogContext).pop(
+                                row['value'],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    searchController.dispose();
+    return selected;
   }
 
   Widget _buildUserList() {
@@ -933,7 +1268,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             Text(
               'Please wait. We\'re loading all users...',
               style: TextStyle(
-                color: Colors.white,
+                color: appTextColor(context),
                 fontSize: 16.0,
                 fontFamily: 'Poppins',
               ),
@@ -943,11 +1278,48 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       );
     }
 
+    if (userProvider.hasError && userProvider.users.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_off, size: 48, color: Colors.red.shade300),
+              const SizedBox(height: 16.0),
+              Text(
+                userProvider.errorMessage ??
+                    'Failed to load users. The server may be waking up.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: appTextColor(context),
+                  fontSize: 14.0,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              const SizedBox(height: 24.0),
+              FilledButton.icon(
+                onPressed: () {
+                  SoundSystem.playButtonClick();
+                  userProvider.fetchUsers(forceRefresh: true);
+                },
+                icon: Icon(Icons.refresh),
+                label: Text('Retry', style: TextStyle(fontFamily: 'Poppins')),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFC10D00),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (userProvider.users.isEmpty && !userProvider.isLoading) {
-      return const Center(
+      return Center(
         child: Text(
           'No onboarding users found.',
-          style: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+          style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
         ),
       );
     }
@@ -973,61 +1345,96 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     if (url != null && url.trim().isNotEmpty) {
       return CircleAvatar(
         radius: 20,
-        backgroundColor: Colors.white24,
+        backgroundColor: appTextColor(context).withValues(alpha: 0.24),
         backgroundImage: NetworkImage(url.trim()),
         onBackgroundImageError: (_, __) {},
       );
     }
-    return const CircleAvatar(
+    return CircleAvatar(
       radius: 20,
-      backgroundColor: Colors.white24,
-      child: Icon(Icons.person, size: 24, color: Colors.white54),
+      backgroundColor: appTextColor(context).withValues(alpha: 0.24),
+      child: Icon(Icons.person, size: 24, color: appTextColor(context)),
     );
   }
 
   Widget _buildUserRow(ManagedUser user, bool isExpanded) {
     final isSelected = _selectedUserIds.contains(user.id);
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color normalWidgetBg = isDark
+        ? userMgmtDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
+    final bool isHovered = _hoveredUserId == user.id;
 
-    return GestureDetector(
-      onLongPress: () {
-        SoundSystem.playButtonClick();
-        if (!_isSelectionMode) {
-          setState(() {
-            _isSelectionMode = true;
-            _selectedUserIds.add(user.id);
-            expandedUserId = null;
-          });
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hoveredUserId = user.id),
+      onExit: (_) {
+        if (_hoveredUserId == user.id) {
+          setState(() => _hoveredUserId = null);
         }
       },
-      onTap: () {
-        SoundSystem.playButtonClick();
-        if (_isSelectionMode) {
-          setState(() {
-            if (isSelected) {
-              _selectedUserIds.remove(user.id);
-              if (_selectedUserIds.isEmpty) {
-                _isSelectionMode = false;
-              }
-            } else {
-              _selectedUserIds.add(user.id);
+      child: AnimatedScale(
+        scale: isHovered ? 1.01 : 1.0,
+        duration: const Duration(milliseconds: 170),
+        curve: Curves.easeOut,
+        child: GestureDetector(
+          onLongPress: () {
+            SoundSystem.playButtonClick();
+            if (!_isSelectionMode) {
+              setState(() {
+                _isSelectionMode = true;
+                _selectedUserIds.add(user.id);
+                expandedUserId = null;
+              });
             }
-          });
-        } else {
-          setState(() {
-            expandedUserId = isExpanded ? null : user.id;
-          });
-        }
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0x80C10D00) : const Color(0x801F2840),
-          borderRadius: BorderRadius.circular(16.0),
-          border: isSelected
-              ? Border.all(color: const Color(0xFFC10D00), width: 2.0)
-              : null,
-        ),
-        padding: const EdgeInsets.all(16.0),
-        child: LayoutBuilder(
+          },
+          onTap: () {
+            SoundSystem.playButtonClick();
+            if (_isSelectionMode) {
+              setState(() {
+                if (isSelected) {
+                  _selectedUserIds.remove(user.id);
+                  if (_selectedUserIds.isEmpty) {
+                    _isSelectionMode = false;
+                  }
+                } else {
+                  _selectedUserIds.add(user.id);
+                }
+              });
+            } else {
+              setState(() {
+                expandedUserId = isExpanded ? null : user.id;
+              });
+            }
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 170),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0x80C10D00) : normalWidgetBg,
+              borderRadius: BorderRadius.circular(16.0),
+              border: isSelected
+                  ? Border.all(color: const Color(0xFFC10D00), width: 2.0)
+                  : Border.all(
+                      color: isHovered
+                          ? const Color(0xFFC10D00).withValues(alpha: 0.70)
+                          : appTextColor(context).withValues(alpha: 0.12),
+                      width: isHovered ? 1.6 : 1.0,
+                    ),
+              boxShadow: isHovered
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFC10D00).withValues(
+                          alpha: isDark ? 0.28 : 0.18,
+                        ),
+                        blurRadius: 16,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : null,
+            ),
+            padding: const EdgeInsets.all(16.0),
+            child: LayoutBuilder(
           builder: (context, constraints) {
             final availableWidth = constraints.maxWidth;
             final checkboxWidth = _isSelectionMode ? 48.0 : 0.0;
@@ -1057,7 +1464,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       });
                     },
                     activeColor: const Color(0xFFC10D00),
-                    checkColor: Colors.white,
+                    checkColor: appTextColor(context),
                   ),
                   const SizedBox(width: 8.0),
                 ],
@@ -1074,8 +1481,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              user.name,
-                              style: const TextStyle(
+                              user.displayName,
+                              style: TextStyle(
+                                color: appTextColor(context),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16.0,
                                 fontFamily: 'Poppins',
@@ -1085,8 +1493,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             ),
                             Text(
                               user.email,
-                              style: const TextStyle(
-                                color: Colors.white60,
+                              style: TextStyle(
+                                color: appTextColor(context),
                                 fontSize: 12.0,
                                 fontFamily: 'Poppins',
                               ),
@@ -1111,7 +1519,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       children: [
                         Text(
                           user.designation,
-                          style: const TextStyle(
+                          style: TextStyle(
+                            color: appTextColor(context),
                             fontWeight: FontWeight.w500,
                             fontSize: 14.0,
                             fontFamily: 'Poppins',
@@ -1122,8 +1531,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         const SizedBox(height: 4.0),
                         Text(
                           user.department,
-                          style: const TextStyle(
-                            color: Colors.white60,
+                          style: TextStyle(
+                            color: appTextColor(context),
                             fontSize: 12.0,
                             fontFamily: 'Poppins',
                           ),
@@ -1150,9 +1559,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         const SizedBox(width: 8.0),
                         Transform.rotate(
                           angle: isExpanded ? 3.14 : 0,
-                          child: const Icon(
+                          child: Icon(
                             Icons.keyboard_arrow_down,
-                            color: Colors.white54,
+                            color: appTextColor(context),
                           ),
                         ),
                       ],
@@ -1162,6 +1571,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ],
             );
           },
+            ),
+          ),
         ),
       ),
     );
@@ -1176,44 +1587,60 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       ),
       child: Text(
         role,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12.0,
           fontWeight: FontWeight.bold,
           fontFamily: 'Poppins',
+          color: Colors.white,
         ),
       ),
     );
   }
 
   Widget _buildStatusBadge(String status) {
+    final label = ManagedUser.normalizeAccountStatus(status);
+    final color =
+        userStatusColors[label] ?? Colors.grey.shade600;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
       decoration: BoxDecoration(
-        color: userStatusColors[status],
+        color: color,
         borderRadius: BorderRadius.circular(20.0),
       ),
       child: Text(
-        status,
-        style: const TextStyle(
+        label,
+        style: TextStyle(
           fontSize: 12.0,
           fontWeight: FontWeight.bold,
           fontFamily: 'Poppins',
+          color: Colors.white,
         ),
       ),
     );
   }
 
   Widget _buildDropdownContent(ManagedUser user) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color panelBg = isDark
+        ? userMgmtDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
+    final Color popupBg = isDark ? _filterPopupDarkBg : Colors.white;
+    final Color dividerColor = appTextColor(context).withValues(
+      alpha: isDark ? 0.22 : 0.30,
+    );
+
     String selectedRole = user.role;
-    String selectedStatusLocal = user.status;
+    String selectedStatusLocal = ManagedUser.normalizeAccountStatus(
+      user.status,
+    );
     String selectedDepartmentLocal =
         _editedDepartments[user.id] ?? user.department;
     String selectedDesignationLocal =
         _editedDesignations[user.id] ?? user.designation;
     return Container(
       padding: const EdgeInsets.all(16.0),
-      decoration: const BoxDecoration(
-        color: Color(0x801A1A1A),
+      decoration: BoxDecoration(
+        color: panelBg,
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(16.0),
           bottomRight: Radius.circular(16.0),
@@ -1228,10 +1655,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'User Role: ',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                     ),
@@ -1240,29 +1667,29 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       height: 40.0,
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2C3E50),
+                        color: panelBg,
                         borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: DropdownButton<String>(
                         value: userRoles.contains(selectedRole)
                             ? selectedRole
                             : null,
-                        hint: const Text(
+                        hint: Text(
                           'Select role',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: appTextColor(context),
                             fontFamily: 'Poppins',
                           ),
                         ),
-                        dropdownColor: const Color(0xFF2C3E50),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        dropdownColor: popupBg,
+                        style: TextStyle(
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                           fontSize: 14.0,
                         ),
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.arrow_drop_down,
-                          color: Colors.white70,
+                          color: appTextColor(context),
                         ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
@@ -1282,6 +1709,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               user.id,
                               newValue,
                               user.status,
+                              oldRole: selectedRole,
+                              oldStatus: user.status,
                               firstName: user.firstName,
                               lastName: user.lastName,
                               department: user.department,
@@ -1297,8 +1726,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             value: value,
                             child: Text(
                               value,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: appTextColor(context),
                                 fontFamily: 'Poppins',
                               ),
                             ),
@@ -1314,10 +1743,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'User Status: ',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                     ),
@@ -1326,30 +1755,30 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       height: 40.0,
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2C3E50),
+                        color: panelBg,
                         borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: DropdownButton<String>(
                         value:
-                            ['Active', 'Pending'].contains(selectedStatusLocal)
+                            ['Active', 'Inactive'].contains(selectedStatusLocal)
                             ? selectedStatusLocal
                             : null,
-                        hint: const Text(
+                        hint: Text(
                           'Select status',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: appTextColor(context),
                             fontFamily: 'Poppins',
                           ),
                         ),
-                        dropdownColor: const Color(0xFF2C3E50),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        dropdownColor: popupBg,
+                        style: TextStyle(
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                           fontSize: 14.0,
                         ),
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.arrow_drop_down,
-                          color: Colors.white70,
+                          color: appTextColor(context),
                         ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) {
@@ -1370,6 +1799,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               user.id,
                               user.role,
                               newValue,
+                              oldRole: user.role,
+                              oldStatus: selectedStatusLocal,
                               firstName: user.firstName,
                               lastName: user.lastName,
                               department: user.department,
@@ -1378,14 +1809,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             );
                           }
                         },
-                        items: ['Active', 'Pending']
+                        items: ['Active', 'Inactive']
                             .map<DropdownMenuItem<String>>((String value) {
                               return DropdownMenuItem<String>(
                                 value: value,
                                 child: Text(
                                   value,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: appTextColor(context),
                                     fontFamily: 'Poppins',
                                   ),
                                 ),
@@ -1402,10 +1833,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Department: ',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                     ),
@@ -1414,29 +1845,32 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       height: 40.0,
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2C3E50),
+                        color: panelBg,
                         borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: DropdownButton<String>(
-                        value: selectedDepartmentLocal.isEmpty
-                            ? null
-                            : selectedDepartmentLocal,
-                        hint: const Text(
+                        value: selectedDepartmentLocal.isNotEmpty &&
+                                _availableDepartments.contains(
+                                  selectedDepartmentLocal,
+                                )
+                            ? selectedDepartmentLocal
+                            : null,
+                        hint: Text(
                           'Select department',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: appTextColor(context),
                             fontFamily: 'Poppins',
                           ),
                         ),
-                        dropdownColor: const Color(0xFF2C3E50),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        dropdownColor: popupBg,
+                        style: TextStyle(
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                           fontSize: 14.0,
                         ),
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.arrow_drop_down,
-                          color: Colors.white70,
+                          color: appTextColor(context),
                         ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) async {
@@ -1478,10 +1912,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Designation: ',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                     ),
@@ -1490,29 +1924,32 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       height: 40.0,
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2C3E50),
+                        color: panelBg,
                         borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: DropdownButton<String>(
-                        value: selectedDesignationLocal.isNotEmpty
+                        value: selectedDesignationLocal.isNotEmpty &&
+                                _availableDesignations.contains(
+                                  selectedDesignationLocal,
+                                )
                             ? selectedDesignationLocal
                             : null,
-                        hint: const Text(
+                        hint: Text(
                           'Select designation',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: appTextColor(context),
                             fontFamily: 'Poppins',
                           ),
                         ),
-                        dropdownColor: const Color(0xFF2C3E50),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        dropdownColor: popupBg,
+                        style: TextStyle(
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                           fontSize: 14.0,
                         ),
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.arrow_drop_down,
-                          color: Colors.white70,
+                          color: appTextColor(context),
                         ),
                         underline: const SizedBox.shrink(),
                         onChanged: (String? newValue) async {
@@ -1554,10 +1991,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Managed by: ',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                     ),
@@ -1571,7 +2008,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         height: 40.0,
                         padding: const EdgeInsets.symmetric(horizontal: 8.0),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2C3E50),
+                          color: panelBg,
                           borderRadius: BorderRadius.circular(4.0),
                         ),
                         child: Row(
@@ -1583,17 +2020,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                     ? user.manager!
                                     : 'Select manager',
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: appTextColor(context),
                                   fontFamily: 'Poppins',
                                   fontSize: 14.0,
                                 ),
                               ),
                             ),
                             const SizedBox(width: 8.0),
-                            const Icon(
+                            Icon(
                               Icons.arrow_drop_down,
-                              color: Colors.white70,
+                              color: appTextColor(context),
                             ),
                           ],
                         ),
@@ -1604,27 +2041,51 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
           Align(
             alignment: Alignment.centerLeft,
             child: RichText(
               text: TextSpan(
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: appTextColor(context),
                   fontFamily: 'Poppins',
                   fontSize: 14.0,
                 ),
                 children: [
-                  const TextSpan(
+                  TextSpan(
                     text: 'Last sign in: ',
-                    style: TextStyle(color: Colors.white60),
+                    style: TextStyle(color: appTextColor(context)),
                   ),
                   TextSpan(text: _formatLastSignIn(user.lastSignInAt)),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  color: appTextColor(context),
+                  fontFamily: 'Poppins',
+                  fontSize: 14.0,
+                ),
+                children: [
+                  TextSpan(
+                    text: 'Login count: ',
+                    style: TextStyle(color: appTextColor(context)),
+                  ),
+                  TextSpan(text: '${user.loginCount}'),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8.0),
+          Divider(color: dividerColor, thickness: 1),
+          const SizedBox(height: 8.0),
 
           Align(
             alignment: Alignment.centerRight,
@@ -1637,6 +2098,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         user.id,
                         user.role,
                         user.status,
+                        oldRole: user.role,
+                        oldStatus: user.status,
                         firstName: user.firstName,
                         lastName: user.lastName,
                         department: selectedDepartmentLocal,
@@ -1646,21 +2109,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFC10D00),
-                foregroundColor: Colors.white,
+                foregroundColor: appTextColor(context),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(45.0),
                 ),
               ),
               child: _updatingUserId == user.id
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor: AlwaysStoppedAnimation<Color>(appTextColor(context)),
                       ),
                     )
-                  : const Text(
+                  : Text(
                       'Update',
                       style: TextStyle(fontFamily: 'Poppins'),
                     ),
@@ -1742,7 +2205,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
       final backendUser = decoded?['user'] as Map<String, dynamic>?;
       if (backendUser != null && mounted) {
-        final updatedUser = ManagedUser.fromApi(backendUser);
+        final updatedUser = _mergeBackendUserData(
+          user,
+          backendUser,
+          fallbackDepartment: user.department,
+          fallbackDesignation: user.designation,
+          fallbackRole: user.role,
+          fallbackStatus: user.status,
+          fallbackEntity: user.entity,
+        );
         final userProvider = Provider.of<UserProvider>(context, listen: false);
         userProvider.updateUser(updatedUser);
       }
@@ -1751,10 +2222,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         SoundSystem.playSuccess();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Manager set to $managerFullName for ${user.name}.'),
+            content: Text('Manager set to $managerFullName for ${user.displayName}.'),
           ),
         );
       }
+      await _publishAdminAlert(
+        title: 'Manager assignment updated',
+        message: 'Manager for ${user.displayName} changed to $managerFullName.',
+        details: {
+          'userId': user.id,
+          'userName': user.displayName,
+          'manager': managerFullName,
+        },
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -1766,9 +2246,76 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
   }
 
+  ManagedUser _mergeBackendUserData(
+    ManagedUser? existingUser,
+    Map<String, dynamic> backendUser, {
+    required String fallbackDepartment,
+    required String fallbackDesignation,
+    required String fallbackRole,
+    required String fallbackStatus,
+    String? fallbackEntity,
+  }) {
+    final parsed = ManagedUser.fromApi(backendUser);
+    return parsed.copyWith(
+      firstName: parsed.firstName.isNotEmpty
+          ? parsed.firstName
+          : existingUser?.firstName,
+      lastName: parsed.lastName.isNotEmpty
+          ? parsed.lastName
+          : existingUser?.lastName,
+      email: parsed.email.isNotEmpty ? parsed.email : existingUser?.email,
+      department: parsed.department.isNotEmpty
+          ? parsed.department
+          : (existingUser?.department.isNotEmpty == true
+                ? existingUser!.department
+                : fallbackDepartment),
+      designation: parsed.designation.isNotEmpty
+          ? parsed.designation
+          : (existingUser?.designation.isNotEmpty == true
+                ? existingUser!.designation
+                : fallbackDesignation),
+      role: parsed.role.isNotEmpty ? parsed.role : fallbackRole,
+      status: ManagedUser.normalizeAccountStatus(
+        parsed.status.isNotEmpty ? parsed.status : fallbackStatus,
+      ),
+      entity: (parsed.entity ?? '').trim().isNotEmpty
+          ? parsed.entity
+          : (existingUser?.entity ?? fallbackEntity),
+      manager: (parsed.manager ?? '').trim().isNotEmpty
+          ? parsed.manager
+          : existingUser?.manager,
+      moduleAccess: (parsed.moduleAccess ?? '').trim().isNotEmpty
+          ? parsed.moduleAccess
+          : existingUser?.moduleAccess,
+      moduleRole: (parsed.moduleRole ?? '').trim().isNotEmpty
+          ? parsed.moduleRole
+          : existingUser?.moduleRole,
+      moduleAccessRole: (parsed.moduleAccessRole ?? '').trim().isNotEmpty
+          ? parsed.moduleAccessRole
+          : existingUser?.moduleAccessRole,
+      phoneNumber: (parsed.phoneNumber ?? '').trim().isNotEmpty
+          ? parsed.phoneNumber
+          : existingUser?.phoneNumber,
+      profilePictureUrl: (parsed.profilePictureUrl ?? '').trim().isNotEmpty
+          ? parsed.profilePictureUrl
+          : existingUser?.profilePictureUrl,
+      createdAt: parsed.createdAt ?? existingUser?.createdAt,
+      updatedAt: parsed.updatedAt ?? DateTime.now(),
+      lastSignInAt: parsed.lastSignInAt ?? existingUser?.lastSignInAt,
+      loginCount: parsed.loginCount > 0
+          ? parsed.loginCount
+          : (existingUser?.loginCount ?? 0),
+    );
+  }
+
   void _showManagedByDialog(ManagedUser user) {
     final userProvider = context.read<UserProvider>();
     final allUsers = userProvider.users;
+
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color dialogBg = isDark
+        ? const Color(0xFF3D3F40)
+        : Colors.white;
 
     final TextEditingController searchController = TextEditingController();
     ManagedUser? selectedManager;
@@ -1800,11 +2347,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             }).toList();
 
             return AlertDialog(
-              backgroundColor: const Color(0xFF2C3E50),
+              backgroundColor: dialogBg,
               title: Text(
-                'Managed by: ${user.name}',
-                style: const TextStyle(
-                  color: Colors.white,
+                'Managed by: ${user.displayName}',
+                style: TextStyle(
+                  color: appTextColor(context),
                   fontFamily: 'Poppins',
                 ),
               ),
@@ -1816,18 +2363,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     children: [
                       TextField(
                         controller: searchController,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Search manager',
                           labelStyle: TextStyle(
-                            color: Colors.white70,
+                            color: appTextColor(context),
                             fontFamily: 'Poppins',
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.white24),
+                            borderSide: BorderSide(color: appTextColor(context).withValues(alpha: 0.24)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderSide: BorderSide(color: Color(0xFFC10D00)),
@@ -1843,11 +2390,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       SizedBox(
                         height: 260,
                         child: filtered.isEmpty
-                            ? const Center(
+                            ? Center(
                                 child: Text(
                                   'No users match your search.',
                                   style: TextStyle(
-                                    color: Colors.white70,
+                                    color: appTextColor(context),
                                     fontFamily: 'Poppins',
                                   ),
                                 ),
@@ -1861,21 +2408,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   return ListTile(
                                     title: Text(
                                       candidate.name,
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                      style: TextStyle(
+                                        color: appTextColor(context),
                                         fontFamily: 'Poppins',
                                       ),
                                     ),
                                     subtitle: Text(
                                       candidate.email,
-                                      style: const TextStyle(
-                                        color: Colors.white70,
+                                      style: TextStyle(
+                                        color: appTextColor(context),
                                         fontFamily: 'Poppins',
                                         fontSize: 12.0,
                                       ),
                                     ),
                                     trailing: isSelected
-                                        ? const Icon(
+                                        ? Icon(
                                             Icons.check,
                                             color: Color(0xFFC10D00),
                                           )
@@ -1900,10 +2447,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     SoundSystem.playButtonClick();
                     Navigator.of(dialogContext).pop();
                   },
-                  child: const Text(
+                  child: Text(
                     'Cancel',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: appTextColor(context),
                       fontFamily: 'Poppins',
                     ),
                   ),
@@ -1919,9 +2466,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFC10D00),
-                    foregroundColor: Colors.white,
+                    foregroundColor: appTextColor(context),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Save',
                     style: TextStyle(fontFamily: 'Poppins'),
                   ),
@@ -1944,12 +2491,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final bool isDark = Theme.of(context).brightness == Brightness.dark;
+            final Color dialogBg = isDark
+                ? const Color(0xFF3D3F40)
+                : Colors.white;
             return AlertDialog(
-              backgroundColor: const Color(0xFF2C3E50),
-              title: const Text(
+              backgroundColor: dialogBg,
+              title: Text(
                 'Add New Users',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: appTextColor(context),
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.bold,
                 ),
@@ -1959,19 +2510,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Paste emails (one per line or with "email:" prefix)',
                       style: TextStyle(
-                        color: Colors.white70,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                         fontSize: 12.0,
                       ),
                     ),
                     const SizedBox(height: 8.0),
-                    const Text(
+                    Text(
                       'Example:\nemail: nathi.radebez@khonology.com\nemail: john.doe@khonology.com',
                       style: TextStyle(
-                        color: Colors.white54,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                         fontSize: 11.0,
                         fontStyle: FontStyle.italic,
@@ -1982,25 +2533,25 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       controller: emailsController,
                       maxLines: 10,
                       minLines: 5,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                       decoration: InputDecoration(
                         labelText: 'Emails',
-                        labelStyle: const TextStyle(
-                          color: Colors.white70,
+                        labelStyle: TextStyle(
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
                         hintText:
                             'email: user.name@khonology.com\nemail: another.user@khonology.com',
-                        hintStyle: const TextStyle(
-                          color: Colors.white54,
+                        hintStyle: TextStyle(
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8.0),
-                          borderSide: const BorderSide(color: Colors.white54),
+                          borderSide: BorderSide(color: appTextColor(context)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8.0),
@@ -2014,8 +2565,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       const SizedBox(height: 16.0),
                       Text(
                         progressMessage!,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                           fontSize: 12.0,
                         ),
@@ -2032,10 +2583,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           SoundSystem.playButtonClick();
                           Navigator.of(dialogContext).pop();
                         },
-                  child: const Text(
+                  child: Text(
                     'Cancel',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: appTextColor(context),
                       fontFamily: 'Poppins',
                     ),
                   ),
@@ -2104,7 +2655,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 SnackBar(
                                   content: Text(
                                     'Error creating users: ${e.toString()}',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontFamily: 'Poppins',
                                     ),
                                   ),
@@ -2123,20 +2674,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFC10D00),
-                    foregroundColor: Colors.white,
+                    foregroundColor: appTextColor(context),
                   ),
                   child: isCreating
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
+                              appTextColor(context),
                             ),
                           ),
                         )
-                      : const Text(
+                      : Text(
                           'Create Users',
                           style: TextStyle(fontFamily: 'Poppins'),
                         ),
@@ -2207,7 +2758,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     if (userProvider.users.isEmpty) {
       onProgress('Loading existing users...');
-      await userProvider.fetchUsers();
+      await userProvider.fetchUsers(forceRefresh: true);
     }
 
     final validEmails = <String>[];
@@ -2285,13 +2836,24 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       }
     }
 
-    if (successCount > 0) {
+      if (successCount > 0) {
       onProgress('Refreshing user list...');
 
       if (mounted) {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
-        await userProvider.fetchUsers();
+        await userProvider.fetchUsers(forceRefresh: true);
       }
+
+      await _publishAdminAlert(
+        title: 'New users added',
+        message: '$successCount user(s) were added from User Management.',
+        details: {
+          'successCount': successCount,
+          'failureCount': failureCount,
+          'skippedCount': skippedCount,
+          'successEmails': successEmails,
+        },
+      );
     }
 
     return {
@@ -2317,12 +2879,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
+        final Color dialogBg = isDark
+            ? const Color(0xFF3D3F40)
+            : Colors.white;
         return AlertDialog(
-          backgroundColor: const Color(0xFF2C3E50),
+          backgroundColor: dialogBg,
           title: Text(
             'Creation Summary',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: appTextColor(context),
               fontFamily: 'Poppins',
               fontWeight: FontWeight.bold,
             ),
@@ -2334,7 +2900,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               children: [
                 Text(
                   'Successfully created: $successCount user(s)',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.green,
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.bold,
@@ -2344,7 +2910,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   const SizedBox(height: 8.0),
                   Text(
                     'Skipped (already exists): $skippedCount user(s)',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.orange,
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
@@ -2355,7 +2921,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   const SizedBox(height: 8.0),
                   Text(
                     'Failed: $failureCount user(s)',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.red,
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
@@ -2364,10 +2930,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ],
                 if (successEmails.isNotEmpty) ...[
                   const SizedBox(height: 16.0),
-                  const Text(
+                  Text(
                     'Successfully created:',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: appTextColor(context),
                       fontFamily: 'Poppins',
                       fontSize: 12.0,
                     ),
@@ -2379,7 +2945,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           padding: const EdgeInsets.only(left: 8.0, top: 4.0),
                           child: Text(
                             '• $email',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.green,
                               fontFamily: 'Poppins',
                               fontSize: 11.0,
@@ -2390,7 +2956,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   if (successEmails.length > 10)
                     Text(
                       '... and ${successEmails.length - 10} more',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.green,
                         fontFamily: 'Poppins',
                         fontSize: 11.0,
@@ -2400,10 +2966,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ],
                 if (failureEmails.isNotEmpty) ...[
                   const SizedBox(height: 16.0),
-                  const Text(
+                  Text(
                     'Failed:',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: appTextColor(context),
                       fontFamily: 'Poppins',
                       fontSize: 12.0,
                     ),
@@ -2421,7 +2987,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         children: [
                           Text(
                             '• $email',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.red,
                               fontFamily: 'Poppins',
                               fontSize: 11.0,
@@ -2437,7 +3003,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 errorMsg.length > 50
                                     ? '${errorMsg.substring(0, 50)}...'
                                     : errorMsg,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.redAccent,
                                   fontFamily: 'Poppins',
                                   fontSize: 10.0,
@@ -2452,7 +3018,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   if (failureEmails.length > 10)
                     Text(
                       '... and ${failureEmails.length - 10} more',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.red,
                         fontFamily: 'Poppins',
                         fontSize: 11.0,
@@ -2462,10 +3028,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ],
                 if (skippedEmails.isNotEmpty) ...[
                   const SizedBox(height: 16.0),
-                  const Text(
+                  Text(
                     'Skipped (already exists):',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: appTextColor(context),
                       fontFamily: 'Poppins',
                       fontSize: 12.0,
                     ),
@@ -2479,7 +3045,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         children: [
                           Text(
                             '• $email',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.orange,
                               fontFamily: 'Poppins',
                               fontSize: 11.0,
@@ -2489,7 +3055,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             padding: const EdgeInsets.only(left: 8.0, top: 2.0),
                             child: Text(
                               '($name)',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: Colors.orangeAccent,
                                 fontFamily: 'Poppins',
                                 fontSize: 10.0,
@@ -2504,7 +3070,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   if (skippedEmails.length > 10)
                     Text(
                       '... and ${skippedEmails.length - 10} more',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.orange,
                         fontFamily: 'Poppins',
                         fontSize: 11.0,
@@ -2523,9 +3089,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFC10D00),
-                foregroundColor: Colors.white,
+                foregroundColor: appTextColor(context),
               ),
-              child: const Text('OK', style: TextStyle(fontFamily: 'Poppins')),
+              child: Text('OK', style: TextStyle(fontFamily: 'Poppins')),
             ),
           ],
         );
@@ -2621,7 +3187,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
       if (!skipRefresh && mounted) {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
-        await userProvider.fetchUsers();
+        await userProvider.fetchUsers(forceRefresh: true);
 
         if (mounted) {
           SoundSystem.playSuccess();
@@ -2629,9 +3195,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             SnackBar(
               content: Text(
                 'User $fullName created successfully!',
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Poppins',
-                  color: Colors.white,
+                  color: appTextColor(context),
                 ),
               ),
               backgroundColor: const Color(0xFFC10D00),
@@ -2665,12 +3231,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final bool isDark = Theme.of(context).brightness == Brightness.dark;
+            final Color dialogBg = isDark
+                ? const Color(0xFF3D3F40)
+                : Colors.white;
             return AlertDialog(
-              backgroundColor: const Color(0xFF2C3E50),
-              title: const Text(
+              backgroundColor: dialogBg,
+              title: Text(
                 'Bulk update',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: appTextColor(context),
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.bold,
                 ),
@@ -2682,17 +3252,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   children: [
                     Text(
                       'Apply the following to ${selectedUsers.length} selected user(s):',
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                         fontSize: 13.0,
                       ),
                     ),
                     const SizedBox(height: 16.0),
-                    const Text(
+                    Text(
                       'Role',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                         fontSize: 12.0,
                       ),
@@ -2702,16 +3272,23 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       child: DropdownButton<String>(
                         value: userRoles.contains(bulkRole) ? bulkRole : null,
                         isExpanded: true,
-                        dropdownColor: const Color(0xFF2C3E50),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        dropdownColor: dialogBg,
+                        style: TextStyle(
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
                         items: userRoles
                             .map(
                               (r) => DropdownMenuItem<String>(
                                 value: r,
-                                child: Text(r),
+                                child: Text(
+                                  r,
+                                  style: TextStyle(
+                                    color: appTextColor(context),
+                                    fontFamily: 'Poppins',
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                               ),
                             )
                             .toList(),
@@ -2722,10 +3299,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       ),
                     ),
                     const SizedBox(height: 12.0),
-                    const Text(
+                    Text(
                       'Status',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                         fontSize: 12.0,
                       ),
@@ -2737,16 +3314,23 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             ? bulkStatus
                             : null,
                         isExpanded: true,
-                        dropdownColor: const Color(0xFF2C3E50),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        dropdownColor: dialogBg,
+                        style: TextStyle(
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
                         items: userStatusColors.keys
                             .map(
                               (s) => DropdownMenuItem<String>(
                                 value: s,
-                                child: Text(s),
+                                child: Text(
+                                  s,
+                                  style: TextStyle(
+                                    color: appTextColor(context),
+                                    fontFamily: 'Poppins',
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                               ),
                             )
                             .toList(),
@@ -2757,10 +3341,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       ),
                     ),
                     const SizedBox(height: 12.0),
-                    const Text(
+                    Text(
                       'Department (optional)',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                         fontSize: 12.0,
                       ),
@@ -2770,14 +3354,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       child: DropdownButton<String?>(
                         value: bulkDepartment,
                         isExpanded: true,
-                        dropdownColor: const Color(0xFF2C3E50),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        dropdownColor: dialogBg,
+                        style: TextStyle(
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
-                        hint: const Text(
+                        hint: Text(
                           '— No change —',
-                          style: TextStyle(color: Colors.white54),
+                          style: TextStyle(color: appTextColor(context)),
                         ),
                         items: [
                           const DropdownMenuItem<String?>(
@@ -2787,7 +3371,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           ...deptOptions.map(
                             (d) => DropdownMenuItem<String?>(
                               value: d,
-                              child: Text(d),
+                              child: Text(
+                                d,
+                                style: TextStyle(
+                                  color: appTextColor(context),
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -2798,10 +3389,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       ),
                     ),
                     const SizedBox(height: 12.0),
-                    const Text(
+                    Text(
                       'Designation (optional)',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: appTextColor(context),
                         fontFamily: 'Poppins',
                         fontSize: 12.0,
                       ),
@@ -2811,14 +3402,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       child: DropdownButton<String?>(
                         value: bulkDesignation,
                         isExpanded: true,
-                        dropdownColor: const Color(0xFF2C3E50),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        dropdownColor: dialogBg,
+                        style: TextStyle(
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
-                        hint: const Text(
+                        hint: Text(
                           '— No change —',
-                          style: TextStyle(color: Colors.white54),
+                          style: TextStyle(color: appTextColor(context)),
                         ),
                         items: [
                           const DropdownMenuItem<String?>(
@@ -2828,7 +3419,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           ...desigOptions.map(
                             (d) => DropdownMenuItem<String?>(
                               value: d,
-                              child: Text(d),
+                              child: Text(
+                                d,
+                                style: TextStyle(
+                                  color: appTextColor(context),
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -2847,10 +3445,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     SoundSystem.playButtonClick();
                     Navigator.of(ctx).pop();
                   },
-                  child: const Text(
+                  child: Text(
                     'Cancel',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: appTextColor(context),
                       fontFamily: 'Poppins',
                     ),
                   ),
@@ -2869,6 +3467,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           user.id,
                           role,
                           status,
+                          oldRole: user.role,
+                          oldStatus: user.status,
                           firstName: user.firstName,
                           lastName: user.lastName,
                           department: bulkDepartment ?? user.department,
@@ -2893,7 +3493,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         SnackBar(
                           content: Text(
                             'Updated $done user(s).${failed > 0 ? ' $failed failed.' : ''}',
-                            style: const TextStyle(fontFamily: 'Poppins'),
+                            style: TextStyle(fontFamily: 'Poppins'),
                           ),
                           backgroundColor: const Color(0xFFC10D00),
                         ),
@@ -2902,9 +3502,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFC10D00),
-                    foregroundColor: Colors.white,
+                    foregroundColor: appTextColor(context),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Save',
                     style: TextStyle(fontFamily: 'Poppins'),
                   ),
@@ -2923,19 +3523,23 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
+        final Color dialogBg = isDark
+            ? const Color(0xFF3D3F40)
+            : Colors.white;
         return AlertDialog(
-          backgroundColor: const Color(0xFF2C3E50),
-          title: const Text(
+          backgroundColor: dialogBg,
+          title: Text(
             'Delete Users',
             style: TextStyle(
-              color: Colors.white,
+              color: appTextColor(context),
               fontFamily: 'Poppins',
               fontWeight: FontWeight.bold,
             ),
           ),
           content: Text(
             'Are you sure you want to delete $selectedCount user(s)?',
-            style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+            style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
           ),
           actions: [
             TextButton(
@@ -2943,9 +3547,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 SoundSystem.playButtonClick();
                 Navigator.of(context).pop();
               },
-              child: const Text(
+              child: Text(
                 'Cancel',
-                style: TextStyle(color: Colors.white70, fontFamily: 'Poppins'),
+                style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
               ),
             ),
             ElevatedButton(
@@ -2956,9 +3560,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
+                foregroundColor: appTextColor(context),
               ),
-              child: const Text(
+              child: Text(
                 'Delete',
                 style: TextStyle(fontFamily: 'Poppins'),
               ),
@@ -3048,12 +3652,24 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         SnackBar(
           content: Text(
             message,
-            style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
+            style: TextStyle(fontFamily: 'Poppins', color: appTextColor(context)),
           ),
           backgroundColor: successfullyDeletedUserIds.isNotEmpty
               ? (failureCount > 0 ? Colors.orange : Colors.green)
               : Colors.red,
         ),
+      );
+    }
+
+    if (successfullyDeletedUserIds.isNotEmpty) {
+      await _publishAdminAlert(
+        title: 'Users deleted',
+        message:
+            '${successfullyDeletedUserIds.length} user(s) deleted by admin.',
+        details: {
+          'deletedUserIds': successfullyDeletedUserIds,
+          'failedCount': failureCount,
+        },
       );
     }
   }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -9,11 +10,17 @@ import 'package:intl/intl.dart';
 import '../config/api_config.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
+import '../services/modules_ping_service.dart';
 import '../services/sound_system.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
 import '../widgets/floating_circles_particle_animation.dart';
 
-const Color primaryDark = Color(0xFF1F2937);
 const Color primaryAccent = Color(0xFFC10D00);
+const Color moduleCardDarkSurface = Color(0xFF3D3F40);
+const Duration _moduleTokenFetchTimeout = Duration(milliseconds: 1800);
+final Map<String, String> _moduleLaunchTokenCache = <String, String>{};
 
 class ModuleScreen extends StatefulWidget {
   const ModuleScreen({super.key});
@@ -25,16 +32,26 @@ class ModuleScreen extends StatefulWidget {
 class _ModuleScreenState extends State<ModuleScreen> {
   bool _isLoadingModuleAccess = false;
   final ScrollController _scrollController = ScrollController();
+  Timer? _moduleAccessPollTimer;
 
   @override
   void initState() {
     super.initState();
 
     _loadModuleAccess();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Pick up module changes from admins without logging out (matches admin refresh cadence).
+      _moduleAccessPollTimer = Timer.periodic(const Duration(minutes: 3), (_) {
+        if (!mounted) return;
+        context.read<AuthProvider>().refreshModuleAccessFromServer();
+      });
+    });
   }
 
   @override
   void dispose() {
+    _moduleAccessPollTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -134,16 +151,23 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<ThemeModeProvider>();
+
     return Scaffold(
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset('assets/images/nathi_bg.png', fit: BoxFit.cover),
+            child: Image.asset(
+              appBackgroundAsset(context),
+              fit: BoxFit.cover,
+            ),
           ),
           Positioned.fill(
             child: ScrollbarTheme(
               data: ScrollbarThemeData(
-                thumbColor: WidgetStatePropertyAll<Color>(Colors.white),
+                thumbColor: WidgetStatePropertyAll<Color>(
+                  appTextColor(context),
+                ),
               ),
               child: Scrollbar(
                 controller: _scrollController,
@@ -216,11 +240,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                 !showRecruitment &&
                                 !showSOWBuilder &&
                                 !showDeliverables) {
-                              return const Center(
+                              return Center(
                                 child: Text(
                                   'No module access assigned. Please contact your administrator.',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: appTextColor(context),
                                     fontSize: 18.0,
                                     fontFamily: 'Poppins',
                                   ),
@@ -248,8 +272,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Development',
                                     'Hub',
                                   ],
-                                  buttonText: 'Launch',
-                                  url: 'https://pdh-web-app-4in5.onrender.com',
+                                  buttonText: 'LAUNCH',
+                                  url:
+                                      'https://personal-development-hub.onrender.com',
                                   moduleKey: 'pdh',
                                 ),
                               );
@@ -267,7 +292,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Capacity &',
                                     'Skills heatmap',
                                   ],
-                                  buttonText: 'Launch',
+                                  buttonText: 'LAUNCH',
                                   url: 'https://resource-capacity.netlify.app/',
                                   moduleKey: 'skills_heatmap',
                                 ),
@@ -286,9 +311,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Recruitment',
                                     'Workflow',
                                   ],
-                                  buttonText: 'Launch',
-                                  url:
-                                      'https://recruitment-web-59qy.onrender.com/',
+                                  buttonText: 'LAUNCH',
+                                  url: 'https://recruitment-web-59qy.onrender.com/',
                                   moduleKey: 'recruitment',
                                 ),
                               );
@@ -301,8 +325,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   context: context,
                                   cardWidth: calculatedCardWidth,
                                   titleLines: ['Proposal &', 'SOW Builder'],
-                                  buttonText: 'Launch',
-                                  url: 'https://lukens-1.onrender.com',
+                                  buttonText: 'LAUNCH',
+                                  url: 'https://lukens-ivdu.onrender.com',
                                   moduleKey: 'sow_builder',
                                 ),
                               );
@@ -319,7 +343,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                     'Deliverables & Sprint',
                                     'Sign Off Hub',
                                   ],
-                                  buttonText: 'Launch',
+                                  buttonText: 'LAUNCH',
                                   url: 'https://flow-space-1.onrender.com/',
                                   moduleKey: 'deliverable_sprint',
                                   isComingSoon: false,
@@ -455,6 +479,19 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
   @override
   Widget build(BuildContext context) {
     final String? description = _getModuleDescription(widget.moduleKey);
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color cardBg = isDark
+        ? Color.alphaBlend(
+            Colors.white.withValues(alpha: 0.10),
+            moduleCardDarkSurface.withValues(alpha: 0.40),
+          )
+        : Colors.white.withValues(alpha: 0.40);
+    final Color titleColor = appTextColor(context);
+    final Color secondaryTextColor =
+        isDark ? appTextColor(context).withValues(alpha: 0.85) : Colors.black87;
+    final Color borderColor = _isHovered
+        ? (isDark ? Colors.white54 : Colors.black45)
+        : (isDark ? Colors.white24 : Colors.black26);
     return LayoutBuilder(
       builder: (context, constraints) {
         final bool hasBoundedHeight =
@@ -497,19 +534,17 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                         width: widget.cardWidth,
                         padding: const EdgeInsets.all(28.8),
                         decoration: BoxDecoration(
-                          color: primaryDark.withValues(
-                            alpha: _isHovered ? 0.7 : 0.5,
-                          ),
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(16.0),
                           border: Border.all(
-                            color: _isHovered ? Colors.white38 : Colors.white24,
+                            color: borderColor,
                             width: _isHovered ? 1.5 : 1.0,
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: _isHovered
-                                  ? Colors.black.withValues(alpha: 0.7)
-                                  : Colors.black54,
+                                  ? Colors.black.withValues(alpha: 0.35)
+                                  : Colors.black.withValues(alpha: 0.22),
                               blurRadius: _isHovered ? 35 : 25,
                               offset: Offset(0, _isHovered ? 15 : 10),
                               spreadRadius: _isHovered ? 2 : 0,
@@ -530,10 +565,16 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                   children: [
                                     Align(
                                       alignment: Alignment.center,
-                                      child: Image.asset(
-                                        'assets/images/khonology_white_logo.png',
-                                        height: 40,
-                                        fit: BoxFit.contain,
+                                      child: ColorFiltered(
+                                        colorFilter: ColorFilter.mode(
+                                          titleColor,
+                                          BlendMode.srcIn,
+                                        ),
+                                        child: Image.asset(
+                                          'assets/images/khonology_white_logo.png',
+                                          height: 40,
+                                          fit: BoxFit.contain,
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(height: 16.0),
@@ -554,7 +595,7 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                                   ? 19.8
                                                   : 16.2,
                                               fontWeight: FontWeight.w900,
-                                              color: Colors.white,
+                                              color: titleColor,
                                               height: 1.3,
                                             ),
                                           ),
@@ -583,8 +624,8 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
                                           fontSize: 12.6,
-                                          fontWeight: FontWeight.w400,
-                                          color: Colors.white70,
+                                          fontWeight: FontWeight.w500,
+                                          color: secondaryTextColor,
                                           fontStyle: FontStyle.italic,
                                         ),
                                       ),
@@ -595,49 +636,50 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                       Text(
                                         description,
                                         textAlign: TextAlign.center,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 13.5,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.white70,
+                                          fontWeight: FontWeight.w600,
+                                          color: secondaryTextColor,
                                           fontFamily: 'Poppins',
+                                          height: 1.35,
                                         ),
                                       ),
                                       const SizedBox(height: 18.0),
                                     ],
                                     ElevatedButton(
-                                        onPressed: _isLoading
-                                            ? null
-                                            : () async {
-                                                SoundSystem.playButtonClick();
-                                                _animationKey.currentState
-                                                    ?.triggerParticleExplosion();
+                                      onPressed: _isLoading
+                                          ? null
+                                          : () async {
+                                              SoundSystem.playButtonClick();
+                                              _animationKey.currentState
+                                                  ?.triggerParticleExplosion();
 
-                                                if (widget.isComingSoon) {
-                                                  if (!mounted) {
-                                                    return;
-                                                  }
-                                                  ScaffoldMessenger.of(
-                                                    context,
-                                                  ).showSnackBar(
-                                                    const SnackBar(
-                                                      content: Text(
-                                                        'Deliverables & Sprint Sign-Off Hub is coming soon.',
-                                                        style: TextStyle(
-                                                          fontFamily: 'Poppins',
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  );
+                                              if (widget.isComingSoon) {
+                                                if (!mounted) {
                                                   return;
                                                 }
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Deliverables & Sprint Sign-Off Hub is coming soon.',
+                                                      style: TextStyle(
+                                                        fontFamily: 'Poppins',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                                return;
+                                              }
 
-                                                setState(() => _isLoading = true);
-                                                try {
-                                                  await _launchUrlFromContext(
-                                                    widget.context,
-                                                    widget.url,
-                                                    widget.moduleKey,
-                                                  );
+                                              setState(() => _isLoading = true);
+                                              try {
+                                                await _launchUrlFromContext(
+                                                  widget.context,
+                                                  widget.url,
+                                                  widget.moduleKey,
+                                                );
                                                 if (mounted) {
                                                   setState(() {
                                                     _lastAccessedText =
@@ -652,31 +694,31 @@ class _HoverableModuleCardState extends State<_HoverableModuleCard>
                                                 }
                                               }
                                             },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: primaryAccent,
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 36.0,
-                                            vertical: 14.4,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              45.0,
-                                            ),
-                                          ),
-                                          textStyle: const TextStyle(
-                                            fontSize: 16.2,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          elevation: widget.isComingSoon ? 0 : 10,
-                                          shadowColor: widget.isComingSoon
-                                              ? Colors.transparent
-                                              : primaryAccent.withValues(
-                                                  alpha: 0.5,
-                                                ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: primaryAccent,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 36.0,
+                                          vertical: 14.4,
                                         ),
-                                        child: Text(widget.buttonText),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            45.0,
+                                          ),
+                                        ),
+                                        textStyle: const TextStyle(
+                                          fontSize: 16.2,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        elevation: widget.isComingSoon ? 0 : 10,
+                                        shadowColor: widget.isComingSoon
+                                            ? Colors.transparent
+                                            : primaryAccent.withValues(
+                                                alpha: 0.5,
+                                              ),
                                       ),
+                                      child: Text(widget.buttonText),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -815,6 +857,8 @@ Future<void> _launchUrlFromContext(
   String moduleKey,
 ) async {
   try {
+    ModulesPingService.pingOnModuleLaunch();
+
     String secureUrl = url.trim();
     if (secureUrl.startsWith('http://')) {
       secureUrl = secureUrl.replaceFirst('http://', 'https://');
@@ -823,6 +867,9 @@ Future<void> _launchUrlFromContext(
     }
 
     final authProvider = context.read<AuthProvider>();
+    final userProvider = context.read<UserProvider>();
+    final isLightMode = context.read<ThemeModeProvider>().isLight;
+    final theme = isLightMode ? 'light' : 'dark';
     final String? existingToken = authProvider.userToken;
     if (existingToken == null || existingToken.isEmpty) {
       if (!context.mounted) return;
@@ -838,40 +885,309 @@ Future<void> _launchUrlFromContext(
     }
 
     String token = existingToken;
-    if (moduleKey == 'recruitment') {
-      final email = authProvider.userEmail;
-      if (email != null && email.isNotEmpty) {
-        try {
-          final tokenUri = Uri.parse(
-            ApiConfig.authTokenEndpoint(email, module: 'recruitment'),
-          );
-          final response = await http.get(
-            tokenUri,
+    final email = authProvider.userEmail;
+    if (email == null || email.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'User email is missing. Please log in again.',
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final String cacheKey = '$moduleKey:$email:$theme';
+    String? latestModuleAccessRole;
+    try {
+      final userByEmailUri = Uri.parse(ApiConfig.userByEmailEndpoint(email));
+      final userByEmailRes = await http
+          .get(
+            userByEmailUri,
             headers: {
               'Authorization': 'Bearer $existingToken',
               'Accept': 'application/json',
             },
-          ).timeout(const Duration(seconds: 10));
+          )
+          .timeout(_moduleTokenFetchTimeout);
+      if (userByEmailRes.statusCode == 200) {
+        final payload = json.decode(userByEmailRes.body);
+        if (payload is Map<String, dynamic>) {
+          final userMap = (payload['user'] is Map<String, dynamic>)
+              ? payload['user'] as Map<String, dynamic>
+              : payload;
+          latestModuleAccessRole = userMap['moduleAccessRole'] as String?;
+        }
+      }
+    } catch (e) {
+      debugPrint('[ModuleLaunch] Could not refresh moduleAccessRole: $e');
+    }
+
+    Future<String?> fetchLatestToken({
+      required String tokenEndpoint,
+    }) async {
+      const int maxAttempts = 5;
+      for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse(tokenEndpoint),
+                headers: {
+                  'Authorization': 'Bearer $existingToken',
+                  'Accept': 'application/json',
+                },
+              )
+              .timeout(const Duration(seconds: 8));
           if (response.statusCode == 200) {
             final body = json.decode(response.body);
             if (body is Map<String, dynamic>) {
-              final arwToken = body['token'] as String?;
-              if (arwToken != null && arwToken.isNotEmpty) {
-                token = arwToken;
-                debugPrint('[ModuleLaunch] Using ARW token for recruitment app');
+              final freshToken = body['token'] as String?;
+              if (freshToken != null && freshToken.isNotEmpty) {
+                return freshToken;
               }
             }
           }
+          debugPrint(
+            '[ModuleLaunch] Token fetch attempt $attempt/$maxAttempts failed '
+            '(status ${response.statusCode})',
+          );
         } catch (e) {
-          debugPrint('[ModuleLaunch] ARW token fetch failed, using default token: $e');
+          debugPrint(
+            '[ModuleLaunch] Token fetch attempt $attempt/$maxAttempts error: $e',
+          );
+        }
+        if (attempt < maxAttempts) {
+          await Future<void>.delayed(const Duration(milliseconds: 350));
         }
       }
+      return null;
     }
 
-    Uri uri = Uri.parse(secureUrl);
-    final existingParams = Map<String, String>.from(uri.queryParameters);
-    existingParams['token'] = token;
-    uri = uri.replace(queryParameters: existingParams);
+    if (moduleKey == 'recruitment') {
+      final fresh = await fetchLatestToken(
+        tokenEndpoint: ApiConfig.authTokenEndpoint(
+          email,
+          module: 'recruitment',
+          theme: theme,
+        ),
+      );
+      if (fresh == null || fresh.isEmpty) {
+        return;
+      }
+      token = fresh;
+      _moduleLaunchTokenCache[cacheKey] = fresh;
+      debugPrint('[ModuleLaunch] Using latest ARW token for recruitment app');
+    } else if (moduleKey == 'skills_heatmap') {
+      String? selectedRole;
+      try {
+        final roleSource = latestModuleAccessRole;
+        if (roleSource != null && roleSource.isNotEmpty) {
+          final parts = roleSource.split(',');
+          for (final part in parts) {
+            final trimmedPart = part.trim();
+            if (trimmedPart.startsWith('Skills Heatmap - ')) {
+              selectedRole = trimmedPart.replaceFirst('Skills Heatmap - ', '').trim();
+              break;
+            }
+          }
+        }
+        if ((selectedRole == null || selectedRole.isEmpty) &&
+            userProvider.users.isNotEmpty) {
+          final currentUser = userProvider.users.firstWhere(
+            (u) => u.email.toLowerCase() == email.toLowerCase(),
+            orElse: () => throw StateError('Current user not found'),
+          );
+          final localRole = currentUser.moduleAccessRole;
+          if (localRole != null && localRole.isNotEmpty) {
+            final parts = localRole.split(',');
+            for (final part in parts) {
+              final trimmedPart = part.trim();
+              if (trimmedPart.startsWith('Skills Heatmap - ')) {
+                selectedRole = trimmedPart.replaceFirst('Skills Heatmap - ', '').trim();
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[ModuleLaunch] Error getting skills heatmap role: $e');
+      }
+      selectedRole = (selectedRole == null || selectedRole.isEmpty)
+          ? 'Executive'
+          : selectedRole;
+
+      final String skillsCacheKey = '$moduleKey:$email:$selectedRole:$theme';
+      final fresh = await fetchLatestToken(
+        tokenEndpoint: ApiConfig.authTokenEndpoint(
+          email,
+          module: 'skills_heatmap',
+          role: selectedRole,
+          theme: theme,
+        ),
+      );
+      if (fresh == null || fresh.isEmpty) {
+        return;
+      }
+      token = fresh;
+      _moduleLaunchTokenCache[skillsCacheKey] = fresh;
+      debugPrint(
+        '[ModuleLaunch] Using latest skills heatmap token with role: $selectedRole',
+      );
+    } else if (moduleKey == 'deliverable_sprint') {
+      String? selectedRole;
+      try {
+        final roleSource = latestModuleAccessRole;
+        if (roleSource != null && roleSource.isNotEmpty) {
+          final parts = roleSource.split(',');
+          for (final part in parts) {
+            final trimmedPart = part.trim();
+            if (trimmedPart.startsWith('Deliverables & Sprint Sign-Off Hub - ')) {
+              selectedRole = trimmedPart
+                  .replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '')
+                  .trim();
+              break;
+            }
+          }
+        }
+        if ((selectedRole == null || selectedRole.isEmpty) &&
+            userProvider.users.isNotEmpty) {
+          final currentUser = userProvider.users.firstWhere(
+            (u) => u.email.toLowerCase() == email.toLowerCase(),
+            orElse: () => throw StateError('Current user not found'),
+          );
+          final localRole = currentUser.moduleAccessRole;
+          if (localRole != null && localRole.isNotEmpty) {
+            final parts = localRole.split(',');
+            for (final part in parts) {
+              final trimmedPart = part.trim();
+              if (trimmedPart.startsWith('Deliverables & Sprint Sign-Off Hub - ')) {
+                selectedRole = trimmedPart
+                    .replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '')
+                    .trim();
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[ModuleLaunch] Error getting deliverables role: $e');
+      }
+      selectedRole = (selectedRole == null || selectedRole.isEmpty)
+          ? 'Team member'
+          : selectedRole;
+
+      final String deliverablesCacheKey =
+          '$moduleKey:$email:$selectedRole:$theme';
+      final fresh = await fetchLatestToken(
+        tokenEndpoint: ApiConfig.authTokenEndpoint(
+          email,
+          module: 'deliverable_sprint',
+          role: selectedRole,
+          theme: theme,
+        ),
+      );
+      if (fresh == null || fresh.isEmpty) {
+        return;
+      }
+      token = fresh;
+      _moduleLaunchTokenCache[deliverablesCacheKey] = fresh;
+      debugPrint(
+        '[ModuleLaunch] Using latest deliverables token with role: $selectedRole',
+      );
+    } else if (moduleKey == 'sow_builder') {
+      String? selectedRole;
+      try {
+        final roleSource = latestModuleAccessRole;
+        if (roleSource != null && roleSource.isNotEmpty) {
+          final parts = roleSource.split(',');
+          for (final part in parts) {
+            final trimmedPart = part.trim();
+            if (trimmedPart.startsWith('Proposal & SOW Builder - ')) {
+              selectedRole = trimmedPart
+                  .replaceFirst('Proposal & SOW Builder - ', '')
+                  .trim();
+              break;
+            }
+          }
+        }
+        if ((selectedRole == null || selectedRole.isEmpty) &&
+            userProvider.users.isNotEmpty) {
+          final currentUser = userProvider.users.firstWhere(
+            (u) => u.email.toLowerCase() == email.toLowerCase(),
+            orElse: () => throw StateError('Current user not found'),
+          );
+          final localRole = currentUser.moduleAccessRole;
+          if (localRole != null && localRole.isNotEmpty) {
+            final parts = localRole.split(',');
+            for (final part in parts) {
+              final trimmedPart = part.trim();
+              if (trimmedPart.startsWith('Proposal & SOW Builder - ')) {
+                selectedRole = trimmedPart
+                    .replaceFirst('Proposal & SOW Builder - ', '')
+                    .trim();
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[ModuleLaunch] Error getting SOW Builder persona: $e');
+      }
+      selectedRole =
+          (selectedRole == null || selectedRole.isEmpty) ? 'Manager' : selectedRole;
+
+      final String sowCacheKey =
+          '$moduleKey:$email:$selectedRole:$theme';
+      final fresh = await fetchLatestToken(
+        tokenEndpoint: ApiConfig.authTokenEndpoint(
+          email,
+          module: 'sow_builder',
+          role: selectedRole,
+          theme: theme,
+        ),
+      );
+      if (fresh == null || fresh.isEmpty) {
+        return;
+      }
+      token = fresh;
+      _moduleLaunchTokenCache[sowCacheKey] = fresh;
+      debugPrint(
+        '[ModuleLaunch] Using latest SOW Builder token with persona: $selectedRole',
+      );
+    } else {
+      final fresh = await fetchLatestToken(
+        tokenEndpoint: ApiConfig.authTokenEndpoint(email, theme: theme),
+      );
+      if (fresh == null || fresh.isEmpty) {
+        return;
+      }
+      token = fresh;
+      _moduleLaunchTokenCache[cacheKey] = fresh;
+    }
+
+    final Uri uri;
+    if (moduleKey == 'recruitment') {
+      // Hash-router SPA: .../#/splash?token=... (not /splash?token=... on the server path)
+      final base = Uri.parse(secureUrl);
+      final fragmentPath = Uri(
+        path: '/splash',
+        queryParameters: <String, String>{'token': token},
+      );
+      uri = Uri(
+        scheme: base.scheme,
+        host: base.host,
+        path: '/',
+        fragment: fragmentPath.toString(),
+      );
+    } else {
+      var built = Uri.parse(secureUrl);
+      final existingParams = Map<String, String>.from(built.queryParameters);
+      existingParams['token'] = token;
+      built = built.replace(queryParameters: existingParams);
+      uri = built;
+    }
 
     debugPrint('[ModuleLaunch] Launching URL for $moduleKey: $uri');
 
@@ -882,7 +1198,7 @@ Future<void> _launchUrlFromContext(
     );
     if (!context.mounted) return;
     if (launched) {
-      await _saveLastAccessedTime(moduleKey);
+      unawaited(_saveLastAccessedTime(moduleKey));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

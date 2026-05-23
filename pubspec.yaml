@@ -36,18 +36,16 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.6
-  cloud_firestore: ^4.17.4 # Added for Firestore integration
-  firebase_auth: ^4.19.0 # Added for Firebase Authentication
   provider: ^6.1.5+1
   shared_preferences: ^2.5.3
   intl: ^0.20.2
   flutter_aad_oauth: ^2.3.0
-  firebase_core: ^2.32.0 # Added firebase_core dependency
   video_player: ^2.9.2
   url_launcher: ^6.3.0
   image_picker: ^1.1.2
   http: ^0.13.6
   audioplayers: ^6.0.0
+  sentry_flutter: ^8.14.2
 
 dev_dependencies:
   flutter_test:
@@ -79,7 +77,9 @@ flutter:
     - assets/videos/spinning_discs.gif      
     - assets/images/logo.png
     - assets/images/discs.png
+    - assets/images/red_disc.png
     - assets/images/nathi_bg.png
+    - assets/images/light_mode_bg.png
     - assets/images/khono.png
     - assets/images/rokects.png
     - assets/images/animated_rocket.mp4
@@ -110,6 +110,13 @@ flutter:
     - assets/sounds/Successful_1.wav
     - assets/sounds/clapass.wav
     - assets/sounds/LoginPass.wav
+    - assets/images/siderbar/1.png
+    - assets/images/siderbar/2.png
+    - assets/images/siderbar/3.png
+    - assets/images/siderbar/4.png
+    - assets/images/siderbar/5.png
+    - assets/images/siderbar/6.png
+    - assets/images/siderbar/7.png
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

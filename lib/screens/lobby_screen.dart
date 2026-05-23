@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/sound_system.dart';
-import '../widgets/version_control_widget.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
 import 'auth_screen.dart';
 import 'package:flutter_aad_oauth/flutter_aad_oauth.dart';
 import 'package:video_player/video_player.dart';
+import '../widgets/version_control_widget.dart';
 
 class LobbyScreen extends StatefulWidget {
   final FlutterAadOauth? oauth;
@@ -235,7 +240,6 @@ class _BubblesPainter extends CustomPainter {
 }
 
 class LobbyScreenState extends State<LobbyScreen> {
-  double _discsOpacity = 0.0;
   VideoPlayerController? _videoController;
 
   @override
@@ -252,11 +256,7 @@ class LobbyScreenState extends State<LobbyScreen> {
             }
           });
 
-    Future.delayed(const Duration(milliseconds: 500), () {
-      setState(() {
-        _discsOpacity = 1.0;
-      });
-    });
+
   }
 
   @override
@@ -267,6 +267,7 @@ class LobbyScreenState extends State<LobbyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
@@ -274,9 +275,9 @@ class LobbyScreenState extends State<LobbyScreen> {
           Container(
             width: double.infinity,
             height: double.infinity,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage('assets/images/nathi_bg.png'),
+                image: AssetImage(appBackgroundAsset(context)),
                 fit: BoxFit.cover,
               ),
             ),
@@ -316,12 +317,12 @@ class LobbyScreenState extends State<LobbyScreen> {
                       const SizedBox(height: 24),
                       Image.asset('assets/images/khono.png', height: 100),
                       const SizedBox(height: 16),
-                      const Text(
+                      Text(
                         'Please be patient while Khonology Admin attends to your onboarding request...',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 18,
-                          color: Colors.white,
+                          color: appTextColor(context),
                           fontFamily: 'Poppins',
                         ),
                       ),
@@ -339,18 +340,14 @@ class LobbyScreenState extends State<LobbyScreen> {
                         },
                         bounceDelayMs: 250,
                       ),
-                      const SizedBox(height: 32),
-                      AnimatedOpacity(
-                        opacity: _discsOpacity,
-                        duration: const Duration(milliseconds: 1000),
-                        child: RotatedBox(
-                          quarterTurns: 1,
-                          child: Image.asset(
-                            'assets/videos/spinning_discs.gif',
-                            height: 122,
-                          ),
-                        ),
+                      const SizedBox(height: 48),
+                      Image.asset(
+                        isDark
+                            ? 'assets/images/discs.png'
+                            : 'assets/images/red_disc.png',
+                        height: isDark ? 72 : 110,
                       ),
+
                     ],
                   ),
                 ),
@@ -358,12 +355,39 @@ class LobbyScreenState extends State<LobbyScreen> {
             ),
           ),
           Positioned(
-            bottom: 20,
-            left: 0,
-            right: 0,
-            child: Align(
-              alignment: Alignment.center,
-              child: const VersionControlWidget(),
+            left: 16,
+            bottom: 16,
+            child: SafeArea(
+              child: VersionControlWidget(
+                textColor: isDark ? Colors.white70 : Colors.black54,
+                hoverColor: isDark ? Colors.white : Colors.black,
+              ),
+            ),
+          ),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: SafeArea(
+              child: Consumer<ThemeModeProvider>(
+                builder: (context, themeMode, _) {
+                  return FloatingActionButton(
+                    mini: true,
+                    shape: const CircleBorder(),
+                    heroTag: 'lobby_theme_toggle_fab',
+                    onPressed: () {
+                      SoundSystem.playButtonClick();
+                      themeMode.toggle();
+                    },
+                    backgroundColor: AppThemes.light.primaryColor,
+                    child: Icon(
+                      themeMode.isLight
+                          ? Icons.dark_mode_rounded
+                          : Icons.light_mode_rounded,
+                      color: Colors.white,
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ],

@@ -5,10 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import '../providers/auth_provider.dart';
+import '../theme/app_backgrounds.dart';
+import '../providers/theme_mode_provider.dart';
+import '../theme/app_text_colors.dart';
+import '../theme/app_themes.dart';
 import '../widgets/floating_circles_particle_animation.dart';
 import '../widgets/profile_image_upload.dart';
 import 'dart:convert';
 import '../config/api_config.dart';
+import '../services/sound_system.dart';
+import '../utils/profile_api_fields.dart';
 
 class AdminProfileScreen extends StatefulWidget {
   const AdminProfileScreen({super.key});
@@ -18,6 +24,11 @@ class AdminProfileScreen extends StatefulWidget {
 }
 
 class AdminProfileScreenState extends State<AdminProfileScreen> {
+  static final Color profileDarkWidgetBg = Color.alphaBlend(
+    Colors.white.withValues(alpha: 0.10),
+    const Color(0xFF3D3F40).withValues(alpha: 0.40),
+  );
+
   // Text editing controllers
   late TextEditingController _firstNameController;
   late TextEditingController _surnameController;
@@ -30,6 +41,8 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
 
   String? _selectedDepartment;
   String? _selectedDesignation;
+  late List<String> _departmentOptions;
+  late List<String> _designationOptions;
   String? _profileImageUrl;
   String? _profileImagePublicId;
   String _userEntity = '';
@@ -64,6 +77,7 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
   Timer? _debounceTimer;
   String? _phoneError;
   String? _emailError;
+  bool _isHydratingProfile = false;
 
   bool _validateFields() {
     final phone = _phoneController.text.trim();
@@ -120,6 +134,8 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
     // Initialize dropdown selections
     _selectedDepartment = null;
     _selectedDesignation = null;
+    _departmentOptions = List<String>.from(_departments);
+    _designationOptions = List<String>.from(_designations);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadUserData();
@@ -127,6 +143,9 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
   }
 
   void _onFieldChanged() {
+    if (_isHydratingProfile) {
+      return;
+    }
     if (_validateFields()) {
       if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
       _debounceTimer = Timer(const Duration(seconds: 1), () {
@@ -186,11 +205,11 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
 
       final firstName = (userMap['firstName'] ?? userMap['name'] ?? '').toString().trim();
       final lastName = (userMap['lastName'] ?? userMap['surname'] ?? '').toString().trim();
-      final phone = (userMap['phoneNumber'] ?? '').toString().trim();
-      final deptRaw = (userMap['department'] ?? '').toString().trim();
-      final desigRaw = (userMap['designation'] ?? '').toString().trim();
+      final phone = ProfileApiFields.phoneFrom(userMap);
+      final deptRaw = ProfileApiFields.departmentFrom(userMap);
+      final desigRaw = ProfileApiFields.designationFrom(userMap);
       final preferred = (userMap['preferredName'] ?? '').toString().trim();
-      final manager = (userMap['managedBy'] ?? '').toString().trim();
+      final manager = ProfileApiFields.managerFrom(userMap);
       final _curEmail = email.trim().toLowerCase();
       final _curEnc = _curEmail.replaceAll('@', '%40');
       String profileImageUrl = (userMap['profileImageUrl'] ?? '').toString().trim();
@@ -207,30 +226,16 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
       final moduleAccess = (userMap['moduleAccess'] ?? '').toString().trim();
       final responseEmailDisplay = (userMap['email'] ?? email).toString().trim();
 
-      String? matchedDept;
-      if (deptRaw.isNotEmpty) {
-        try {
-          matchedDept = _departments.firstWhere(
-            (d) => d.toLowerCase() == deptRaw.toLowerCase(),
-          );
-        } catch (_) {
-          matchedDept = null;
-        }
-      }
-
-      String? matchedDesig;
-      if (desigRaw.isNotEmpty) {
-        try {
-          matchedDesig = _designations.firstWhere(
-            (d) => d.toLowerCase() == desigRaw.toLowerCase(),
-          );
-        } catch (_) {
-          matchedDesig = null;
-        }
-      }
+      final deptOpts = ProfileApiFields.dropdownOptionsFor(deptRaw, _departments);
+      final desigOpts = ProfileApiFields.dropdownOptionsFor(desigRaw, _designations);
+      final matchedDept = ProfileApiFields.dropdownSelection(deptRaw, deptOpts);
+      final matchedDesig = ProfileApiFields.dropdownSelection(desigRaw, desigOpts);
 
       if (mounted) {
+        _isHydratingProfile = true;
         setState(() {
+          _departmentOptions = deptOpts;
+          _designationOptions = desigOpts;
           _firstNameController.text = firstName;
           _surnameController.text = lastName;
           _emailController.text = responseEmailDisplay;
@@ -239,11 +244,20 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
           _managerController.text = manager;
           _selectedDepartment = matchedDept;
           _selectedDesignation = matchedDesig;
+          _departmentController.text = matchedDept ?? deptRaw;
+          _designationController.text = matchedDesig ?? desigRaw;
           _profileImageUrl = profileImageUrl.isNotEmpty ? profileImageUrl : null;
           _profileImagePublicId = profileImagePublicId.isNotEmpty ? profileImagePublicId : null;
           _userEntity = entity.isEmpty ? 'Not assigned' : entity;
           _userModuleAccess = moduleAccess.isNotEmpty ? moduleAccess : (authProvider.userModuleAccess ?? 'None');
         });
+        _isHydratingProfile = false;
+      }
+
+      final themePref = (userMap['themePreference'] as String?)?.toLowerCase();
+      if (themePref == 'light' || themePref == 'dark') {
+        if (!mounted) return;
+        await context.read<ThemeModeProvider>().applyThemePreference(themePref);
       }
 
       // Sync AuthProvider profile image: only set if this user has one, otherwise clear (no previous user's pic)
@@ -301,12 +315,17 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
         'surname': _surnameController.text.trim(),
         'email': _emailController.text.trim(),
         'phoneNumber': _phoneController.text.trim(),
-        'department': _selectedDepartment ?? '',
-        'designation': _selectedDesignation ?? '',
+        'department':
+            (_selectedDepartment ?? _departmentController.text).trim(),
+        'designation':
+            (_selectedDesignation ?? _designationController.text).trim(),
         'preferredName': _preferredNameController.text.trim(),
         'managedBy': _managerController.text.trim(),
         'profileImageUrl': _saveProfileUrl,
         'profileImagePublicId': _saveProfileId,
+        'themePreference': context.read<ThemeModeProvider>().isLight
+            ? 'light'
+            : 'dark',
       };
 
       debugPrint('=== SAVING PROFILE TO DATABASE ===');
@@ -336,14 +355,46 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
     }
   }
 
+  Future<void> _saveThemePreference(bool isLightMode) async {
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final response = await http.put(
+        Uri.parse(
+          '${ApiConfig.baseUrl}/api/admin/users/${authProvider.userEmail}/profile',
+        ),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${authProvider.userToken}',
+        },
+        body: json.encode({
+          'themePreference': isLightMode ? 'light' : 'dark',
+          'department':
+              (_selectedDepartment ?? _departmentController.text).trim(),
+          'designation':
+              (_selectedDesignation ?? _designationController.text).trim(),
+        }),
+      );
+      if (response.statusCode != 200) {
+        debugPrint('Failed to save theme preference: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error saving theme preference: $e');
+    }
+  }
+
   Widget _buildReadOnlyLabelValue(String label, String value) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark
+        ? profileDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: appTextColor(context),
             fontSize: 14,
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w500,
@@ -354,14 +405,15 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: widgetBg,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+            border:
+                Border.all(color: appTextColor(context).withValues(alpha: 0.3)),
           ),
           child: Text(
             value,
-            style: const TextStyle(
-              color: Colors.white70,
+            style: TextStyle(
+              color: appTextColor(context),
               fontSize: 14,
               fontFamily: 'Poppins',
             ),
@@ -377,13 +429,18 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
     String? errorText,
     bool readOnly = false,
   }) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark
+        ? profileDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: appTextColor(context),
             fontSize: 14,
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w500,
@@ -392,28 +449,26 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: readOnly
-                ? Colors.white.withValues(alpha: 0.05)
-                : Colors.white.withValues(alpha: 0.1),
+            color: widgetBg,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: errorText != null
                   ? Colors.redAccent
-                  : Colors.white.withValues(alpha: 0.3),
+                  : appTextColor(context).withValues(alpha: 0.3),
             ),
           ),
           child: TextField(
             controller: controller,
             readOnly: readOnly,
             style: TextStyle(
-              color: readOnly ? Colors.white70 : Colors.white,
+              color: readOnly ? appTextColor(context) : appTextColor(context),
               fontSize: 16,
               fontFamily: 'Poppins',
             ),
             decoration: InputDecoration(
               border: InputBorder.none,
               errorText: errorText,
-              errorStyle: const TextStyle(
+              errorStyle: TextStyle(
                 color: Colors.redAccent,
                 fontSize: 12,
                 height: 0.8,
@@ -436,13 +491,18 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
     List<String> items,
     void Function(String?) onChanged,
   ) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark
+        ? profileDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: appTextColor(context),
             fontSize: 14,
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w500,
@@ -451,17 +511,17 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: widgetBg,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+            border: Border.all(color: appTextColor(context).withValues(alpha: 0.3)),
           ),
           child: DropdownButtonFormField<String>(
             value: initialValue,
-            dropdownColor: Colors.grey[800],
-            style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+            dropdownColor: widgetBg,
+            style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
             decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.grey[800]!.withValues(alpha: 0.5),
+              fillColor: widgetBg,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(25.0),
                 borderSide: BorderSide.none,
@@ -473,10 +533,23 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
             ),
             hint: Text(
               'Select $label',
-              style: TextStyle(color: Colors.grey[600], fontFamily: 'Poppins'),
+              style: TextStyle(
+                color: appTextColor(context).withValues(alpha: 0.65),
+                fontFamily: 'Poppins',
+              ),
             ),
             items: items.map((String item) {
-              return DropdownMenuItem<String>(value: item, child: Text(item));
+              return DropdownMenuItem<String>(
+                value: item,
+                child: Text(
+                  item,
+                  style: TextStyle(
+                    color: appTextColor(context),
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              );
             }).toList(),
             onChanged: onChanged,
             validator: (value) {
@@ -494,13 +567,17 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color widgetBg = isDark
+        ? profileDarkWidgetBg
+        : Colors.white.withValues(alpha: 0.40);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/nathi_bg.png'),
+            image: AssetImage(appBackgroundAsset(context)),
             fit: BoxFit.cover,
           ),
         ),
@@ -517,7 +594,7 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
                 width: 400,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.3),
+                  color: widgetBg,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: const Color(0xFFC10D00).withValues(alpha: 0.3),
@@ -549,10 +626,10 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Administrator Profile',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: appTextColor(context),
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                               fontFamily: 'Poppins',
@@ -560,8 +637,8 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
                           ),
                           Text(
                             authProvider.userEmail ?? 'admin@example.com',
-                            style: const TextStyle(
-                              color: Colors.white70,
+                            style: TextStyle(
+                              color: appTextColor(context),
                               fontSize: 16,
                               fontFamily: 'Poppins',
                             ),
@@ -583,7 +660,7 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
                 width: 400,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.3),
+                  color: widgetBg,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: const Color(0xFFC10D00).withValues(alpha: 0.3),
@@ -651,10 +728,11 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
                                 'Department',
                                 _departmentController,
                                 _selectedDepartment,
-                                _departments,
+                                _departmentOptions,
                                 (String? newValue) {
                                   setState(() {
                                     _selectedDepartment = newValue;
+                                    _departmentController.text = newValue ?? '';
                                   });
                                   _onFieldChanged();
                                 },
@@ -664,10 +742,11 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
                                 'Designation',
                                 _designationController,
                                 _selectedDesignation,
-                                _designations,
+                                _designationOptions,
                                 (String? newValue) {
                                   setState(() {
                                     _selectedDesignation = newValue;
+                                    _designationController.text = newValue ?? '';
                                   });
                                   _onFieldChanged();
                                 },
@@ -688,7 +767,63 @@ class AdminProfileScreenState extends State<AdminProfileScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 16),
+                    Consumer<ThemeModeProvider>(
+                      builder: (context, themeMode, _) {
+                        return SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            'Theme Preference (Light/Dark)',
+                            style: TextStyle(
+                              color: appTextColor(context),
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            themeMode.isLight ? 'Light mode' : 'Dark mode',
+                            style: TextStyle(
+                              color: appTextColor(context).withValues(alpha: 0.75),
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                          value: themeMode.isLight,
+                          onChanged: (value) async {
+                            await themeMode.setThemeMode(
+                              value ? ThemeMode.light : ThemeMode.dark,
+                            );
+                            await _saveThemePreference(value);
+                          },
+                        );
+                      },
+                    ),
                   ],
+                ),
+              ),
+            ),
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: SafeArea(
+                child: Consumer<ThemeModeProvider>(
+                  builder: (context, themeMode, _) {
+                    return FloatingActionButton(
+                      mini: true,
+                      shape: const CircleBorder(),
+                      heroTag: 'admin_profile_theme_toggle_fab',
+                      onPressed: () {
+                        SoundSystem.playButtonClick();
+                        themeMode.toggle();
+                      },
+                      backgroundColor: AppThemes.light.primaryColor,
+                      child: Icon(
+                        themeMode.isLight
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        color: appTextColor(context),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),

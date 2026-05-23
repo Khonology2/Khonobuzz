@@ -24,6 +24,7 @@ from token_utils import (
     JWT_ALGORITHM,
     JWT_EXPIRATION_HOURS,
 )
+from sentry_setup import run_script
 
 PDH_ROLES = ("Employee", "Manager", "Admin")
 
@@ -131,4 +132,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run_script(main, "generate_pdh_token")
