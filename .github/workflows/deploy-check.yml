@@ -570,6 +570,7 @@ jobs:
           sentry_auth_token: ${{ env.SENTRY_AUTH_TOKEN }}
           sentry_org: ${{ env.SENTRY_ORG }}
           sentry_project_frontend: ${{ env.SENTRY_PROJECT_FRONTEND }}
+          require_dsn: ${{ steps.branch.outputs.deploy == 'true' && 'true' || 'false' }}
 
       - name: Disable service worker in web bundle
         if: steps.branch.outputs.deploy == 'true'
