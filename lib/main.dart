@@ -8,6 +8,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'config/api_config.dart';
 import 'config/env.dart';
+import 'config/sentry_dsn_loader.dart';
 import 'screens/entity_management_screen.dart';
 import 'screens/user_management_screen.dart';
 import 'screens/module_access_screen.dart';
@@ -104,10 +105,20 @@ Future<void> main() async {
       ? ThemeMode.light
       : ThemeMode.dark;
 
+  await resolveSentryDsn();
+
   if (!sentryEnabled) {
+    debugPrint(
+      '[Sentry] Disabled — no DSN. '
+      'Use --dart-define=FRONTEND_DSN=... locally or deploy with CI FRONTEND_DSN secret.',
+    );
     await _runApp(initialThemeMode: initialThemeMode);
     return;
   }
+
+  debugPrint(
+    '[Sentry] Enabled env=$sentryEnvironment release=$sentryRelease',
+  );
 
   await SentryFlutter.init(
     (options) {
@@ -117,6 +128,7 @@ Future<void> main() async {
       options.sendDefaultPii = true;
       options.attachStacktrace = true;
       options.enableAutoSessionTracking = true;
+      options.debug = kDebugMode;
       // Release tracking — ties errors to a specific git commit/deploy.
       options.release = sentryRelease;
       options.autoAppStart = true;

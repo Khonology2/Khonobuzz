@@ -12,8 +12,23 @@ const String _legacySentryDsn = String.fromEnvironment(
   defaultValue: '',
 );
 
-String get sentryDsn =>
+String get sentryDsn {
+  if (_runtimeSentryDsn != null && _runtimeSentryDsn!.isNotEmpty) {
+    return _runtimeSentryDsn!;
+  }
+  return compileTimeSentryDsn;
+}
+
+/// DSN from `--dart-define=FRONTEND_DSN` / `SENTRY_DSN` only (no runtime file).
+String get compileTimeSentryDsn =>
     _frontendDsn.isNotEmpty ? _frontendDsn : _legacySentryDsn;
+
+String? _runtimeSentryDsn;
+
+/// Set after [resolveSentryDsn] loads `build/web/sentry-config.json` on web.
+void setRuntimeSentryDsn(String dsn) {
+  _runtimeSentryDsn = dsn.trim().isEmpty ? null : dsn.trim();
+}
 
 /// Optional override for Sentry environment label.
 const String sentryEnvironmentOverride = String.fromEnvironment(
