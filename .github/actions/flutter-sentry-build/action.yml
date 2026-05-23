@@ -88,9 +88,9 @@ runs:
         curl -sL https://sentry.io/get-cli/ | bash
         sentry-cli releases new "$SENTRY_RELEASE"
         sentry-cli releases set-commits "$SENTRY_RELEASE" --auto
-        sentry-cli releases files "$SENTRY_RELEASE" \
-          upload-sourcemaps build/web \
-          --rewrite \
+        # sentry-cli 3.4+ removed `releases files upload-sourcemaps`; use sourcemaps upload instead.
+        sentry-cli sourcemaps upload build/web \
+          --release "$SENTRY_RELEASE" \
           --ignore-file .sentryignore
         sentry-cli releases finalize "$SENTRY_RELEASE"
         sentry-cli releases deploys "$SENTRY_RELEASE" new \
