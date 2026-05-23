@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http; // Import for making HTTP requests
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'dart:convert'; // Import for JSON encoding/decoding
 import 'dart:async'; // Import for TimeoutException
 import '../utils/pdh_sync.dart' show syncUserToPDH, syncUserToSkillsHeatmap;
 import '../config/api_config.dart';
+import '../config/env.dart';
+import '../services/api_client.dart';
 import '../services/modules_ping_service.dart';
 import '../models/managed_user.dart';
 
@@ -77,6 +80,28 @@ class AuthProvider extends ChangeNotifier {
     _lastLoginStatus = status;
   }
 
+  Future<void> _applySentryUserContext({
+    required String id,
+    required String email,
+    required String role,
+  }) async {
+    if (sentryEnabled) {
+      await Sentry.configureScope((scope) {
+        scope.setUser(SentryUser(
+          id: id,
+          email: email,
+          data: {'role': role},
+        ));
+      });
+      await Sentry.addBreadcrumb(Breadcrumb(
+        message: 'User signed in',
+        category: 'auth',
+        level: SentryLevel.info,
+        data: {'role': role},
+      ));
+    }
+  }
+
   AuthProvider() {
     _loadAuthState();
   }
@@ -85,7 +110,7 @@ class AuthProvider extends ChangeNotifier {
   static void warmUpBackendForLogin() {
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/health');
-      http.get(uri).timeout(const Duration(seconds: 20)).then((_) {}, onError: (_) {});
+      apiClient.get(uri).timeout(const Duration(seconds: 20)).then((_) {}, onError: (_) {});
     } catch (_) {}
   }
 
@@ -101,7 +126,7 @@ class AuthProvider extends ChangeNotifier {
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
       final attemptStart = DateTime.now().millisecondsSinceEpoch;
       try {
-        final response = await http
+        final response = await apiClient
             .post(url, headers: headers, body: body)
             .timeout(
               timeout,
@@ -162,7 +187,7 @@ class AuthProvider extends ChangeNotifier {
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
       final attemptStart = DateTime.now().millisecondsSinceEpoch;
       try {
-        final response = await http
+        final response = await apiClient
             .get(url, headers: headers)
             .timeout(
               timeout,
@@ -425,6 +450,11 @@ class AuthProvider extends ChangeNotifier {
           _userToken = tokenFromResponse;
         }
 
+        await _applySentryUserContext(
+          id: uid,
+          email: email,
+          role: _userRole ?? 'Staff',
+        );
         notifyListeners();
 
         ModulesPingService.start();
@@ -636,6 +666,11 @@ class AuthProvider extends ChangeNotifier {
         if (isSpecialAccess) {
           await prefs.setBool('_spSess', true);
         }
+        await _applySentryUserContext(
+          id: userPayload['id']?.toString() ?? _userEmail ?? email,
+          email: _userEmail ?? email,
+          role: _userRole ?? 'Staff',
+        );
         notifyListeners();
 
         _schedulePostLoginWarmup();
@@ -930,6 +965,11 @@ class AuthProvider extends ChangeNotifier {
           }
           await Future.wait(prefsWrites);
 
+          await _applySentryUserContext(
+            id: foundUser['id']?.toString() ?? _userEmail ?? email,
+            email: _userEmail ?? email,
+            role: _userRole ?? 'Staff',
+          );
           notifyListeners();
 
           ModulesPingService.start();
@@ -955,6 +995,14 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    if (sentryEnabled) {
+      await Sentry.addBreadcrumb(Breadcrumb(
+        message: 'User signed out',
+        category: 'auth',
+        level: SentryLevel.info,
+      ));
+      await Sentry.configureScope((scope) => scope.setUser(null));
+    }
     ModulesPingService.stop();
     final prefs = await SharedPreferences.getInstance();
     _isAuthenticated = false;

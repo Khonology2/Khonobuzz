@@ -25,7 +25,7 @@ class CloudinaryService:
             self.is_initialized = True
             logger.info("Cloudinary service initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize Cloudinary: {e}")
+            logger.exception("Failed to initialize Cloudinary: %s", e)
             self.is_initialized = False
     
     def upload_profile_image(self, file, user_id):
@@ -135,7 +135,7 @@ class CloudinaryService:
                 }
                 
         except Exception as e:
-            logger.error(f"Profile image upload error: {str(e)}")
+            logger.exception("Profile image upload error: %s", e)
             return {
                 'success': False,
                 'error': f'Upload failed: {str(e)}'
@@ -184,7 +184,7 @@ class CloudinaryService:
                 }
                 
         except Exception as e:
-            logger.error(f"Cloudinary upload error: {e}")
+            logger.exception("Cloudinary upload error: %s", e)
             return {
                 'success': False,
                 'error': str(e),
@@ -227,7 +227,7 @@ class CloudinaryService:
             return image_url
             
         except Exception as e:
-            logger.error(f"Error creating optimized URL: {e}")
+            logger.exception("Error creating optimized URL: %s", e)
             return image_url
     
     def delete_image(self, public_id):
@@ -245,7 +245,7 @@ class CloudinaryService:
             return delete_response and 'deleted' in delete_response and delete_response['deleted']
             
         except Exception as e:
-            logger.error(f"Error deleting image: {e}")
+            logger.exception("Error deleting image: %s", e)
             return False
 
 # Create global instance

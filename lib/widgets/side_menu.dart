@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
+import '../config/env.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import '../screens/landing_screen.dart';
@@ -341,6 +343,28 @@ class SideMenu extends StatefulWidget {
 class _SideMenuState extends State<SideMenu> {
   static const double _sidebarWidth = 260;
 
+  static const Map<int, String> _sectionNames = {
+    0: 'User Management',
+    1: 'Entity Management',
+    2: 'Module Access',
+    3: 'Modules',
+    4: 'Profile',
+  };
+
+  Future<void> _navigateToSection(int index) async {
+    final sectionName = _sectionNames[index] ?? 'Section $index';
+    final portal = _isAdmin ? 'admin' : 'staff';
+    if (sentryEnabled) {
+      await Sentry.addBreadcrumb(Breadcrumb(
+        message: 'Navigated to $sectionName',
+        category: 'navigation',
+        level: SentryLevel.info,
+        data: {'portal': portal, 'section': sectionName},
+      ));
+    }
+    widget.onItemSelected(index);
+  }
+
   // Check if current user is Admin
   bool get _isAdmin {
     final authProvider = context.read<AuthProvider>();
@@ -416,7 +440,7 @@ class _SideMenuState extends State<SideMenu> {
                         title: 'User Management',
                         isSelected: widget.selectedIndex == 0,
                         isExpanded: true,
-                        onTap: () => widget.onItemSelected(0),
+                        onTap: () => _navigateToSection(0),
                       ),
                     if (_isAdmin)
                       MenuItemWidget(
@@ -427,7 +451,7 @@ class _SideMenuState extends State<SideMenu> {
                         title: 'Entity Management',
                         isSelected: widget.selectedIndex == 1,
                         isExpanded: true,
-                        onTap: () => widget.onItemSelected(1),
+                        onTap: () => _navigateToSection(1),
                       ),
                     if (_isAdmin)
                       MenuItemWidget(
@@ -438,7 +462,7 @@ class _SideMenuState extends State<SideMenu> {
                         title: 'Module Access',
                         isSelected: widget.selectedIndex == 2,
                         isExpanded: true,
-                        onTap: () => widget.onItemSelected(2),
+                        onTap: () => _navigateToSection(2),
                       ),
                     MenuItemWidget(
                       itemKey: const ValueKey('e2e_nav_modules'),
@@ -449,7 +473,7 @@ class _SideMenuState extends State<SideMenu> {
                       title: 'Modules',
                       isSelected: widget.selectedIndex == 3,
                       isExpanded: true,
-                      onTap: () => widget.onItemSelected(3),
+                      onTap: () => _navigateToSection(3),
                     ),
                   ],
                 ),
@@ -468,7 +492,7 @@ class _SideMenuState extends State<SideMenu> {
                   title: 'Profile',
                   isSelected: widget.selectedIndex == 4,
                   isExpanded: true,
-                  onTap: () => widget.onItemSelected(4),
+                  onTap: () => _navigateToSection(4),
                 ),
               ),
             SizedBox(height: bottomGap),

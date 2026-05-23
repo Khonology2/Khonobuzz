@@ -25,6 +25,7 @@ from token_utils import (
     JWT_ALGORITHM,
     JWT_EXPIRATION_HOURS,
 )
+from sentry_setup import run_script
 
 SOW_BUILDER_PERSONAS = (
     "Admin",
@@ -201,4 +202,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run_script(main, "generate_sow_builder_token")

@@ -1,5 +1,9 @@
+// ignore_for_file: duplicate_ignore, use_build_context_synchronously
+
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
+import '../config/env.dart';
 import '../main.dart';
 import 'dart:async';
 import '../providers/auth_provider.dart';
@@ -274,6 +278,14 @@ class ManualLoginScreenState extends State<ManualLoginScreen>
                           });
                         },
                         onPressed: () async {
+                          if (sentryEnabled) {
+                            await Sentry.addBreadcrumb(Breadcrumb(
+                              message: 'Login form submitted',
+                              category: 'ui.click',
+                              level: SentryLevel.info,
+                              data: {'screen': 'ManualLoginScreen'},
+                            ));
+                          }
                           SoundSystem.playButtonClick();
                           final email = _emailController.text.trim();
                           if (email.isEmpty) {
