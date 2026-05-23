@@ -34,7 +34,7 @@ if __name__ == "__main__":
     debug = os.environ.get("DEBUG", "True").lower() == "true"
     print("=" * 70)
     print("Starting Khonology Backend API")
-    # CI flow test marker: release-pr pipeline verification (2026-05-23)
+    # CI flow test marker: release-pr pipeline verification (2026-05-23).....
     print("=" * 70)
     print(f"Host: {host}")
     print(f"Port: {port}")
