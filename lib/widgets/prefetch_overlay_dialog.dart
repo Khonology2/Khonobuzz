@@ -46,22 +46,8 @@ class _PrefetchOverlayDialogState extends State<PrefetchOverlayDialog>
         fontFamily: 'Poppins',
       );
 
-  /// Derives display name from email, e.g. nkosinathi.radebe@khonology.com → "Nkosinathi Radebe".
-  static String _displayNameFromEmail(String? email) {
-    if (email == null || email.trim().isEmpty) return '';
-    final local = email.split('@').first.trim();
-    if (local.isEmpty) return '';
-    final parts = local.split(RegExp(r'[.\-_]'));
-    return parts
-        .where((s) => s.isNotEmpty)
-        .map((s) => s.length > 1
-            ? '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}'
-            : s.toUpperCase())
-        .join(' ');
-  }
-
   String get _welcomeMessage {
-    final name = _displayNameFromEmail(widget.authProvider.userEmail);
+    final name = widget.authProvider.userDisplayName.trim();
     return name.isEmpty
         ? 'Enjoy your session!'
         : 'Enjoy your session, $name!';

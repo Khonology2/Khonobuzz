@@ -166,7 +166,8 @@ class _UserManagementScreenState extends State<UserManagementScreen>
 
     if (query.isNotEmpty) {
       users = users.where((user) {
-        return user.name.toLowerCase().contains(query) ||
+        return user.displayName.toLowerCase().contains(query) ||
+            user.email.toLowerCase().contains(query) ||
             user.department.toLowerCase().contains(query) ||
             user.designation.toLowerCase().contains(query);
       }).toList();
@@ -1480,7 +1481,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              user.name,
+                              user.displayName,
                               style: TextStyle(
                                 color: appTextColor(context),
                                 fontWeight: FontWeight.bold,
@@ -2221,16 +2222,16 @@ class _UserManagementScreenState extends State<UserManagementScreen>
         SoundSystem.playSuccess();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Manager set to $managerFullName for ${user.name}.'),
+            content: Text('Manager set to $managerFullName for ${user.displayName}.'),
           ),
         );
       }
       await _publishAdminAlert(
         title: 'Manager assignment updated',
-        message: 'Manager for ${user.name} changed to $managerFullName.',
+        message: 'Manager for ${user.displayName} changed to $managerFullName.',
         details: {
           'userId': user.id,
-          'userName': user.name,
+          'userName': user.displayName,
           'manager': managerFullName,
         },
       );
@@ -2348,7 +2349,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
             return AlertDialog(
               backgroundColor: dialogBg,
               title: Text(
-                'Managed by: ${user.name}',
+                'Managed by: ${user.displayName}',
                 style: TextStyle(
                   color: appTextColor(context),
                   fontFamily: 'Poppins',

@@ -393,10 +393,18 @@ class _SideMenuState extends State<SideMenu> {
               fit: BoxFit.contain,
             ),
             SizedBox(height: isUltraCompact ? 4 : 6),
-            Text(
-              'Welcome to KhonoBuzz',
-              style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
+            Builder(
+              builder: (context) {
+                final auth = context.watch<AuthProvider>();
+                final welcome = auth.isAuthenticated
+                    ? 'Welcome, ${auth.userDisplayName}!'
+                    : 'Welcome to KhonoBuzz';
+                return Text(
+                  welcome,
+                  style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                );
+              },
             ),
             SizedBox(height: sectionGap),
             Expanded(

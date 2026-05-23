@@ -284,7 +284,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
           .map((e) => e.trim().toLowerCase())
           .toList();
 
-      return user.name.toLowerCase().contains(query) ||
+      return user.displayName.toLowerCase().contains(query) ||
           user.email.toLowerCase().contains(query) ||
           user.department.toLowerCase().contains(query) ||
           user.designation.toLowerCase().contains(query) ||
@@ -864,7 +864,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Module access updated for ${user.name}.',
+              'Module access updated for ${user.displayName}.',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 color: appTextColor(context),
@@ -883,13 +883,13 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             after: afterRoleMap,
           );
           if (changes.isEmpty) {
-            return 'Module access for ${user.name} was updated.';
+            return 'Module access for ${user.displayName} was updated.';
           }
           return changes.join('; ');
         })(),
         details: {
           'userId': user.id,
-          'userName': user.name,
+          'userName': user.displayName,
           'moduleAccess': updatedModuleAccess ?? '',
           'moduleAccessRole': updatedModuleAccessRole ?? '',
           'approvedBy': adminEmail,
@@ -2200,7 +2200,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              user.name,
+                              user.displayName,
                               style: TextStyle(
                                 color: appTextColor(context),
                                 fontWeight: FontWeight.bold,

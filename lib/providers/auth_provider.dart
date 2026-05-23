@@ -31,9 +31,19 @@ class AuthProvider extends ChangeNotifier {
   Map<String, dynamic>? _cachedProfileData; // Cache for prefetched profile data
   String? _lastLoginError;
   String? _lastLoginStatus;
+  String? _userDisplayName;
 
   bool get isAuthenticated => _isAuthenticated;
   String? get userEmail => _userEmail;
+  /// Resolved from login/profile API when present; otherwise derived from email local-part.
+  String get userDisplayName {
+    final stored = _userDisplayName?.trim();
+    if (stored != null && stored.isNotEmpty) return stored;
+    return ManagedUser.displayLabelFromUserPayload({
+      'email': _userEmail ?? '',
+      'id': '',
+    });
+  }
   String? get userRole => _userRole; // New: Getter for user role
   bool get userAlreadyOnboarded =>
       _userAlreadyOnboarded; // New: Getter for onboarding status
@@ -231,6 +241,7 @@ class AuthProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _isAuthenticated = prefs.getBool('isAuthenticated') ?? false;
     _userEmail = prefs.getString('userEmail');
+    _userDisplayName = prefs.getString('userDisplayName');
     _userRole = prefs.getString('userRole');
     _initialScreenIndex = prefs.getInt('initialScreenIndex');
     _currentScreenIndex = prefs.getInt('currentScreenIndex');
@@ -394,11 +405,14 @@ class AuthProvider extends ChangeNotifier {
         _currentScreenIndex = 9;
         _userAlreadyOnboarded = false;
 
+        _userDisplayName = ManagedUser.displayLabelFromUserPayload(userPayload);
+
         // Batch all writes
         await Future.wait([
           prefs.setBool('isAuthenticated', true),
           prefs.setString('userEmail', email),
           prefs.setString('userRole', _userRole!),
+          prefs.setString('userDisplayName', _userDisplayName!),
           prefs.setInt('initialScreenIndex', 9),
           prefs.setInt('currentScreenIndex', 9),
           if (_userThemePreference != null && _userThemePreference!.isNotEmpty)
@@ -465,10 +479,12 @@ class AuthProvider extends ChangeNotifier {
     _userProfileImageUrl = null;
     _userProfilePublicId = null;
     _userThemePreference = null;
+    _userDisplayName = null;
     final prefsForClear = await SharedPreferences.getInstance();
     await Future.wait([
       prefsForClear.remove('userProfileImageUrl'),
       prefsForClear.remove('userProfilePublicId'),
+      prefsForClear.remove('userDisplayName'),
     ]);
     notifyListeners();
 
@@ -581,11 +597,14 @@ class AuthProvider extends ChangeNotifier {
           '[AuthProvider] Extracted profileImagePublicId: $_userProfilePublicId',
         );
 
+        _userDisplayName = ManagedUser.displayLabelFromUserPayload(userPayload);
+
         // Batch all SharedPreferences writes (clear old profile image if not set for new user)
         final writeTasks = <Future>[
           prefs.setBool('isAuthenticated', true),
           prefs.setString('userEmail', _userEmail!),
           prefs.setString('userRole', _userRole!),
+          prefs.setString('userDisplayName', _userDisplayName!),
           prefs.setInt('initialScreenIndex', 9),
           prefs.setInt('currentScreenIndex', 9),
           if (_userProfileImageUrl != null)
@@ -774,6 +793,14 @@ class AuthProvider extends ChangeNotifier {
 
         // Store other profile data for potential future use (only for this user; already validated email match)
         _cachedProfileData = userMap;
+
+        final label = ManagedUser.displayLabelFromUserPayload(userMap);
+        if (label != _userDisplayName) {
+          _userDisplayName = label;
+          final p = await SharedPreferences.getInstance();
+          await p.setString('userDisplayName', label);
+          notifyListeners();
+        }
       } else {
         debugPrint(
           '[AuthProvider] Failed to prefetch profile data: ${response.statusCode}',
@@ -871,10 +898,13 @@ class AuthProvider extends ChangeNotifier {
           _userProfileImageUrl = foundUser['profileImageUrl'] as String?;
           _userProfilePublicId = foundUser['profileImagePublicId'] as String?;
 
+          _userDisplayName = ManagedUser.displayLabelFromUserPayload(foundUser);
+
           final prefsWrites = <Future>[
             prefs.setBool('isAuthenticated', true),
             prefs.setString('userEmail', _userEmail!),
             prefs.setString('userRole', _userRole!),
+            prefs.setString('userDisplayName', _userDisplayName!),
             prefs.setInt('initialScreenIndex', 9),
             prefs.setInt('currentScreenIndex', 9),
           ];
@@ -939,10 +969,12 @@ class AuthProvider extends ChangeNotifier {
     _userThemePreference = null;
     _isSpecialSession = false;
     _cachedProfileData = null;
+    _userDisplayName = null;
     await Future.wait([
       prefs.remove('isAuthenticated'),
       prefs.remove('userEmail'),
       prefs.remove('userRole'),
+      prefs.remove('userDisplayName'),
       prefs.remove('initialScreenIndex'),
       prefs.remove('currentScreenIndex'),
       prefs.remove('userModuleAccess'),

@@ -91,7 +91,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     if (query.isEmpty) return users;
 
     return users.where((user) {
-      return user.name.toLowerCase().contains(query) ||
+      return user.displayName.toLowerCase().contains(query) ||
           user.email.toLowerCase().contains(query) ||
           user.department.toLowerCase().contains(query) ||
           user.designation.toLowerCase().contains(query) ||
@@ -394,7 +394,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Entity updated for ${user.name}.',
+              'Entity updated for ${user.displayName}.',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 color: appTextColor(context),
@@ -407,10 +407,10 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
       await _publishAdminAlert(
         title: 'User entity updated',
         message:
-            'Entity for ${user.name} changed to ${updatedEntity ?? 'Not Assigned'}.',
+            'Entity for ${user.displayName} changed to ${updatedEntity ?? 'Not Assigned'}.',
         details: {
           'userId': user.id,
-          'userName': user.name,
+          'userName': user.displayName,
           'entity': updatedEntity ?? '',
         },
       );
@@ -764,7 +764,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              user.name,
+                              user.displayName,
                               style: TextStyle(
                                 color: appTextColor(context),
                                 fontWeight: FontWeight.bold,
