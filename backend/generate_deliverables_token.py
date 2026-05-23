@@ -25,6 +25,7 @@ from token_utils import (
     JWT_ALGORITHM,
     JWT_EXPIRATION_HOURS,
 )
+from sentry_setup import run_script
 
 DELIVERABLES_ROLES = (
     "System Admin",
@@ -206,4 +207,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run_script(main, "generate_deliverables_token")

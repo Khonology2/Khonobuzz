@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_client.dart';
 
 /// Version data from version.json: YYYY.MM.[W][D][n] (W=week 1-4 A-D, D=weekday A-E Mon-Fri; Sat/Sun not counted).
 class VersionData {
@@ -175,7 +176,7 @@ class VersionService {
             '_': DateTime.now().millisecondsSinceEpoch.toString(),
           },
         );
-        final response = await http
+        final response = await apiClient
             .get(uri)
             .timeout(const Duration(seconds: 3));
         // #region agent log
@@ -227,7 +228,7 @@ class VersionService {
             '_': DateTime.now().millisecondsSinceEpoch.toString(),
           },
         );
-        final response = await http
+        final response = await apiClient
             .get(uri)
             .timeout(const Duration(seconds: 5));
         // #region agent log

@@ -7,6 +7,7 @@
 # 6) checks-build-deploy — Flutter analyze/test, web build, commit build/web, Render hook
 #
 # Render: Static Site with pre-built build/web. Secrets: RENDER_DEPLOY_HOOK
+# Release PR: enable Settings → Actions → "Allow GitHub Actions to create and approve pull requests"
 
 name: deploy-check
 
@@ -29,6 +30,7 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   version-control:
@@ -90,6 +92,9 @@ jobs:
       - name: Read or initialize version.json
         id: version
         if: steps.commit.outputs.skip != 'true' && steps.commit.outputs.skip_weekend != 'true'
+        env:
+          # Do not interpolate the commit body into the shell script (quotes/newlines break bash).
+          COMMIT_MSG: ${{ steps.commit.outputs.message }}
         run: |
           VERSION_FILE="assets/data/version.json"
           COMMIT_DATE="${{ steps.commit.outputs.date }}"
@@ -114,7 +119,6 @@ jobs:
             COMMIT_COUNT="0"
           fi
           IS_FEATURE="${{ steps.commit.outputs.is_feature }}"
-          COMMIT_MSG="${{ steps.commit.outputs.message }}"
           if [ "$IS_FEATURE" = "true" ]; then
             NEW_COUNT=1
             NEW_VERSION="${YEAR}.${MONTH}.AB${NEW_COUNT}"
@@ -139,7 +143,12 @@ jobs:
           fi
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "new_count=$NEW_COUNT" >> $GITHUB_OUTPUT
-          echo "last_feature=$NEW_LAST_FEATURE" >> $GITHUB_OUTPUT
+          FEAT_OUT_DELIM="FEAT_OUT_${GITHUB_RUN_ID:-run}_${GITHUB_RUN_ATTEMPT:-1}"
+          {
+            echo "last_feature<<$FEAT_OUT_DELIM"
+            echo "$NEW_LAST_FEATURE"
+            echo "$FEAT_OUT_DELIM"
+          } >> $GITHUB_OUTPUT
           echo "feature_date=$NEW_FEATURE_DATE" >> $GITHUB_OUTPUT
 
       - name: Write version.json
@@ -160,12 +169,23 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Actions"
+          BRANCH="${GITHUB_REF#refs/heads/}"
           git add assets/data/version.json version.json
           if git diff --staged --quiet; then
             echo "No version change to commit"
           else
             git commit -m "chore: update version to ${{ steps.version.outputs.new_version }} [skip ci]"
-            git push
+            git fetch origin "$BRANCH"
+            if ! git pull --rebase origin "$BRANCH"; then
+              echo "::error::Rebase onto origin/$BRANCH failed before push (resolve conflicts locally if this persists)"
+              exit 1
+            fi
+            if ! git push origin "$BRANCH"; then
+              echo "Push rejected; fetch, rebase once more, retry push"
+              git fetch origin "$BRANCH"
+              git pull --rebase origin "$BRANCH" || exit 1
+              git push origin "$BRANCH" || exit 1
+            fi
           fi
 
       - name: Summary
@@ -218,13 +238,22 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          BRANCH="${GITHUB_REF#refs/heads/}"
           git add assets/data/version.json version.json 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "No version file changes"
           else
             V=$(jq -r '.version' assets/data/version.json)
             git commit -m "chore: sync version.json ($V) [skip ci]"
-            git push
+            git fetch origin "$BRANCH"
+            if ! git pull --rebase origin "$BRANCH"; then
+              git pull --ff-only origin "$BRANCH" || exit 1
+            fi
+            if ! git push origin "$BRANCH"; then
+              git fetch origin "$BRANCH"
+              git pull --rebase origin "$BRANCH" || exit 1
+              git push origin "$BRANCH" || exit 1
+            fi
           fi
 
   generate-daily-commits:
@@ -269,12 +298,21 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          BRANCH="${GITHUB_REF#refs/heads/}"
           git add assets/data/daily-commits.json
           if git diff --staged --quiet; then
             echo "No changes to daily-commits.json"
           else
             git commit -m "Update daily commits data [${{ steps.gen.outputs.today }}] [skip ci]"
-            git push
+            git fetch origin "$BRANCH"
+            if ! git pull --rebase origin "$BRANCH"; then
+              git pull --ff-only origin "$BRANCH" || exit 1
+            fi
+            if ! git push origin "$BRANCH"; then
+              git fetch origin "$BRANCH"
+              git pull --rebase origin "$BRANCH" || exit 1
+              git push origin "$BRANCH" || exit 1
+            fi
           fi
 
   version-api:
@@ -469,6 +507,19 @@ jobs:
     name: Flutter CI, web build, Render deploy
     needs: [version-monitor]
     runs-on: ubuntu-latest
+    outputs:
+      frontend_changed: ${{ steps.changes.outputs.frontend_changed }}
+      backend_changed: ${{ steps.changes.outputs.backend_changed }}
+    env:
+      FRONTEND_DSN: ${{ secrets['FRONTEND_DSN'] }}
+      SENTRY_ENVIRONMENT: ${{ secrets['SENTRY_ENVIRONMENT'] }}
+      SENTRY_REPLAY_SESSION_RATE: ${{ secrets['SENTRY_REPLAY_SESSION_RATE'] }}
+      SENTRY_REPLAY_ON_ERROR_RATE: ${{ secrets['SENTRY_REPLAY_ON_ERROR_RATE'] }}
+      SENTRY_AUTH_TOKEN: ${{ secrets['SENTRY_AUTH_TOKEN'] }}
+      SENTRY_ORG: ${{ secrets['SENTRY_ORG'] }}
+      SENTRY_PROJECT_FRONTEND: ${{ secrets['SENTRY_PROJECT_FRONTEND'] }}
+      RENDER_DEPLOY_HOOK: ${{ secrets['RENDER_DEPLOY_HOOK'] }}
+      RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets['RENDER_BACKEND_DEPLOY_HOOK'] }}
     steps:
       - name: Resolve deploy branch eligibility
         id: branch
@@ -509,7 +560,16 @@ jobs:
 
       - name: Build web (for Render — not built on Render)
         if: steps.branch.outputs.deploy == 'true'
-        run: flutter build web --release --base-href /
+        uses: ./.github/actions/flutter-sentry-build
+        with:
+          github_sha: ${{ github.sha }}
+          frontend_dsn: ${{ env.FRONTEND_DSN }}
+          sentry_environment: ${{ env.SENTRY_ENVIRONMENT }}
+          sentry_replay_session_rate: ${{ env.SENTRY_REPLAY_SESSION_RATE }}
+          sentry_replay_on_error_rate: ${{ env.SENTRY_REPLAY_ON_ERROR_RATE }}
+          sentry_auth_token: ${{ env.SENTRY_AUTH_TOKEN }}
+          sentry_org: ${{ env.SENTRY_ORG }}
+          sentry_project_frontend: ${{ env.SENTRY_PROJECT_FRONTEND }}
 
       - name: Disable service worker in web bundle
         if: steps.branch.outputs.deploy == 'true'
@@ -592,27 +652,14 @@ jobs:
             echo "backend_changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Trigger Render frontend deploy hook
-        if: steps.branch.outputs.deploy == 'true' && steps.changes.outputs.frontend_changed == 'true'
-        env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
-        run: |
-          if [ -z "${RENDER_DEPLOY_HOOK}" ]; then
-            echo "::error::RENDER_DEPLOY_HOOK is not set"
-            exit 1
-          fi
-          curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
-
-      - name: Trigger Render backend deploy hook
-        if: steps.branch.outputs.deploy == 'true' && steps.changes.outputs.backend_changed == 'true'
-        env:
-          RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
-        run: |
-          if [ -z "${RENDER_BACKEND_DEPLOY_HOOK}" ]; then
-            echo "::error::RENDER_BACKEND_DEPLOY_HOOK is not set"
-            exit 1
-          fi
-          curl -fsS -X POST "$RENDER_BACKEND_DEPLOY_HOOK"
+      - name: Trigger Render deploy hooks
+        if: steps.branch.outputs.deploy == 'true'
+        uses: ./.github/actions/render-deploy-hooks
+        with:
+          frontend_changed: ${{ steps.changes.outputs.frontend_changed }}
+          backend_changed: ${{ steps.changes.outputs.backend_changed }}
+          render_deploy_hook: ${{ env.RENDER_DEPLOY_HOOK }}
+          render_backend_deploy_hook: ${{ env.RENDER_BACKEND_DEPLOY_HOOK }}
 
       - name: Deploy summary
         if: ${{ always() && steps.branch.outputs.deploy == 'true' }}
@@ -621,3 +668,36 @@ jobs:
           echo "- **Branch:** ${{ steps.branch.outputs.name }} at \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Frontend deploy hook triggered:** ${{ steps.changes.outputs.frontend_changed }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Backend deploy hook triggered:** ${{ steps.changes.outputs.backend_changed }}" >> "$GITHUB_STEP_SUMMARY"
+
+  open-release-pr:
+    name: Open release PR to main
+    needs: [checks-build-deploy]
+    if: |
+      needs.checks-build-deploy.result == 'success' &&
+      (github.ref == 'refs/heads/khono_v4' || github.ref == 'refs/heads/khono-v4') &&
+      github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    # PR creation can fail when repo settings block GITHUB_TOKEN — do not fail deploy.
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Open khono_v4 → main PR (manual merge only)
+        uses: ./.github/actions/open-release-pr
+        with:
+          deploy_check_run_id: ${{ github.run_id }}
+          frontend_changed: ${{ needs.checks-build-deploy.outputs.frontend_changed }}
+          backend_changed: ${{ needs.checks-build-deploy.outputs.backend_changed }}
+
+      - name: Release PR summary
+        if: always()
+        run: |
+          {
+            echo "## Release PR"
+            echo "- **Integration branch:** khono_v4"
+            echo "- **Target:** main (manual merge only)"
+            echo "- **deploy-check run:** ${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"

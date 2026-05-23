@@ -1,0 +1,48 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: Trigger Render deploy hooks
+description: POST Render deploy hooks when frontend and/or backend paths changed.
+
+inputs:
+  frontend_changed:
+    description: Whether frontend files changed.
+    required: true
+  backend_changed:
+    description: Whether backend files changed.
+    required: true
+  render_deploy_hook:
+    description: Render frontend deploy hook URL.
+    required: false
+    default: ''
+  render_backend_deploy_hook:
+    description: Render backend deploy hook URL.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Trigger Render frontend deploy hook
+      if: inputs.frontend_changed == 'true'
+      shell: bash
+      env:
+        RENDER_DEPLOY_HOOK: ${{ inputs.render_deploy_hook }}
+      run: |
+        if [ -z "${RENDER_DEPLOY_HOOK:-}" ]; then
+          echo "::error::RENDER_DEPLOY_HOOK is not set"
+          exit 1
+        fi
+        curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
+        echo "Frontend deploy hook triggered"
+
+    - name: Trigger Render backend deploy hook
+      if: inputs.backend_changed == 'true'
+      shell: bash
+      env:
+        RENDER_BACKEND_DEPLOY_HOOK: ${{ inputs.render_backend_deploy_hook }}
+      run: |
+        if [ -z "${RENDER_BACKEND_DEPLOY_HOOK:-}" ]; then
+          echo "::error::RENDER_BACKEND_DEPLOY_HOOK is not set"
+          exit 1
+        fi
+        curl -fsS -X POST "$RENDER_BACKEND_DEPLOY_HOOK"
+        echo "Backend deploy hook triggered"

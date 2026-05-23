@@ -20,6 +20,14 @@ from pathlib import Path
 import jwt
 from redis import Redis
 try:
+    from .auth import get_current_user
+except ImportError:
+    from auth import get_current_user
+try:
+    from .sentry_setup import api_error_response, init_sentry, report_exception, report_message, sentry_enabled
+except ImportError:
+    from sentry_setup import api_error_response, init_sentry, report_exception, report_message, sentry_enabled
+try:
     from .token_utils import (
         generate_and_encrypt_token,
         parse_module_access_role_to_roles,
@@ -105,10 +113,25 @@ def debug_log(message: str):
     if DEBUG_MODE:
         logger.debug(message)
         print(f"[DEBUG] {message}")
-def error_log(message: str):
+def error_log(message: str, exc: Optional[BaseException] = None):
     "Log error messages (always shown)"
-    logger.error(message)
+    if exc is not None:
+        logger.error("%s: %s", message, exc, exc_info=(type(exc), exc, exc.__traceback__))
+        report_exception(exc, context={"message": message}, level="error")
+    else:
+        logger.error(message)
+        report_message(message, level="error")
     print(f"[ERROR] {message}")
+
+
+def warning_log(message: str, exc: Optional[BaseException] = None):
+    if exc is not None:
+        logger.warning("%s: %s", message, exc, exc_info=(type(exc), exc, exc.__traceback__))
+        report_exception(exc, context={"message": message}, level="warning")
+    else:
+        logger.warning(message)
+        report_message(message, level="warning")
+    print(f"[WARNING] {message}")
 def info_log(message: str):
     logger.info(message)
     print(f"[INFO] {message}")
@@ -583,13 +606,31 @@ if os.environ.get("AUTO_MIGRATE_KB_TABLES", "").lower() in ("1", "true", "yes"):
         counts = migrate_from_firestore_documents(pg_engine)
         info_log(f"AUTO_MIGRATE_KB_TABLES import counts: {counts}")
     except Exception as exc:
-        error_log(f"AUTO_MIGRATE_KB_TABLES failed: {exc}")
+        error_log("AUTO_MIGRATE_KB_TABLES failed", exc=exc)
 info_log("Using PostgreSQL as primary datastore")
+
+init_sentry(script_name="khonobuzz-backend")
 app = FastAPI(
     title="Khonology Backend API",
     description="Backend API for Khonology project management application",
     version="1.0.0",
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    if exc.status_code >= 500:
+        report_exception(exc, context={"path": request.url.path, "method": request.method})
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    report_exception(exc, context={"path": request.url.path, "method": request.method})
+    error_log(f"Unhandled error on {request.method} {request.url.path}", exc=exc)
+    return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
 @app.on_event("startup")
 async def startup_warmup():
     start = time.time()
@@ -613,7 +654,7 @@ async def startup_warmup():
         )
     except Exception as e:
         _db_breaker_record_failure(e)
-        error_log(f"Startup warm-up failed: {e}")
+        error_log("Startup warm-up failed", exc=e)
 cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
 PRIMARY_FRONTEND_URL = os.environ.get(
     'FRONTEND_URL',
@@ -671,6 +712,11 @@ else:
 # In production, pin CORS to explicit origins only.
 # In development, still allow localhost origins with arbitrary ports.
 cors_origin_regex = None if is_production else LOCALHOST_ORIGIN_REGEX
+# SentryAsgiMiddleware must wrap the entire app (outermost layer)
+# so every request including CORS failures gets a transaction.
+if sentry_enabled():
+    from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
+    app.add_middleware(SentryAsgiMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -689,7 +735,7 @@ async def log_requests(request, call_next):
     should_log = request.url.path != "/api/version"
     if should_log:
         info_log(
-            f"→ {request.method} {request.url.path} from {request.client.host if request.client else 'unknown'}"
+            f"-> {request.method} {request.url.path} from {request.client.host if request.client else 'unknown'}"
         )
     if DEBUG_MODE and should_log and request.query_params:
         debug_log(f"  Query params: {dict(request.query_params)}")
@@ -697,7 +743,7 @@ async def log_requests(request, call_next):
     process_time = (datetime.utcnow() - start_time).total_seconds()
     if should_log:
         info_log(
-            f"← {request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)"
+            f"<- {request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)"
         )
     return response
 
@@ -724,6 +770,13 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
+
+
+@app.get("/api/sentry-debug")
+def sentry_debug():
+    """Intentional crash — call once to verify Sentry receives backend
+    events, then delete or protect this route behind admin auth."""
+    raise ValueError("Sentry backend verification error — safe to ignore.")
 
 
 def _cors_headers_for_request(request: Request) -> dict:
@@ -839,7 +892,7 @@ async def get_version(request: Request):
         response.headers.update(_cors_headers_for_request(request))
         return response
     except Exception as e:
-        error_log(f"Failed to serve version: {e}")
+        error_log("Failed to serve version", exc=e)
         resp = JSONResponse(status_code=500, content={"error": "Failed to load version"})
         resp.headers.update(_cors_headers_for_request(request))
         return resp
@@ -851,7 +904,7 @@ class TokenValidationRequest(BaseModel):
 
 def _validate_token_internal(token: str):
     try:
-        payload = verify_token(token)
+        payload = get_current_user(token)
         user_id = payload.get('user_id') or payload.get('uid', '')
         user_data = None
         if user_id:
@@ -860,14 +913,14 @@ def _validate_token_internal(token: str):
                     if relational_user_count(s) > 0:
                         user_data = get_user_legacy_dict(s, user_id)
             except Exception as e:
-                print(f"[WARNING] relational user read during token validation: {e}")
+                warning_log("relational user read during token validation", exc=e)
             if user_data is None:
                 try:
                     user_doc = db.collection('users').document(user_id).get()
                     if user_doc.exists:
                         user_data = user_doc.to_dict()
                 except Exception as e:
-                    print(f"[WARNING] Failed to fetch user data during token validation: {e}")
+                    warning_log("Failed to fetch user data during token validation", exc=e)
         return {
             "valid": True,
             "payload": payload,
@@ -884,6 +937,7 @@ def _validate_token_internal(token: str):
             "error": f"Invalid token: {str(e)}",
         }, 400
     except Exception as e:
+        report_exception(e, context={"endpoint": "token_validation_internal"}, level="error")
         return {
             "valid": False,
             "error": f"Token validation failed: {str(e)}",
@@ -897,7 +951,7 @@ async def validate_token(request: TokenValidationRequest):
         result, status_code = _validate_token_internal(request.token)
         return JSONResponse(status_code=status_code, content=result)
     except Exception as e:
-        error_log(f"Error during token validation (POST): {e}")
+        error_log("Error during token validation (POST)", exc=e)
         return JSONResponse(
             status_code=500,
             content={"valid": False, "error": "Token validation failed"},
@@ -914,7 +968,7 @@ async def validate_token_get(token: str = Query(..., description="Token to valid
         result, status_code = _validate_token_internal(token)
         return JSONResponse(status_code=status_code, content=result)
     except Exception as e:
-        error_log(f"Error during token validation (GET): {e}")
+        error_log("Error during token validation (GET)", exc=e)
         return JSONResponse(
             status_code=500,
             content={"valid": False, "error": "Token validation failed"},
@@ -963,7 +1017,7 @@ async def pdh_sync_user(data: dict):
                     onboarding_data['token_updated_at'] = datetime.utcnow()
                     print(f"[DEBUG] Token generated during PDH sync for user_id: {uid} with roles: {roles}")
                 except Exception as token_error:
-                    print(f"[ERROR] Failed to generate token during PDH sync: {token_error}")
+                    warning_log("Failed to generate token during PDH sync", exc=token_error)
         if not _run_with_pdh_db(
             "pdh_sync_user",
             lambda pdh: (
@@ -975,8 +1029,7 @@ async def pdh_sync_user(data: dict):
         sync_sso_user_login(uid, user_data, onboarding_data)
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH sync successful"})
     except Exception as e:
-        print(f"[ERROR] During PDH sync: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "pdh_sync_user")
 @app.patch("/api/pdh/update-user/{uid}")
 async def pdh_update_user(uid: str, data: dict):
     try:
@@ -1025,15 +1078,14 @@ async def pdh_update_user(uid: str, data: dict):
                     onboarding_fields['token_updated_at'] = datetime.utcnow()
                     print(f"[DEBUG] Token regenerated during PDH update for user_id: {uid} with roles: {roles}")
                 except Exception as token_error:
-                    print(f"[ERROR] Failed to regenerate token during PDH update: {token_error}")
+                    warning_log("Failed to regenerate token during PDH update", exc=token_error)
             _run_with_pdh_db(
                 "pdh_update_user.onboarding",
                 lambda pdh: pdh.collection('onboarding').document(uid).set(onboarding_fields, merge=True),
             )
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "PDH update successful"})
     except Exception as e:
-        print(f"[ERROR] During PDH update: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "pdh_update_user")
 
 
 @app.patch("/api/onboarding/update-user/{uid}")
@@ -1087,13 +1139,38 @@ async def onboarding_update_user(uid: str, data: dict):
             content={"message": "Onboarding update successful"},
         )
     except Exception as e:
-        print(f"[ERROR] During onboarding update: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "onboarding_update")
 
 @app.get("/")
 async def home():
     info_log("Health check endpoint accessed")
     return {"message": "Khonology Backend API (FastAPI)", "status": "running"}
+
+
+@app.get("/sentry-debug")
+async def trigger_error():
+    if not DEBUG_MODE:
+        raise HTTPException(status_code=404, detail="Not found")
+    division_by_zero = 1 / 0
+    return {"ok": division_by_zero}
+
+
+@app.get("/sentry-log-test")
+async def sentry_log_test():
+    if not DEBUG_MODE:
+        raise HTTPException(status_code=404, detail="Not found")
+    report_message(
+        "Sentry capture_message info test from /sentry-log-test",
+        level="info",
+    )
+    report_message(
+        "Sentry capture_message warning test from /sentry-log-test",
+        level="warning",
+    )
+    logger.info("Python logging info test from /sentry-log-test")
+    logger.warning("Python logging warning test from /sentry-log-test")
+    logger.error("Python logging error test from /sentry-log-test")
+    return {"message": "Test logs sent to Sentry", "status": "ok"}
 
 
 @app.get("/api/users/by-email")
@@ -1233,11 +1310,7 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
             content={'user': response_user},
         )
     except Exception as e:
-        print(f"[ERROR] get_user_by_email failed for {email}: {e}")
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"error": str(e)},
-        )
+        return api_error_response(e, "get_user_by_email")
 
 @app.put("/api/admin/users/{email}/profile")
 async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)):
@@ -1454,7 +1527,7 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
                     ),
                 )
             except Exception as token_error:
-                print(f"[ERROR] admin_update_user_profile token refresh failed: {token_error}")
+                warning_log("admin_update_user_profile token refresh failed", exc=token_error)
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
@@ -1465,11 +1538,7 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
         )
         
     except Exception as e:
-        print(f"[ERROR] admin_update_user_profile: {e}")
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"error": str(e)}
-        )
+        return api_error_response(e, "admin_update_user_profile")
 
 @app.post("/api/auth/register")
 async def register_user(user: UserRegister):
@@ -1548,7 +1617,7 @@ async def register_user(user: UserRegister):
             )
             print(f"[DEBUG] Token generated for new user: {user_id} with roles: {roles}")
         except Exception as token_error:
-            print(f"[ERROR] Failed to generate token during registration: {token_error}")
+            warning_log("Failed to generate token during registration", exc=token_error)
         onboarding_data = {
             'user_id': user_id,
             'email': normalized_email,
@@ -1597,8 +1666,7 @@ async def register_user(user: UserRegister):
             content=response_content
         )
     except Exception as e:
-        print(f"[ERROR] During FastAPI registration: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "register_user")
 @app.get("/api/users")
 async def list_users():
     cache_key = "users:list"
@@ -1692,7 +1760,7 @@ async def list_users():
     except Exception as e:
         _db_breaker_record_failure(e)
         msg = str(e)
-        print(f"[ERROR] During users fetch: {msg}")
+        error_log("During users fetch", exc=e)
         if _is_quota_error(e):
             stale_cache = _cache_get_any(cache_key)
             if stale_cache is not None:
@@ -1859,7 +1927,7 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
                     else:
                         print("[WARNING] PDH Firebase not initialized, skipping token sync")
                 except Exception as token_error:
-                    print(f"[ERROR] Failed to regenerate token: {token_error}")
+                    warning_log("Failed to regenerate token", exc=token_error)
         if use_rel:
             with SessionLocal() as _r1:
                 u1 = _r1.get(KbAppUser, user_id)
@@ -1907,7 +1975,7 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
         msg = str(e)
         if "quota exceeded" in msg.lower() or msg.strip().startswith("429"):
             return JSONResponse(status_code=429, content={"error": "Quota exceeded"})
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "update_user")
 @app.delete("/api/users/{user_id}")
 async def delete_user(user_id: str):
     try:
@@ -1963,8 +2031,7 @@ async def delete_user(user_id: str):
             content={"message": f"User {user_id} deleted successfully"}
         )
     except Exception as e:
-        print(f"[ERROR] During user deletion: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "delete_user")
 
 
 @app.get("/api/departments")
@@ -1987,8 +2054,7 @@ async def list_departments():
                     names.append(n)
         return JSONResponse(status_code=200, content={"departments": names})
     except Exception as e:
-        print(f"[ERROR] list_departments: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "list_departments")
 
 
 @app.post("/api/departments")
@@ -2022,8 +2088,7 @@ async def create_department(body: NameBody):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] create_department: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "create_department")
 
 
 @app.get("/api/designations")
@@ -2046,8 +2111,7 @@ async def list_designations():
                     names.append(n)
         return JSONResponse(status_code=200, content={"designations": names})
     except Exception as e:
-        print(f"[ERROR] list_designations: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "list_designations")
 
 
 @app.get("/api/entities")
@@ -2073,8 +2137,7 @@ async def list_entities():
         names.sort(key=str.lower)
         return JSONResponse(status_code=200, content={"entities": names})
     except Exception as e:
-        print(f"[ERROR] list_entities: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "list_entities")
 
 
 @app.post("/api/entities")
@@ -2107,8 +2170,7 @@ async def create_entity(body: NameBody):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] create_entity: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "create_entity")
 
 
 @app.post("/api/admin/notifications")
@@ -2166,8 +2228,7 @@ async def create_admin_notification(payload: AdminNotificationCreate):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] create_admin_notification: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "create_admin_notification")
 
 
 @app.get("/api/admin/notifications")
@@ -2268,7 +2329,7 @@ async def list_admin_notifications(
     except Exception as e:
         _db_breaker_record_failure(e)
         msg = str(e)
-        print(f"[ERROR] list_admin_notifications: {msg}")
+        error_log("list_admin_notifications", exc=e)
         if _is_quota_error(e):
             stale_cache = _cache_get_any(cache_key)
             if stale_cache is not None:
@@ -2303,8 +2364,7 @@ async def clear_admin_notifications(payload: AdminNotificationClear):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] clear_admin_notifications: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "clear_admin_notifications")
 
 
 @app.post("/api/admin/notifications/dismiss")
@@ -2326,8 +2386,7 @@ async def dismiss_admin_notification(payload: AdminNotificationDismiss):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] dismiss_admin_notification: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "dismiss_admin_notification")
 
 
 @app.post("/api/admin/notifications/ack")
@@ -2350,8 +2409,7 @@ async def acknowledge_admin_notification(payload: AdminNotificationAcknowledge):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] acknowledge_admin_notification: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "acknowledge_admin_notification")
 
 
 @app.post("/api/designations")
@@ -2385,8 +2443,7 @@ async def create_designation(body: NameBody):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] create_designation: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "create_designation")
 
 
 @app.post("/api/roles")
@@ -2404,8 +2461,7 @@ async def create_role(role: Role):
             },
         )
     except Exception as e:
-        print(f"[ERROR] During role creation: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "create_role")
 @app.post("/api/create_initial_roles")
 async def create_initial_roles():
     roles_data = [
@@ -2459,8 +2515,7 @@ async def create_initial_roles():
             })
         return JSONResponse(status_code=status.HTTP_201_CREATED, content={"message": "Initial roles created successfully"})
     except Exception as e:
-        print(f"[ERROR] During initial role creation: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "create_initial_roles")
 
 
 @app.post("/api/auth/login")
@@ -2562,7 +2617,7 @@ async def login_user(user_login: UserLogin, request: Request):
                 except Exception as query_error:
                     user_lookup_end = time.time()
                     if not is_special_session:
-                        error_log(f"Database query error during login: {query_error}")
+                        error_log("Database query error during login", exc=query_error)
                     return JSONResponse(
                         status_code=500,
                         content={"error": f"Database query failed: {str(query_error)}"}
@@ -2609,7 +2664,7 @@ async def login_user(user_login: UserLogin, request: Request):
                 f"after {ONBOARDING_QUERY_TIMEOUT_SECONDS:.1f}s"
             )
         except Exception as onboarding_query_error:
-            error_log(f"Failed to query onboarding collection: {onboarding_query_error}")
+            error_log("Failed to query onboarding collection", exc=onboarding_query_error)
         onboarding_lookup_end = time.time()
         # Only use onboarding for name/profile in response if it belongs to this user (avoid returning another user's data)
         onboarding_email = (onboarding_data.get('email') or '').strip().lower()
@@ -2659,7 +2714,8 @@ async def login_user(user_login: UserLogin, request: Request):
             user_data['loginCount'] = current_user_login_count + 1
         except Exception as sign_in_error:
             error_log(
-                f"Failed to update login tracking for {normalized_email}: {sign_in_error}"
+                f"Failed to update login tracking for {normalized_email}",
+                exc=sign_in_error,
             )
         if encrypted_token:
             try:
@@ -2743,7 +2799,8 @@ async def login_user(user_login: UserLogin, request: Request):
             )
         except Exception as onboarding_signin_error:
             error_log(
-                f"Failed to update onboarding login tracking for {normalized_email}: {onboarding_signin_error}"
+                f"Failed to update onboarding login tracking for {normalized_email}",
+                exc=onboarding_signin_error,
             )
         module_access_raw = user_data.get('moduleAccess') or onboarding_data.get('moduleAccess', '')
         final_module_access = derive_module_access_from_role(module_access_raw, module_access_role)
@@ -2783,10 +2840,7 @@ async def login_user(user_login: UserLogin, request: Request):
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"error": e.detail})
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Login failed: {str(e)}"}
-        )
+        return api_error_response(e, "login_user")
     finally:
         total_duration = time.time() - request_start
         if user_lookup_start is not None and user_lookup_end is not None:
@@ -2966,8 +3020,7 @@ async def get_user_token(
                 ):
                     print(f"[DEBUG] Token synced to PDH onboarding collection for user_id: {user_id}")
         except Exception as token_error:
-            print(f"[ERROR] Failed to generate token: {token_error}")
-            return JSONResponse(status_code=500, content={"error": "Failed to generate token"})
+            return api_error_response(token_error, "get_user_token")
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={
@@ -2978,8 +3031,7 @@ async def get_user_token(
             }
         )
     except Exception as e:
-        print(f"[ERROR] During token generation: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return api_error_response(e, "get_user_token")
 
 from fastapi import UploadFile, File
 from typing import Union
@@ -3024,7 +3076,7 @@ async def upload_profile_image(file: UploadFile = File(...), user_id: str = Quer
                 }
             )
     except Exception as e:
-        error_log(f"Profile image upload exception for user_id: {user_id}: {str(e)}")
+        error_log(f"Profile image upload exception for user_id: {user_id}", exc=e)
         return JSONResponse(
             status_code=500,
             content={
@@ -3054,8 +3106,4 @@ async def delete_profile_picture(public_id: str = Query(..., description="Cloudi
             )
             
     except Exception as e:
-        print(f"[ERROR] During profile picture deletion: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e), "message": "Failed to delete profile picture"}
-        )
+        return api_error_response(e, "delete_profile_picture")

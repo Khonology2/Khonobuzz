@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import logging
 import os
-import traceback
 import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
 
 from sqlalchemy import MetaData, Table, create_engine, select
 import bcrypt
+
+try:
+    from .sentry_setup import report_exception
+except ImportError:
+    from sentry_setup import report_exception
+
+logger = logging.getLogger(__name__)
 
 _TARGETS: Dict[str, Dict[str, Any]] = {}
 _SEED_PASSWORD_HASH = bcrypt.hashpw(
@@ -316,11 +323,23 @@ def sync_sso_user_login(
                     else:
                         conn.execute(table.insert().values(**payload))
             except Exception as target_error:
-                print(
-                    f"[WARNING] Failed syncing user {uid} to {target_name}: {target_error}\n"
-                    f"{traceback.format_exc()}"
+                logger.warning(
+                    "Failed syncing user %s to %s: %s",
+                    uid,
+                    target_name,
+                    target_error,
+                    exc_info=True,
+                )
+                report_exception(
+                    target_error,
+                    context={"uid": uid, "target": target_name},
+                    level="warning",
                 )
     except Exception as e:
-        print(
-            f"[WARNING] Failed syncing user {uid} to sso targets: {e}\n{traceback.format_exc()}"
+        logger.warning(
+            "Failed syncing user %s to sso targets: %s",
+            uid,
+            e,
+            exc_info=True,
         )
+        report_exception(e, context={"uid": uid, "scope": "sso_sync"}, level="warning")

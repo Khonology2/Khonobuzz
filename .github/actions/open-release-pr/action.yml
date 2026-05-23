@@ -1,0 +1,123 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: Open release PR
+description: Open khono_v4 → main PR when the integration branch is ahead of production (manual merge only).
+
+inputs:
+  integration_branch:
+    description: Integration branch (source of the release PR).
+    required: false
+    default: khono_v4
+  production_branch:
+    description: Production branch (target of the release PR).
+    required: false
+    default: main
+  pr_assignees:
+    description: Comma-separated GitHub usernames to assign on the PR.
+    required: false
+    default: Nathi66,tebza176
+  deploy_check_run_id:
+    description: deploy-check workflow run id for the PR body.
+    required: false
+    default: ''
+  frontend_changed:
+    description: Whether frontend paths changed (for PR body).
+    required: false
+    default: ''
+  backend_changed:
+    description: Whether backend paths changed (for PR body).
+    required: false
+    default: ''
+  github_token:
+    description: Optional token with pull-request write access. Defaults to github.token when omitted.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Open release PR (manual merge only)
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token != '' && inputs.github_token || github.token }}
+        INTEGRATION_BRANCH: ${{ inputs.integration_branch }}
+        PRODUCTION_BRANCH: ${{ inputs.production_branch }}
+        PR_ASSIGNEES: ${{ inputs.pr_assignees }}
+        DEPLOY_CHECK_RUN_ID: ${{ inputs.deploy_check_run_id }}
+        FRONTEND_CHANGED: ${{ inputs.frontend_changed }}
+        BACKEND_CHANGED: ${{ inputs.backend_changed }}
+      run: |
+        set -euo pipefail
+
+        assign_release_pr() {
+          local pr_num="$1"
+          if gh pr edit "$pr_num" --add-assignee "$PR_ASSIGNEES" 2>/tmp/pr-assign.err; then
+            echo "Assigned $PR_ASSIGNEES to PR #$pr_num"
+          else
+            echo "::warning::Could not assign users to PR #$pr_num"
+            cat /tmp/pr-assign.err || true
+          fi
+        }
+
+        git fetch origin "$INTEGRATION_BRANCH" "$PRODUCTION_BRANCH"
+
+        AHEAD=$(git rev-list --count "origin/$PRODUCTION_BRANCH..origin/$INTEGRATION_BRANCH" || echo 0)
+        if [ "$AHEAD" -eq 0 ]; then
+          echo "origin/$INTEGRATION_BRANCH is not ahead of origin/$PRODUCTION_BRANCH — skipping PR"
+          exit 0
+        fi
+        echo "$INTEGRATION_BRANCH is $AHEAD commit(s) ahead of $PRODUCTION_BRANCH"
+
+        EXISTING=$(gh pr list \
+          --base "$PRODUCTION_BRANCH" \
+          --head "$INTEGRATION_BRANCH" \
+          --state open \
+          --json number,url \
+          --jq '.[0] // empty' 2>/dev/null || true)
+
+        if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ]; then
+          PR_NUM=$(echo "$EXISTING" | jq -r '.number')
+          PR_URL=$(echo "$EXISTING" | jq -r '.url')
+          assign_release_pr "$PR_NUM"
+          echo "Release PR #$PR_NUM already open — merge manually: $PR_URL"
+          exit 0
+        fi
+
+        INTEGRATION_SHA=$(git rev-parse "origin/$INTEGRATION_BRANCH")
+        BODY="deploy-check finished and Render hooks were triggered. Merge this PR manually on GitHub.
+
+        - Integration branch: \`$INTEGRATION_BRANCH\` @ \`$INTEGRATION_SHA\`
+        - Commits ahead of \`$PRODUCTION_BRANCH\`: $AHEAD
+        - deploy-check run: ${DEPLOY_CHECK_RUN_ID:-n/a}
+        - Frontend deploy: ${FRONTEND_CHANGED:-unknown}
+        - Backend deploy: ${BACKEND_CHANGED:-unknown}
+        - Assignees: $PR_ASSIGNEES"
+
+        if gh pr create \
+          --base "$PRODUCTION_BRANCH" \
+          --head "$INTEGRATION_BRANCH" \
+          --title "Release: ${INTEGRATION_BRANCH} → ${PRODUCTION_BRANCH}" \
+          --body "$BODY" \
+          --assignee "$PR_ASSIGNEES" > /tmp/pr-create.out 2>&1; then
+          PR_NUM=$(gh pr list \
+            --base "$PRODUCTION_BRANCH" \
+            --head "$INTEGRATION_BRANCH" \
+            --state open \
+            --limit 1 \
+            --json number \
+            --jq '.[0].number')
+          echo "Opened release PR #$PR_NUM (manual merge required): $(cat /tmp/pr-create.out)"
+          assign_release_pr "$PR_NUM"
+          exit 0
+        fi
+
+        if grep -q 'not permitted to create or approve pull requests' /tmp/pr-create.out 2>/dev/null; then
+          echo "::error::GitHub Actions is not allowed to create pull requests in this repository."
+          echo "Fix one of:"
+          echo "  1. Settings → Actions → General → enable 'Allow GitHub Actions to create and approve pull requests'"
+          echo "  2. Open $INTEGRATION_BRANCH → $PRODUCTION_BRANCH manually on GitHub"
+        else
+          echo "::error::Could not open release PR automatically."
+          echo "Open $INTEGRATION_BRANCH → $PRODUCTION_BRANCH manually on GitHub."
+        fi
+        cat /tmp/pr-create.out || true
+        exit 1

@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+
+import 'api_client.dart';
 
 /// Keeps Render module backends warm while the user is logged in.
 /// Call [start] after successful login and [stop] on logout.
@@ -34,7 +35,7 @@ class ModulesPingService {
     for (final path in paths) {
       try {
         final uri = _uriFor(base, path);
-        final response = await http.get(uri).timeout(_requestTimeout);
+        final response = await apiClient.get(uri).timeout(_requestTimeout);
         if (response.statusCode >= 200 && response.statusCode < 300) {
           return;
         }

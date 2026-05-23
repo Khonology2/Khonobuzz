@@ -1,9 +1,8 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
 import '../models/admin_alert.dart';
 import '../config/api_config.dart';
+import 'api_client.dart';
 
 class AdminAlertApiException implements Exception {
   final int statusCode;
@@ -34,7 +33,7 @@ class AdminAlertService {
         .toSet()
         .toList(growable: false);
 
-    final response = await http.post(
+    final response = await apiClient.post(
       Uri.parse(ApiConfig.adminNotificationsEndpoint),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -66,7 +65,7 @@ class AdminAlertService {
       return const [];
     }
 
-    final response = await http.get(
+    final response = await apiClient.get(
       Uri.parse(
         '${ApiConfig.adminNotificationsEndpoint}?role=${Uri.encodeComponent(normalizedRole)}&userEmail=${Uri.encodeComponent(userEmail.trim().toLowerCase())}&limit=$limit',
       ),
@@ -89,7 +88,7 @@ class AdminAlertService {
     required String role,
     required String userEmail,
   }) async {
-    final response = await http.post(
+    final response = await apiClient.post(
       Uri.parse(ApiConfig.adminNotificationsClearEndpoint),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -110,7 +109,7 @@ class AdminAlertService {
     required String userEmail,
     required String alertId,
   }) async {
-    final response = await http.post(
+    final response = await apiClient.post(
       Uri.parse('${ApiConfig.adminNotificationsEndpoint}/dismiss'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -131,7 +130,7 @@ class AdminAlertService {
     required String userEmail,
     required String alertId,
   }) async {
-    final response = await http.post(
+    final response = await apiClient.post(
       Uri.parse('${ApiConfig.adminNotificationsEndpoint}/ack'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
