@@ -1,7 +1,5 @@
 """
 Normalized PostgreSQL tables for KhonoBuzz (users, emails, profiles, roles, org data).
-
-Legacy `firestore_documents` JSONB rows remain supported via mirror writes until fully retired.
 """
 from __future__ import annotations
 

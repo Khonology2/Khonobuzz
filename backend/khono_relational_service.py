@@ -1,9 +1,10 @@
 """
-Read/write helpers for normalized kb_* tables + optional mirror to legacy PG Firestore shim.
+Read/write helpers for normalized kb_* tables (PostgreSQL-only).
 """
 from __future__ import annotations
 
 import json
+import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -157,14 +158,11 @@ def profile_to_legacy_onboarding_dict(p: KbUserProfile, user_id: str) -> Dict[st
     return d
 
 
-def mirror_user_profile_to_firestore(db_compat: Any, user: KbAppUser, prof: Optional[KbUserProfile]) -> None:
-    """Keep `firestore_documents` rows in sync for tooling still reading JSONB."""
-    db_compat.collection("users").document(user.id).set(user_to_legacy_dict(user), merge=True)
-    if prof is None:
-        prof = KbUserProfile(user_id=user.id)
-    ob = profile_to_legacy_onboarding_dict(prof, user.id)
-    ob["email"] = user.email
-    db_compat.collection("onboarding").document(user.id).set(ob, merge=True)
+def find_user_by_id(session: Session, user_id: str) -> Tuple[Optional[str], Dict[str, Any]]:
+    u = session.get(KbAppUser, user_id)
+    if u is None:
+        return None, {}
+    return u.id, user_to_legacy_dict(u)
 
 
 def find_user_by_email(session: Session, normalized_email: str) -> Tuple[Optional[str], Dict[str, Any]]:
@@ -457,6 +455,325 @@ def delete_user_relational(session: Session, user_id: str) -> bool:
     session.delete(u)
     session.flush()
     return True
+
+
+def _unique_sorted_names(rows: List[Tuple[Optional[datetime], str]]) -> List[str]:
+    rows.sort(key=lambda item: _sortable_dt(item[0]), reverse=True)
+    names: List[str] = []
+    for _, name in rows:
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def list_department_names(session: Session) -> List[str]:
+    rows = session.execute(select(KbDepartment.created_at, KbDepartment.name)).all()
+    return _unique_sorted_names([(r[0], (r[1] or "").strip()) for r in rows if (r[1] or "").strip()])
+
+
+def create_department(session: Session, name: str) -> List[str]:
+    normalized = (name or "").strip()
+    if not normalized:
+        return list_department_names(session)
+    existing = session.scalar(select(KbDepartment).where(func.lower(KbDepartment.name) == normalized.lower()))
+    if existing is None:
+        session.add(
+            KbDepartment(id=uuid.uuid4().hex, name=normalized, created_at=datetime.utcnow())
+        )
+        session.flush()
+    return list_department_names(session)
+
+
+def list_designation_names(session: Session) -> List[str]:
+    rows = session.execute(select(KbDesignation.created_at, KbDesignation.name)).all()
+    return _unique_sorted_names([(r[0], (r[1] or "").strip()) for r in rows if (r[1] or "").strip()])
+
+
+def create_designation(session: Session, name: str) -> List[str]:
+    normalized = (name or "").strip()
+    if not normalized:
+        return list_designation_names(session)
+    existing = session.scalar(
+        select(KbDesignation).where(func.lower(KbDesignation.name) == normalized.lower())
+    )
+    if existing is None:
+        session.add(
+            KbDesignation(id=uuid.uuid4().hex, name=normalized, created_at=datetime.utcnow())
+        )
+        session.flush()
+    return list_designation_names(session)
+
+
+def list_entity_names(session: Session) -> List[str]:
+    names: List[str] = []
+    for row in session.scalars(select(KbEntity).order_by(KbEntity.created_at.desc())):
+        n = (row.name or "").strip()
+        if n and n not in names:
+            names.append(n)
+    for u in session.scalars(select(KbAppUser)):
+        n = (u.entity or "").strip()
+        if n and n not in names:
+            names.append(n)
+    return names
+
+
+def create_entity(session: Session, name: str) -> List[str]:
+    normalized = (name or "").strip()
+    if not normalized:
+        return list_entity_names(session)
+    existing = session.scalar(select(KbEntity).where(func.lower(KbEntity.name) == normalized.lower()))
+    if existing is None:
+        session.add(
+            KbEntity(
+                id=uuid.uuid4().hex,
+                name=normalized,
+                assigned_user_ids=[],
+                raw={"name": normalized},
+                created_at=datetime.utcnow(),
+            )
+        )
+        session.flush()
+    return list_entity_names(session)
+
+
+def create_role(session: Session, role_data: Dict[str, Any]) -> Dict[str, Any]:
+    role_id = uuid.uuid4().hex
+    now = datetime.utcnow()
+    row = KbRoleDefinition(
+        id=role_id,
+        role_name=(role_data.get("roleName") or role_data.get("role_name") or "")[:200],
+        description=role_data.get("description") or "",
+        page_access=role_data.get("pageAccess") if isinstance(role_data.get("pageAccess"), dict) else None,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(row)
+    session.flush()
+    return {
+        "id": role_id,
+        "roleName": row.role_name,
+        "description": row.description,
+        "pageAccess": row.page_access,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def seed_initial_roles(session: Session) -> None:
+    roles_data = [
+        {
+            "roleName": "staff",
+            "pageAccess": {
+                "user_management": {"create": False, "read": False, "update": False, "delete": False},
+                "dashboard": {"create": False, "read": True, "update": False, "delete": False},
+                "resource_allocation": {"create": False, "read": False, "update": False, "delete": False},
+                "project_data": {"create": False, "read": False, "update": False, "delete": False},
+                "reports_analytics": {"create": False, "read": True, "update": False, "delete": False},
+                "audit_logging": {"create": False, "read": False, "update": False, "delete": False},
+                "time_keeping": {"create": False, "read": False, "update": False, "delete": False},
+            },
+        },
+        {
+            "roleName": "admin",
+            "description": "Strategic administrator with full system access except for deletion.",
+            "pageAccess": {
+                "user_management": {"create": True, "read": True, "update": True, "delete": False},
+                "dashboard": {"create": True, "read": True, "update": True, "delete": False},
+                "resource_allocation": {"create": True, "read": True, "update": True, "delete": False},
+                "project_data": {"create": True, "read": True, "update": True, "delete": False},
+                "reports_analytics": {"create": True, "read": True, "update": True, "delete": False},
+                "audit_logging": {"create": True, "read": True, "update": True, "delete": False},
+                "time_keeping": {"create": True, "read": True, "update": True, "delete": False},
+            },
+        },
+        {
+            "roleName": "manager",
+            "pageAccess": {
+                "user_management": {"create": False, "read": False, "update": False, "delete": False},
+                "dashboard": {"create": True, "read": True, "update": True, "delete": False},
+                "resource_allocation": {"create": True, "read": True, "update": True, "delete": False},
+                "project_data": {"create": True, "read": True, "update": True, "delete": False},
+                "reports_analytics": {"create": False, "read": False, "update": False, "delete": False},
+                "audit_logging": {"create": True, "read": True, "update": True, "delete": False},
+                "time_keeping": {"create": False, "read": False, "update": False, "delete": False},
+            },
+        },
+    ]
+    for role_data in roles_data:
+        create_role(session, role_data)
+
+
+def _notification_to_alert_dict(n: KbAdminNotification) -> Dict[str, Any]:
+    raw = n.raw if isinstance(n.raw, dict) else {}
+    created_at_iso = n.created_at_iso or (
+        n.created_at.isoformat() + "Z" if n.created_at else datetime.utcnow().isoformat() + "Z"
+    )
+    return {
+        "id": n.id,
+        "actorEmail": n.actor_email or raw.get("actorEmail", ""),
+        "title": n.title or raw.get("title", "Admin update"),
+        "message": n.message or raw.get("message", ""),
+        "area": n.area or raw.get("area", "general"),
+        "details": n.details if isinstance(n.details, dict) else raw.get("details", {}),
+        "targetRoles": n.target_roles or raw.get("targetRoles", []),
+        "requiresAck": bool(n.requires_ack or raw.get("requiresAck", False)),
+        "effectiveDateIso": (n.effective_date_iso or raw.get("effectiveDateIso", "") or "").strip(),
+        "acknowledgedByEmails": n.acknowledged_by_emails or raw.get("acknowledgedByEmails", []) or [],
+        "createdAtIso": created_at_iso,
+    }
+
+
+def create_admin_notification(
+    session: Session,
+    actor_email: str,
+    title: str,
+    message: str,
+    area: str,
+    target_roles: List[str],
+    details: Optional[Dict[str, Any]] = None,
+    requires_ack: bool = False,
+    effective_date_iso: str = "",
+) -> Tuple[str, str]:
+    normalized_roles = sorted({str(r).strip().lower() for r in target_roles if str(r).strip()})
+    if not normalized_roles:
+        normalized_roles = ["admin", "staff"]
+    now = datetime.utcnow()
+    now_iso = now.isoformat() + "Z"
+    details_payload = dict(details or {})
+    if "targetCount" not in details_payload:
+        details_payload["targetCount"] = len(normalized_roles)
+    notif_id = uuid.uuid4().hex
+    doc = {
+        "actorEmail": actor_email,
+        "actorRole": "admin",
+        "title": title,
+        "message": message,
+        "area": area,
+        "details": details_payload,
+        "targetRoles": normalized_roles,
+        "requiresAck": requires_ack,
+        "effectiveDateIso": effective_date_iso,
+        "acknowledgedByEmails": [],
+        "createdAtIso": now_iso,
+    }
+    row = KbAdminNotification(
+        id=notif_id,
+        actor_email=actor_email,
+        title=title,
+        message=message,
+        area=area,
+        details=details_payload,
+        target_roles=normalized_roles,
+        requires_ack=requires_ack,
+        effective_date_iso=effective_date_iso,
+        acknowledged_by_emails=[],
+        created_at_iso=now_iso,
+        created_at=now,
+        raw=doc,
+    )
+    session.add(row)
+    session.flush()
+    return notif_id, now_iso
+
+
+def list_admin_notifications_for_role(
+    session: Session,
+    normalized_role: str,
+    normalized_email: str = "",
+    limit: int = 30,
+) -> List[Dict[str, Any]]:
+    all_rows = session.scalars(select(KbAdminNotification)).all()
+    docs = [
+        n
+        for n in all_rows
+        if normalized_role in [str(r).strip().lower() for r in (n.target_roles or [])]
+    ]
+
+    cleared_after: Optional[datetime] = None
+    dismissed_ids: set[str] = set()
+    if normalized_email:
+        state = session.get(KbAdminNotificationState, normalized_email)
+        if state is not None:
+            cleared_after = _coerce_dt(state.cleared_at_iso)
+            dismissed_ids = set(state.dismissed_ids or [])
+
+    alerts = [_notification_to_alert_dict(n) for n in docs]
+    alerts.sort(
+        key=lambda item: _sortable_dt(_coerce_dt(item.get("createdAtIso"))),
+        reverse=True,
+    )
+    if cleared_after is not None:
+        cleared_key = _sortable_dt(cleared_after)
+        alerts = [
+            item
+            for item in alerts
+            if _sortable_dt(_coerce_dt(item.get("createdAtIso"))) > cleared_key
+        ]
+    alerts = [item for item in alerts if item.get("id") not in dismissed_ids]
+
+    for item in alerts:
+        acked_emails = [(e or "").strip().lower() for e in item.get("acknowledgedByEmails", [])]
+        item["acknowledged"] = normalized_email in acked_emails if normalized_email else False
+        item["acknowledgedCount"] = len(acked_emails)
+        item["targetCount"] = int(item.get("details", {}).get("targetCount", 0))
+        item.pop("acknowledgedByEmails", None)
+
+    return alerts[:limit]
+
+
+def clear_admin_notification_state(session: Session, normalized_role: str, normalized_email: str) -> None:
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    state = session.get(KbAdminNotificationState, normalized_email)
+    if state is None:
+        state = KbAdminNotificationState(user_email=normalized_email)
+        session.add(state)
+    state.role = normalized_role
+    state.cleared_at_iso = now_iso
+    state.updated_at_iso = now_iso
+    state.dismissed_ids = []
+    session.flush()
+
+
+def dismiss_admin_notification(session: Session, normalized_email: str, alert_id: str) -> None:
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    state = session.get(KbAdminNotificationState, normalized_email)
+    if state is None:
+        state = KbAdminNotificationState(user_email=normalized_email)
+        session.add(state)
+    dismissed = list(state.dismissed_ids or [])
+    if alert_id not in dismissed:
+        dismissed.append(alert_id)
+    state.dismissed_ids = dismissed
+    state.updated_at_iso = now_iso
+    session.flush()
+
+
+def acknowledge_admin_notification(session: Session, normalized_email: str, alert_id: str) -> bool:
+    row = session.get(KbAdminNotification, alert_id)
+    if row is None:
+        return False
+    acked = list(row.acknowledged_by_emails or [])
+    if normalized_email not in acked:
+        acked.append(normalized_email)
+    row.acknowledged_by_emails = acked
+    if isinstance(row.raw, dict):
+        row.raw = {**row.raw, "acknowledgedByEmails": acked}
+    session.flush()
+    return True
+
+
+def update_user_login_tracking(session: Session, user_id: str, login_count: int, last_sign_in_at: datetime) -> None:
+    u = session.get(KbAppUser, user_id)
+    if u is not None:
+        u.login_count = login_count
+        u.last_sign_in_at = last_sign_in_at
+        u.updated_at = datetime.utcnow()
+    p = session.get(KbUserProfile, user_id)
+    if p is not None:
+        p.login_count = login_count
+        p.last_sign_in_at = last_sign_in_at
+        p.updated_at = datetime.utcnow()
+    session.flush()
 
 
 def migrate_from_firestore_documents(_engine: Any = None) -> Dict[str, int]:

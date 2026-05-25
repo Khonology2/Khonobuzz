@@ -2,12 +2,20 @@
 Token generation and encryption utilities for secure authentication.
 """
 import jwt
+import logging
 from datetime import datetime, timedelta
 from cryptography.fernet import Fernet
 import os
 from dotenv import load_dotenv
 import base64
+
+try:
+    from .sentry_setup import report_exception
+except ImportError:
+    from sentry_setup import report_exception
+
 load_dotenv()
+logger = logging.getLogger(__name__)
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
 if not JWT_SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY environment variable is required for token signing and validation")
@@ -77,7 +85,8 @@ def encrypt_token(token: str) -> str:
         encrypted_token = fernet.encrypt(token.encode())
         return encrypted_token.decode()
     except Exception as e:
-        print(f"[ERROR] Failed to encrypt token: {e}")
+        logger.exception("Failed to encrypt token: %s", e)
+        report_exception(e, context={"operation": "encrypt_token"})
         raise
 def decrypt_token(encrypted_token: str) -> str:
     """
@@ -93,7 +102,8 @@ def decrypt_token(encrypted_token: str) -> str:
         decrypted_token = fernet.decrypt(encrypted_token.encode())
         return decrypted_token.decode()
     except Exception as e:
-        print(f"[ERROR] Failed to decrypt token: {e}")
+        logger.exception("Failed to decrypt token: %s", e)
+        report_exception(e, context={"operation": "decrypt_token"})
         raise
 def verify_token(token: str) -> dict:
     """
@@ -256,5 +266,6 @@ def generate_and_encrypt_token(
     try:
         return encrypt_token(plain_token)
     except Exception as e:
-        print(f"[ERROR] Failed to encrypt token in generate_and_encrypt_token: {e}")
+        logger.exception("Failed to encrypt token in generate_and_encrypt_token: %s", e)
+        report_exception(e, context={"operation": "generate_and_encrypt_token"})
         raise

@@ -1,0 +1,49 @@
+# Sentry & deploy secrets reference for KhonoBuzz
+# Primary pipeline: .github/workflows/deploy.yml
+
+name: deployment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  secrets-reference:
+    runs-on: ubuntu-latest
+    steps:
+      - name: GitHub Actions secrets checklist
+        run: |
+          cat <<'EOF'
+          ## Required GitHub Actions secrets (Settings → Secrets → Actions)
+
+          ### Sentry DSNs
+          FRONTEND_DSN              Flutter web build (--dart-define=FRONTEND_DSN)
+          BACKEND_DSN               FastAPI on Render (env var BACKEND_DSN)
+
+          ### Sentry release / upload
+          SENTRY_AUTH_TOKEN         Auth token from sentry.io (source maps)
+          SENTRY_ORG                e.g. khonology-2w
+          SENTRY_PROJECT_FRONTEND   e.g. khonobuzz_frontend
+          SENTRY_PROJECT_BACKEND    e.g. khonobuzz-backend
+
+          ### Sentry tuning (optional — workflow defaults shown)
+          SENTRY_ENVIRONMENT        production
+          SENTRY_TRACES_SAMPLE_RATE   0.1
+          SENTRY_PROFILES_SAMPLE_RATE 0.1
+          SENTRY_REPLAY_SESSION_RATE  0.1
+          SENTRY_REPLAY_ON_ERROR_RATE 1.0
+
+          ### Render deploy hooks
+          RENDER_DEPLOY_HOOK          Frontend static site
+          RENDER_BACKEND_DEPLOY_HOOK  Backend web service
+
+          ## Render backend service env vars
+          BACKEND_DSN, SENTRY_ENVIRONMENT, SENTRY_RELEASE, SENTRY_TRACES_SAMPLE_RATE,
+          SENTRY_PROFILES_SAMPLE_RATE, SENTRY_SERVER_NAME
+
+          ## Local Flutter run
+          flutter run -d edge --dart-define=FRONTEND_DSN=<your-frontend-dsn>
+
+          ## Pipelines
+          deploy.yml     — feature branch → khono_v4 → Render → PR to main
+          deploy-check.yml — version bump + legacy CI (khono_v4/main pushes)
+          EOF

@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+from sentry_setup import run_script
+
 USERS = [
     "user.salman@khonology.com",
 ]
@@ -89,4 +91,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    run_script(main, "push_sso_users")

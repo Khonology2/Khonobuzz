@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:ui';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'config/api_config.dart';
+import 'config/env.dart';
+import 'config/sentry_dsn_loader.dart';
 import 'screens/entity_management_screen.dart';
 import 'screens/user_management_screen.dart';
 import 'screens/module_access_screen.dart';
@@ -35,6 +39,14 @@ import 'widgets/flutter_web_readiness.dart';
 
 /// Headless browsers (e.g. Cypress / Electron) sometimes report locales that
 /// break [Locale] construction ("Incorrect locale information provided").
+/// CI flow test marker: release-pr pipeline verification (2026-05-23)...
+/// 
+/// 
+/// 
+/// 
+
+
+
 Locale _resolveApplicationLocale(
   List<Locale>? locales,
   Iterable<Locale> supported,
@@ -76,10 +88,16 @@ Locale? _trySupportedLocale(Locale device, Iterable<Locale> supported) {
   return null;
 }
 
-void main() async {
+/// Configures Sentry session replay sample rates (sentry_flutter 8.x API).
+void _configureSentryReplay(SentryFlutterOptions options) {
+  // ignore: experimental_member_use
+  final replay = options.experimental.replay;
+  replay.sessionSampleRate = sentryReplaySessionRate;
+  replay.onErrorSampleRate = sentryReplayOnErrorRate;
+}
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // So version widget can fetch latest from backend and stop being stuck on build-time version
-  VersionService.versionBaseUrl = ApiConfig.baseUrl;
 
   final prefs = await SharedPreferences.getInstance();
   final storedTheme = prefs.getString(ThemeModeProvider.prefsKey);
@@ -87,10 +105,92 @@ void main() async {
       ? ThemeMode.light
       : ThemeMode.dark;
 
+  await resolveSentryDsn();
+
+  if (!sentryEnabled) {
+    debugPrint(
+      '[Sentry] Disabled — no DSN. '
+      'Use --dart-define=FRONTEND_DSN=... locally or deploy with CI FRONTEND_DSN secret.',
+    );
+    await _runApp(initialThemeMode: initialThemeMode);
+    return;
+  }
+
+  debugPrint(
+    '[Sentry] Enabled env=$sentryEnvironment release=$sentryRelease',
+  );
+
+  try {
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = sentryDsn;
+        options.environment = sentryEnvironment;
+        options.tracesSampleRate = sentryTracesSampleRate;
+        options.sendDefaultPii = true;
+        options.attachStacktrace = true;
+        options.enableAutoSessionTracking = true;
+        options.debug = kDebugMode;
+        // Release tracking — ties errors to a specific git commit/deploy.
+        options.release = sentryRelease;
+        options.autoAppStart = true;
+
+        // Performance — Flutter frame rendering, screen load times,
+        // user interaction response times.
+        options.enableAutoPerformanceTracing = true;
+        options.enableUserInteractionTracing = true;
+        options.enableTimeToFullDisplayTracing = true;
+
+        // Session Replay — records what the user was doing when an error hit.
+        // Replay is under options.experimental until a stable SDK release.
+        _configureSentryReplay(options);
+      },
+      appRunner: () {
+        // Flutter framework errors (widget build failures, rendering errors).
+        FlutterError.onError = (FlutterErrorDetails details) {
+          if (sentryEnabled) {
+            Sentry.captureException(
+              details.exception,
+              stackTrace: details.stack,
+              hint: Hint.withMap({
+                'flutter_error_details': details.toString(),
+              }),
+            );
+          }
+          FlutterError.presentError(details);
+        };
+
+        // Dart isolate errors that Flutter cannot catch via FlutterError.
+        PlatformDispatcher.instance.onError = (error, stack) {
+          if (sentryEnabled) {
+            Sentry.captureException(error, stackTrace: stack);
+          }
+          return true;
+        };
+
+        unawaited(_runApp(initialThemeMode: initialThemeMode));
+      },
+    );
+  } catch (e, stack) {
+    debugPrint('[Sentry] Init failed — starting app without Sentry: $e');
+    debugPrint('$stack');
+    setRuntimeSentryDsn('');
+    await _runApp(initialThemeMode: initialThemeMode);
+  }
+}
+
+Future<void> _runApp({required ThemeMode initialThemeMode}) async {
+  // So version widget can fetch latest from backend and stop being stuck on build-time version
+  VersionService.versionBaseUrl = ApiConfig.baseUrl;
+
   if (kIsWeb) {
     flutter_ready_body.setFlutterReadyAttribute(false);
   }
-  runApp(MyApp(initialThemeMode: initialThemeMode));
+
+  runApp(
+    sentryEnabled
+        ? SentryWidget(child: MyApp(initialThemeMode: initialThemeMode))
+        : MyApp(initialThemeMode: initialThemeMode),
+  );
 
   // Mark app as ready after first frame for Cypress E2E testing
   if (kIsWeb) {
@@ -141,6 +241,9 @@ class MyApp extends StatelessWidget {
           builder: (context, themeModeProvider, _) {
             return MaterialApp(
               title: 'Khonology',
+              navigatorObservers: [
+                if (sentryEnabled) SentryNavigatorObserver(),
+              ],
               theme: AppThemes.light,
               darkTheme: AppThemes.dark,
               themeMode: themeModeProvider.themeMode,
