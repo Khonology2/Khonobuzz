@@ -7,7 +7,5 @@ namespace MyApi.DTOs.Auth
         [Required]
         [EmailAddress]
         public required string Email { get; set; }
-
-        public string? Otp { get; set; }
     }
 }

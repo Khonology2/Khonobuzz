@@ -1,144 +1,125 @@
 using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using Cryptography;
 using Microsoft.IdentityModel.Tokens;
 using MyApi.Models;
 
-namespace MyApi.Services
+namespace MyApi.Services;
+
+public class TokenService : ITokenService
 {
-    public class TokenService : ITokenService
+    private readonly IConfiguration _configuration;
+
+    public TokenService(IConfiguration configuration) => _configuration = configuration;
+
+    private string GetJwtSecret() =>
+        Environment.GetEnvironmentVariable("JWT_SECRET_KEY")?.Trim()
+        ?? _configuration["Jwt:SecretKey"]?.Trim()
+        ?? throw new InvalidOperationException("JWT_SECRET_KEY or Jwt:SecretKey not configured");
+
+    private string GetEncryptionKey()
     {
-        private readonly IConfiguration _configuration;
+        var key = Environment.GetEnvironmentVariable("ENCRYPTION_KEY")?.Trim()
+            ?? _configuration["Encryption:Key"]?.Trim();
+        if (string.IsNullOrEmpty(key))
+            throw new InvalidOperationException("ENCRYPTION_KEY or Encryption:Key not configured");
+        return key;
+    }
 
-        public TokenService(IConfiguration configuration)
-        {
-            _configuration = configuration;
-        }
+    public string GenerateToken(User user, IReadOnlyList<string>? roles = null, string? themePreference = null) =>
+        GeneratePythonStyleToken(user.Id, user.Email, user.Name ?? "", roles, themePreference ?? "dark");
 
-        private string GetEncryptionKey()
-        {
-            var key = Environment.GetEnvironmentVariable("ENCRYPTION_KEY")?.Trim()
-                ?? _configuration["Encryption:Key"]?.Trim();
-            if (string.IsNullOrEmpty(key))
-                throw new InvalidOperationException("ENCRYPTION_KEY or Encryption:Key not configured");
-            return key;
-        }
+    public string GenerateTokenFromDict(string id, string email, string name, string department = "", string designation = "", IReadOnlyList<string>? roles = null, string? themePreference = null) =>
+        GeneratePythonStyleToken(id, email, name, roles, themePreference);
 
-        public string GenerateToken(User user, IReadOnlyList<string>? roles = null)
+    public string GeneratePythonStyleToken(string userId, string email, string fullName, IReadOnlyList<string>? roles = null, string? themePreference = null)
+    {
+        var expirationHours = _configuration.GetValue<int>("Jwt:ExpirationHours", 24);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var exp = now + (expirationHours * 3600L);
+        var payload = new JwtPayload
         {
-            var claimsList = new List<Claim>
+            { "user_id", userId },
+            { "email", email },
+            { "full_name", fullName ?? "" },
+            { "roles", roles?.ToList() ?? new List<string>() },
+            { "theme", ModuleRoleParser.NormalizeThemePreference(themePreference) },
+            { "iat", now },
+            { "exp", exp }
+        };
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(GetJwtSecret()));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var token = new JwtSecurityToken(new JwtHeader(creds), payload);
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    public Dictionary<string, object>? VerifyAndExpandToken(string token)
+    {
+        try
+        {
+            var jwt = token;
+            if (IsEncryptedToken(token))
+                jwt = DecryptToken(token);
+
+            var handler = new JwtSecurityTokenHandler();
+            var parameters = new TokenValidationParameters
             {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim(JwtRegisteredClaimNames.Name, user.Name ?? ""),
-                new Claim("department", user.Department ?? ""),
-                new Claim("designation", user.Designation ?? ""),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(GetJwtSecret())),
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
             };
-            if (roles != null && roles.Count > 0)
+            handler.ValidateToken(jwt, parameters, out var validated);
+            var jwtToken = (JwtSecurityToken)validated;
+
+            if (jwtToken.Payload.TryGetValue("user_id", out var uid) || jwtToken.Payload.TryGetValue("uid", out uid))
             {
-                foreach (var r in roles)
-                    claimsList.Add(new Claim(ClaimTypes.Role, r));
-            }
-            return CreateToken(claimsList);
-        }
-
-        public string GenerateTokenFromDict(string id, string email, string name, string department = "", string designation = "", IReadOnlyList<string>? roles = null)
-        {
-            var claimsList = new List<Claim>
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, id),
-                new Claim(JwtRegisteredClaimNames.Email, email),
-                new Claim(JwtRegisteredClaimNames.Name, name ?? ""),
-                new Claim("department", department ?? ""),
-                new Claim("designation", designation ?? ""),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-            };
-            if (roles != null && roles.Count > 0)
-            {
-                foreach (var r in roles)
-                    claimsList.Add(new Claim(ClaimTypes.Role, r));
-            }
-            return CreateToken(claimsList);
-        }
-
-        private string CreateToken(List<Claim> claims)
-        {
-            var secretKey = _configuration["Jwt:SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            var expirationHours = _configuration.GetValue<int>("Jwt:ExpirationHours", 24);
-            var token = new JwtSecurityToken(
-                issuer: null,
-                audience: null,
-                claims: claims,
-                expires: DateTime.UtcNow.AddHours(expirationHours),
-                signingCredentials: creds);
-            return new JwtSecurityTokenHandler().WriteToken(token);
-        }
-
-        public string EncryptToken(string plainJwt)
-        {
-            var key = GetEncryptionKey();
-            return Fernet.Encrypt(key, plainJwt);
-        }
-
-        public string DecryptToken(string encryptedToken)
-        {
-            var key = GetEncryptionKey();
-            return Fernet.Decrypt(key, encryptedToken);
-        }
-
-        public bool IsEncryptedToken(string token)
-        {
-            if (string.IsNullOrEmpty(token)) return false;
-            return token.StartsWith("gAAAA", StringComparison.Ordinal) || !token.Contains('.');
-        }
-
-        public string? GetUserIdFromToken(string token)
-        {
-            try
-            {
-                var jwt = token;
-                if (IsEncryptedToken(token))
+                var roles = new List<string>();
+                if (jwtToken.Payload.TryGetValue("roles", out var rolesObj))
                 {
-                    try { jwt = DecryptToken(token); } catch { return null; }
+                    if (rolesObj is JsonElement je && je.ValueKind == JsonValueKind.Array)
+                        roles = je.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => x.Length > 0).ToList();
+                    else if (rolesObj is IEnumerable<object> list)
+                        roles = list.Select(x => x?.ToString() ?? "").Where(x => x.Length > 0).ToList();
                 }
-                var tokenHandler = new JwtSecurityTokenHandler();
-                var secretKey = _configuration["Jwt:SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
-                var key = Encoding.UTF8.GetBytes(secretKey);
-
-                var validationParameters = new TokenValidationParameters
+                return new Dictionary<string, object>
                 {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(key),
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
-                    ValidateLifetime = true,
-                    ClockSkew = TimeSpan.Zero
+                    ["user_id"] = uid?.ToString() ?? "",
+                    ["email"] = jwtToken.Payload.TryGetValue("email", out var em) ? em?.ToString() ?? "" : "",
+                    ["full_name"] = jwtToken.Payload.TryGetValue("full_name", out var fn) ? fn?.ToString() ?? "" : "",
+                    ["roles"] = roles,
+                    ["theme"] = jwtToken.Payload.TryGetValue("theme", out var th) ? th?.ToString() ?? "dark" : "dark",
+                    ["exp"] = jwtToken.Payload.TryGetValue("exp", out var exp) ? exp : 0,
+                    ["iat"] = jwtToken.Payload.TryGetValue("iat", out var iat) ? iat : 0
                 };
-
-                var principal = tokenHandler.ValidateToken(jwt, validationParameters, out _);
-                var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier) ??
-                                 principal.FindFirst(JwtRegisteredClaimNames.Sub);
-
-                return userIdClaim?.Value;
             }
-            catch
-            {
-                return null;
-            }
-        }
 
-        public Task<string> EncryptTokenAsync(string token)
-        {
-            return Task.FromResult(EncryptToken(token));
+            return jwtToken.Payload.ToDictionary(k => k.Key, k => k.Value ?? "");
         }
-
-        public Task<string> DecryptTokenAsync(string encryptedToken)
+        catch
         {
-            return Task.FromResult(DecryptToken(encryptedToken));
+            return null;
         }
     }
+
+    public string EncryptToken(string plainJwt) => Fernet.Encrypt(GetEncryptionKey(), plainJwt);
+    public string DecryptToken(string encryptedToken) => Fernet.Decrypt(GetEncryptionKey(), encryptedToken);
+
+    public bool IsEncryptedToken(string token) =>
+        !string.IsNullOrEmpty(token) && (token.StartsWith("gAAAA", StringComparison.Ordinal) || !token.Contains('.'));
+
+    public string? GetUserIdFromToken(string token)
+    {
+        var payload = VerifyAndExpandToken(token);
+        if (payload == null) return null;
+        if (payload.TryGetValue("user_id", out var uid) && uid?.ToString() is { Length: > 0 } id) return id;
+        if (payload.TryGetValue("sub", out var sub) && sub?.ToString() is { Length: > 0 } subId) return subId;
+        return null;
+    }
+
+    public Task<string> EncryptTokenAsync(string token) => Task.FromResult(EncryptToken(token));
+    public Task<string> DecryptTokenAsync(string encryptedToken) => Task.FromResult(DecryptToken(encryptedToken));
 }

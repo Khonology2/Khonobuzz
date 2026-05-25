@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "C:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj": {}
+    "c:\\Users\\Nkosinathi Radebe\\Documents\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj": {}
   },
   "projects": {
-    "C:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj": {
+    "c:\\Users\\Nkosinathi Radebe\\Documents\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj",
+        "projectUniqueName": "c:\\Users\\Nkosinathi Radebe\\Documents\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj",
         "projectName": "MyApi",
-        "projectPath": "C:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj",
+        "projectPath": "c:\\Users\\Nkosinathi Radebe\\Documents\\khonoBUzz\\KhonoBuzz\\C#-setup\\MyApi.csproj",
         "packagesPath": "C:\\Users\\Nkosinathi Radebe\\.nuget\\packages\\",
-        "outputPath": "C:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\obj\\",
+        "outputPath": "c:\\Users\\Nkosinathi Radebe\\Documents\\khonoBUzz\\KhonoBuzz\\C#-setup\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\apps\\khonoBUzz\\KhonoBuzz\\C#-setup\\NuGet.Config",
+          "c:\\Users\\Nkosinathi Radebe\\Documents\\khonoBUzz\\KhonoBuzz\\C#-setup\\NuGet.Config",
           "C:\\Users\\Nkosinathi Radebe\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
@@ -44,10 +44,6 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
-            "BCrypt.Net-Next": {
-              "target": "Package",
-              "version": "[4.0.3, )"
-            },
             "CloudinaryDotNet": {
               "target": "Package",
               "version": "[1.26.2, )"
@@ -60,23 +56,19 @@
               "target": "Package",
               "version": "[3.1.1, )"
             },
-            "FirebaseAdmin": {
-              "target": "Package",
-              "version": "[3.1.0, )"
-            },
-            "Google.Cloud.Firestore": {
-              "target": "Package",
-              "version": "[4.2.0, )"
-            },
-            "MailKit": {
-              "target": "Package",
-              "version": "[4.8.0, )"
-            },
-            "Microsoft.AspNetCore.Authentication.JwtBearer": {
+            "Microsoft.AspNetCore.OpenApi": {
               "target": "Package",
               "version": "[8.0.10, )"
             },
-            "Microsoft.AspNetCore.OpenApi": {
+            "Microsoft.EntityFrameworkCore": {
+              "target": "Package",
+              "version": "[8.0.10, )"
+            },
+            "Npgsql": {
+              "target": "Package",
+              "version": "[8.0.5, )"
+            },
+            "Npgsql.EntityFrameworkCore.PostgreSQL": {
               "target": "Package",
               "version": "[8.0.10, )"
             },
