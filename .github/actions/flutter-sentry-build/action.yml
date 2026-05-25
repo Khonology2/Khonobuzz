@@ -42,6 +42,10 @@ inputs:
     description: Pass SENTRY_TRACES_SAMPLE_RATE to the Flutter build.
     required: false
     default: 'false'
+  require_dsn:
+    description: Fail the build when FRONTEND_DSN is empty (deploy builds).
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -56,8 +60,13 @@ runs:
         SENTRY_REPLAY_ON_ERROR_RATE: ${{ inputs.sentry_replay_on_error_rate }}
         GITHUB_SHA: ${{ inputs.github_sha }}
         INCLUDE_TRACES: ${{ inputs.include_traces_sample_rate }}
+        REQUIRE_DSN: ${{ inputs.require_dsn }}
       run: |
         set -euo pipefail
+        if [ "${REQUIRE_DSN}" = "true" ] && [ -z "${FRONTEND_DSN:-}" ]; then
+          echo "::error::FRONTEND_DSN secret is empty — Sentry cannot receive errors from this build"
+          exit 1
+        fi
         BUILD_ARGS=(
           --dart-define=FRONTEND_DSN="${FRONTEND_DSN}"
           --dart-define=SENTRY_RELEASE=khonobuzz-frontend@${GITHUB_SHA}
@@ -69,6 +78,27 @@ runs:
           BUILD_ARGS+=(--dart-define=SENTRY_TRACES_SAMPLE_RATE="${SENTRY_TRACES_SAMPLE_RATE:-0.1}")
         fi
         flutter build web --release --base-href / "${BUILD_ARGS[@]}"
+
+    - name: Write web Sentry runtime config
+      shell: bash
+      env:
+        FRONTEND_DSN: ${{ inputs.frontend_dsn }}
+        SENTRY_ENVIRONMENT: ${{ inputs.sentry_environment }}
+        GITHUB_SHA: ${{ inputs.github_sha }}
+      run: |
+        set -euo pipefail
+        RELEASE="khonobuzz-frontend@${GITHUB_SHA}"
+        if [ -n "${FRONTEND_DSN:-}" ]; then
+          jq -n \
+            --arg dsn "$FRONTEND_DSN" \
+            --arg environment "${SENTRY_ENVIRONMENT:-production}" \
+            --arg release "$RELEASE" \
+            '{dsn: $dsn, environment: $environment, release: $release}' \
+            > build/web/sentry-config.json
+          echo "Wrote build/web/sentry-config.json for runtime Sentry DSN loading"
+        else
+          echo "::warning::FRONTEND_DSN not set — skipping sentry-config.json"
+        fi
 
     - name: Upload Sentry source maps
       shell: bash

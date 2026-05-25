@@ -8,6 +8,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'config/api_config.dart';
 import 'config/env.dart';
+import 'config/sentry_dsn_loader.dart';
 import 'screens/entity_management_screen.dart';
 import 'screens/user_management_screen.dart';
 import 'screens/module_access_screen.dart';
@@ -104,59 +105,77 @@ Future<void> main() async {
       ? ThemeMode.light
       : ThemeMode.dark;
 
+  await resolveSentryDsn();
+
   if (!sentryEnabled) {
+    debugPrint(
+      '[Sentry] Disabled — no DSN. '
+      'Use --dart-define=FRONTEND_DSN=... locally or deploy with CI FRONTEND_DSN secret.',
+    );
     await _runApp(initialThemeMode: initialThemeMode);
     return;
   }
 
-  await SentryFlutter.init(
-    (options) {
-      options.dsn = sentryDsn;
-      options.environment = sentryEnvironment;
-      options.tracesSampleRate = sentryTracesSampleRate;
-      options.sendDefaultPii = true;
-      options.attachStacktrace = true;
-      options.enableAutoSessionTracking = true;
-      // Release tracking — ties errors to a specific git commit/deploy.
-      options.release = sentryRelease;
-      options.autoAppStart = true;
-
-      // Performance — Flutter frame rendering, screen load times,
-      // user interaction response times.
-      options.enableAutoPerformanceTracing = true;
-      options.enableUserInteractionTracing = true;
-      options.enableTimeToFullDisplayTracing = true;
-
-      // Session Replay — records what the user was doing when an error hit.
-      // Replay is under options.experimental until a stable SDK release.
-      _configureSentryReplay(options);
-    },
-    appRunner: () {
-      // Flutter framework errors (widget build failures, rendering errors).
-      FlutterError.onError = (FlutterErrorDetails details) {
-        if (sentryEnabled) {
-          Sentry.captureException(
-            details.exception,
-            stackTrace: details.stack,
-            hint: Hint.withMap({
-              'flutter_error_details': details.toString(),
-            }),
-          );
-        }
-        FlutterError.presentError(details);
-      };
-
-      // Dart isolate errors that Flutter cannot catch via FlutterError.
-      PlatformDispatcher.instance.onError = (error, stack) {
-        if (sentryEnabled) {
-          Sentry.captureException(error, stackTrace: stack);
-        }
-        return true;
-      };
-
-      unawaited(_runApp(initialThemeMode: initialThemeMode));
-    },
+  debugPrint(
+    '[Sentry] Enabled env=$sentryEnvironment release=$sentryRelease',
   );
+
+  try {
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = sentryDsn;
+        options.environment = sentryEnvironment;
+        options.tracesSampleRate = sentryTracesSampleRate;
+        options.sendDefaultPii = true;
+        options.attachStacktrace = true;
+        options.enableAutoSessionTracking = true;
+        options.debug = kDebugMode;
+        // Release tracking — ties errors to a specific git commit/deploy.
+        options.release = sentryRelease;
+        options.autoAppStart = true;
+
+        // Performance — Flutter frame rendering, screen load times,
+        // user interaction response times.
+        options.enableAutoPerformanceTracing = true;
+        options.enableUserInteractionTracing = true;
+        options.enableTimeToFullDisplayTracing = true;
+
+        // Session Replay — records what the user was doing when an error hit.
+        // Replay is under options.experimental until a stable SDK release.
+        _configureSentryReplay(options);
+      },
+      appRunner: () {
+        // Flutter framework errors (widget build failures, rendering errors).
+        FlutterError.onError = (FlutterErrorDetails details) {
+          if (sentryEnabled) {
+            Sentry.captureException(
+              details.exception,
+              stackTrace: details.stack,
+              hint: Hint.withMap({
+                'flutter_error_details': details.toString(),
+              }),
+            );
+          }
+          FlutterError.presentError(details);
+        };
+
+        // Dart isolate errors that Flutter cannot catch via FlutterError.
+        PlatformDispatcher.instance.onError = (error, stack) {
+          if (sentryEnabled) {
+            Sentry.captureException(error, stackTrace: stack);
+          }
+          return true;
+        };
+
+        unawaited(_runApp(initialThemeMode: initialThemeMode));
+      },
+    );
+  } catch (e, stack) {
+    debugPrint('[Sentry] Init failed — starting app without Sentry: $e');
+    debugPrint('$stack');
+    setRuntimeSentryDsn('');
+    await _runApp(initialThemeMode: initialThemeMode);
+  }
 }
 
 Future<void> _runApp({required ThemeMode initialThemeMode}) async {

@@ -12,8 +12,51 @@ const String _legacySentryDsn = String.fromEnvironment(
   defaultValue: '',
 );
 
-String get sentryDsn =>
+String get sentryDsn {
+  if (_runtimeSentryDsn != null && _runtimeSentryDsn!.isNotEmpty) {
+    return _runtimeSentryDsn!;
+  }
+  return compileTimeSentryDsn;
+}
+
+/// DSN from `--dart-define=FRONTEND_DSN` / `SENTRY_DSN` only (no runtime file).
+String get compileTimeSentryDsn =>
     _frontendDsn.isNotEmpty ? _frontendDsn : _legacySentryDsn;
+
+String? _runtimeSentryDsn;
+
+/// Set after [resolveSentryDsn] loads `build/web/sentry-config.json` on web.
+void setRuntimeSentryDsn(String dsn) {
+  _runtimeSentryDsn = normalizeSentryDsn(dsn);
+}
+
+/// Strips accidental `.env` prefixes and validates the Sentry DSN URL.
+String? normalizeSentryDsn(String raw) {
+  var value = raw.trim();
+  if (value.isEmpty) {
+    return null;
+  }
+
+  for (final prefix in ['FRONTEND_DSN=', 'SENTRY_DSN=', 'BACKEND_DSN=']) {
+    if (value.startsWith(prefix)) {
+      value = value.substring(prefix.length).trim();
+    }
+  }
+
+  final envLine = RegExp(
+    r'^(?:FRONTEND_DSN|SENTRY_DSN|BACKEND_DSN)=(.+)$',
+  ).firstMatch(value);
+  if (envLine != null) {
+    value = envLine.group(1)!.trim();
+  }
+
+  final uri = Uri.tryParse(value);
+  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+    return null;
+  }
+
+  return value;
+}
 
 /// Optional override for Sentry environment label.
 const String sentryEnvironmentOverride = String.fromEnvironment(

@@ -62,43 +62,63 @@ except ImportError:
 try:
     from .khono_relational_models import init_relational_tables, KbAppUser
     from .khono_relational_service import (
+        acknowledge_admin_notification as relational_acknowledge_admin_notification,
         apply_onboarding_patch_to_relational,
         apply_user_patch_to_relational,
+        clear_admin_notification_state,
+        create_admin_notification as relational_create_admin_notification,
+        create_department as relational_create_department,
+        create_designation as relational_create_designation,
+        create_entity as relational_create_entity,
+        create_role as relational_create_role,
         delete_user_relational,
-        fetch_profile_row,
+        dismiss_admin_notification as relational_dismiss_admin_notification,
         find_user_by_email,
-        get_user_legacy_dict,
+        find_user_by_id,
+        list_admin_notifications_for_role,
+        list_department_names,
+        list_designation_names,
+        list_entity_names,
         list_users_payloads,
         merged_onboarding_dict,
         migrate_from_firestore_documents,
-        mirror_user_profile_to_firestore,
         relational_user_count,
+        seed_initial_roles,
         session_scope,
+        update_user_login_tracking,
         upsert_user_from_registration,
         user_to_legacy_dict,
     )
 except ImportError:
     from khono_relational_models import init_relational_tables, KbAppUser
     from khono_relational_service import (
+        acknowledge_admin_notification as relational_acknowledge_admin_notification,
         apply_onboarding_patch_to_relational,
         apply_user_patch_to_relational,
+        clear_admin_notification_state,
+        create_admin_notification as relational_create_admin_notification,
+        create_department as relational_create_department,
+        create_designation as relational_create_designation,
+        create_entity as relational_create_entity,
+        create_role as relational_create_role,
         delete_user_relational,
-        fetch_profile_row,
+        dismiss_admin_notification as relational_dismiss_admin_notification,
         find_user_by_email,
-        get_user_legacy_dict,
+        find_user_by_id,
+        list_admin_notifications_for_role,
+        list_department_names,
+        list_designation_names,
+        list_entity_names,
         list_users_payloads,
         merged_onboarding_dict,
         migrate_from_firestore_documents,
-        mirror_user_profile_to_firestore,
         relational_user_count,
+        seed_initial_roles,
         session_scope,
+        update_user_login_tracking,
         upsert_user_from_registration,
         user_to_legacy_dict,
     )
-try:
-    from .pg_firestore_compat import PGFirestoreClient, firestore as pg_store
-except ImportError:
-    from pg_firestore_compat import PGFirestoreClient, firestore as pg_store
 load_dotenv()
 DEBUG_MODE = os.environ.get('DEBUG', 'True').lower() == 'true'
 LOG_LEVEL = logging.DEBUG if DEBUG_MODE else logging.INFO
@@ -478,44 +498,16 @@ def _normalize_users_list_status_inplace(users_data: Any) -> None:
             row["status"] = _normalize_account_status_display(row.get("status"))
 
 
-def _get_best_onboarding_record(user_id: str):
-    """Pick deterministic onboarding record for a user.
-    Prefers canonical document id == user_id; otherwise best legacy record by recency.
-    """
+def _get_best_onboarding_record(user_id: str) -> Dict[str, Any]:
+    """Return onboarding/profile data for a user from kb_user_profile."""
     try:
         with SessionLocal() as s:
-            if relational_user_count(s) > 0:
-                u = s.get(KbAppUser, user_id)
-                if u is not None:
-                    ref = db.collection("onboarding").document(user_id)
-                    return ref, merged_onboarding_dict(s, user_id, u.email)
+            u = s.get(KbAppUser, user_id)
+            if u is not None:
+                return merged_onboarding_dict(s, user_id, u.email)
     except Exception as e:
         print(f"[WARN] relational onboarding read: {e}")
-    canonical_ref = db.collection('onboarding').document(user_id)
-    canonical_doc = canonical_ref.get(timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS)
-    if canonical_doc.exists:
-        return canonical_ref, (canonical_doc.to_dict() or {})
-
-    docs = list(
-        db.collection('onboarding')
-        .where('user_id', '==', user_id)
-        .limit(5)
-        .stream(timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS)
-    )
-    if not docs:
-        return canonical_ref, {}
-
-    def _score(doc):
-        data = doc.to_dict() or {}
-        raw = (
-            _coerce_datetime(data.get('updated_at'))
-            or _coerce_datetime(data.get('lastSignInAt'))
-            or _coerce_datetime(data.get('created_at'))
-        )
-        return _sortable_datetime(raw)
-
-    best_doc = max(docs, key=_score)
-    return best_doc.reference, (best_doc.to_dict() or {})
+    return {}
 def _run_with_pdh_db(action_label: str, operation: Callable[[Any], None]) -> bool:
     del action_label, operation
     # Firebase PDH sync has been removed; PostgreSQL is now the only runtime datastore.
@@ -598,7 +590,6 @@ class AdminNotificationAcknowledge(BaseModel):
     alertId: str
 if pg_engine is None:
     raise RuntimeError("DATABASE_URL is required.")
-db = PGFirestoreClient(pg_engine)
 init_relational_tables(pg_engine)
 info_log("Normalized kb_* relational tables ensured (kb_app_user, kb_user_email, kb_user_profile, …)")
 if os.environ.get("AUTO_MIGRATE_KB_TABLES", "").lower() in ("1", "true", "yes"):
@@ -639,9 +630,13 @@ async def startup_warmup():
         if _db_breaker_is_open():
             info_log("Startup warm-up skipped: datastore circuit breaker is open")
             return
+        def _warmup_relational_users():
+            with SessionLocal() as s:
+                relational_user_count(s)
+
         # Keep startup non-blocking to avoid cold-start delays.
         await asyncio.wait_for(
-            asyncio.to_thread(lambda: db.collection('users').limit(1).get()),
+            asyncio.to_thread(_warmup_relational_users),
             timeout=6.0,
         )
         _db_breaker_record_success()
@@ -910,17 +905,11 @@ def _validate_token_internal(token: str):
         if user_id:
             try:
                 with SessionLocal() as s:
-                    if relational_user_count(s) > 0:
-                        user_data = get_user_legacy_dict(s, user_id)
+                    _, user_data = find_user_by_id(s, user_id)
+                    if not user_data:
+                        user_data = None
             except Exception as e:
                 warning_log("relational user read during token validation", exc=e)
-            if user_data is None:
-                try:
-                    user_doc = db.collection('users').document(user_id).get()
-                    if user_doc.exists:
-                        user_data = user_doc.to_dict()
-                except Exception as e:
-                    warning_log("Failed to fetch user data during token validation", exc=e)
         return {
             "valid": True,
             "payload": payload,
@@ -1102,34 +1091,17 @@ async def onboarding_update_user(uid: str, data: dict):
         payload['user_id'] = uid
         payload['updated_at'] = datetime.utcnow()
 
-        use_rel = False
         with SessionLocal() as s0:
-            if relational_user_count(s0) > 0 and s0.get(KbAppUser, uid) is not None:
-                use_rel = True
-        if use_rel:
-            with session_scope() as s:
-                apply_onboarding_patch_to_relational(s, uid, payload)
-                u = s.get(KbAppUser, uid)
-                p = fetch_profile_row(s, uid)
-            mirror_user_profile_to_firestore(db, u, p)
-            user_data = user_to_legacy_dict(u) if u is not None else {}
-        else:
-            onboarding_query = (
-                db.collection('onboarding').where('user_id', '==', uid).limit(1).stream()
-            )
-            onboarding_doc = None
-            for doc in onboarding_query:
-                onboarding_doc = doc
-                break
+            if s0.get(KbAppUser, uid) is None:
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={"error": "User not found"},
+                )
 
-            if onboarding_doc is not None:
-                onboarding_doc.reference.set(payload, merge=True)
-            else:
-                payload['created_at'] = datetime.utcnow()
-                db.collection('onboarding').add(payload)
-
-            user_doc = db.collection('users').document(uid).get()
-            user_data = user_doc.to_dict() if user_doc.exists else {}
+        with session_scope() as s:
+            apply_onboarding_patch_to_relational(s, uid, payload)
+            u = s.get(KbAppUser, uid)
+        user_data = user_to_legacy_dict(u) if u is not None else {}
 
         # Keep external app user stores in sync for onboarding-driven user changes.
         sync_sso_user_login(uid, user_data, payload)
@@ -1180,12 +1152,11 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
         user_id = None
         user_info = None
         with SessionLocal() as s:
-            if relational_user_count(s) > 0:
-                rid, ud = find_user_by_email(s, normalized_email)
-                if rid:
-                    user_id, user_info = rid, ud
+            rid, ud = find_user_by_email(s, normalized_email)
+            if rid:
+                user_id, user_info = rid, ud
         if user_id and user_info:
-            _, onboarding_info = _get_best_onboarding_record(user_id)
+            onboarding_info = _get_best_onboarding_record(user_id)
             onboarding_email = (onboarding_info.get('email') or '').strip().lower()
             safe_onboarding = onboarding_info if (not onboarding_email or onboarding_email == normalized_email) else {}
             profile_url = (safe_onboarding.get('profileImageUrl') or '').strip()
@@ -1237,77 +1208,10 @@ async def get_user_by_email(email: str = Query(..., description="User email addr
                 content={'user': response_user},
             )
 
-        users_ref = db.collection('users')
-        query = users_ref.where('email', '==', normalized_email).limit(1)
-        users = query.get()
-        if not users:
-            print(f"[DEBUG] get_user_by_email: User not found: {normalized_email}")
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={"error": "User not found"},
-            )
-
-        user_doc = users[0]
-        user_info = user_doc.to_dict() or {}
-        user_id = user_doc.id
-
-        _, onboarding_info = _get_best_onboarding_record(user_id)
-
-        # Only use onboarding for profile/name if it belongs to this user (avoid returning another user's data)
-        onboarding_email = (onboarding_info.get('email') or '').strip().lower()
-        safe_onboarding = onboarding_info if (not onboarding_email or onboarding_email == normalized_email) else {}
-
-        # If profile image URL/ID clearly belong to another user (e.g. path contains other email), do not use onboarding for name/profile
-        profile_url = (safe_onboarding.get('profileImageUrl') or '').strip()
-        profile_id = (safe_onboarding.get('profileImagePublicId') or '').strip()
-        encoded_email = normalized_email.replace('@', '%40')
-        url_belongs = (not profile_url) or (normalized_email in profile_url.lower()) or (encoded_email in profile_url)
-        id_belongs = (not profile_id) or (normalized_email in profile_id.lower()) or (encoded_email in profile_id)
-        if not url_belongs or not id_belongs:
-            safe_onboarding = {}  # use user_info only for name/profile so we never return another user's data
-
-        module_access_raw = user_info.get('moduleAccess') or onboarding_info.get('moduleAccess', '')
-        module_access_role_raw = user_info.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', '')
-
-        entity_value = user_info.get('entity') or onboarding_info.get('entity') or ''
-        response_user = {
-            'email': user_info.get('email', normalized_email),
-            'role': user_info.get('role', ''),
-            'status': _normalize_account_status_display(user_info.get('status')),
-            'entity': entity_value,
-            'moduleAccess': module_access_raw or '',
-            'moduleAccessRole': module_access_role_raw or '',
-            'firstName': safe_onboarding.get('firstName') or user_info.get('firstName') or user_info.get('name', '').split(' ')[0],
-            'lastName': safe_onboarding.get('lastName') or safe_onboarding.get('surname') or user_info.get('lastName') or (user_info.get('name', '').split(' ')[1] if ' ' in user_info.get('name', '') else ''),
-            'surname': safe_onboarding.get('surname') or safe_onboarding.get('lastName') or user_info.get('lastName') or '',
-            'preferredName': safe_onboarding.get('preferredName') or user_info.get('preferredName') or '',
-            'phoneNumber': safe_onboarding.get('phoneNumber') or user_info.get('phoneNumber') or '',
-            'department': safe_onboarding.get('department') or user_info.get('department') or '',
-            'designation': safe_onboarding.get('designation') or user_info.get('designation') or '',
-            'managedBy': safe_onboarding.get('managedBy') or user_info.get('manager') or onboarding_info.get('manager') or '',
-            'profileImageUrl': safe_onboarding.get('profileImageUrl') or '',
-            'profileImagePublicId': safe_onboarding.get('profileImagePublicId') or '',
-            'themePreference': (
-                safe_onboarding.get('themePreference')
-                or user_info.get('themePreference')
-                or 'dark'
-            ),
-            'lastSignInAt': (
-                (
-                    _coerce_datetime(
-                        user_info.get('lastSignInAt') or onboarding_info.get('lastSignInAt')
-                    )
-                ).isoformat() + 'Z'
-            ) if _coerce_datetime(user_info.get('lastSignInAt') or onboarding_info.get('lastSignInAt')) else None,
-            'loginCount': _safe_int(
-                onboarding_info.get('loginCount', user_info.get('loginCount', 0)),
-                0,
-            ),
-        }
-
+        print(f"[DEBUG] get_user_by_email: User not found: {normalized_email}")
         return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={'user': response_user},
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "User not found"},
         )
     except Exception as e:
         return api_error_response(e, "get_user_by_email")
@@ -1320,21 +1224,12 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
     """
     try:
         normalized_email = email.lower().strip()
-        
+
         user_id = None
-        user_doc_ref = None
-        users_ref = db.collection('users')
         with SessionLocal() as _lu:
-            if relational_user_count(_lu) > 0:
-                rid, _ = find_user_by_email(_lu, normalized_email)
-                if rid:
-                    user_id = rid
-        if not user_id:
-            query = users_ref.where('email', '==', normalized_email).limit(1).stream()
-            for doc in query:
-                user_id = doc.id
-                user_doc_ref = users_ref.document(user_id)
-                break
+            rid, _ = find_user_by_email(_lu, normalized_email)
+            if rid:
+                user_id = rid
 
         if not user_id:
             return JSONResponse(
@@ -1408,61 +1303,28 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
         if theme_preference:
             onboarding_update['themePreference'] = theme_preference
 
-        use_rel = False
-        with SessionLocal() as _adm:
-            if relational_user_count(_adm) > 0 and _adm.get(KbAppUser, user_id) is not None:
-                use_rel = True
-
-        if use_rel:
-            with session_scope() as s:
-                u = s.get(KbAppUser, user_id)
-                if u is not None:
-                    if department is not None:
-                        u.department = str(department)
-                    if designation is not None:
-                        u.designation = str(designation)
-                    if managed_by is not None:
-                        u.manager = str(managed_by)
-                    if theme_preference:
-                        u.theme_preference = theme_preference
-                    if full_name:
-                        u.name = full_name
-                    u.updated_at = datetime.utcnow()
-                apply_onboarding_patch_to_relational(s, user_id, onboarding_update)
-                u2 = s.get(KbAppUser, user_id)
-                p2 = fetch_profile_row(s, user_id)
-            mirror_user_profile_to_firestore(db, u2, p2)
-        else:
-            if user_doc_ref:
-                user_doc_ref.update(user_update)
-
-            onboarding_query = (
-                db.collection('onboarding')
-                .where('user_id', '==', user_id)
-                .limit(1)
-                .stream()
-            )
-            onboarding_doc_ref = None
-            for ondoc in onboarding_query:
-                onboarding_doc_ref = ondoc.reference
-                break
-
-            ob_save = {k: v for k, v in onboarding_update.items() if k != 'user_id'}
-            if onboarding_doc_ref:
-                onboarding_doc_ref.update(ob_save)
-            else:
-                db.collection('onboarding').add({
-                    **ob_save,
-                    'user_id': user_id,
-                    'created_at': datetime.utcnow(),
-                })
+        with session_scope() as s:
+            u = s.get(KbAppUser, user_id)
+            if u is not None:
+                if department is not None:
+                    u.department = str(department)
+                if designation is not None:
+                    u.designation = str(designation)
+                if managed_by is not None:
+                    u.manager = str(managed_by)
+                if theme_preference:
+                    u.theme_preference = theme_preference
+                if full_name:
+                    u.name = full_name
+                u.updated_at = datetime.utcnow()
+            apply_onboarding_patch_to_relational(s, user_id, onboarding_update)
 
         regenerated_token = None
         if theme_preference:
             try:
-                refreshed_user_doc = users_ref.document(user_id).get()
-                refreshed_user = refreshed_user_doc.to_dict() or {}
-                _, refreshed_onboarding = _get_best_onboarding_record(user_id)
+                with SessionLocal() as _rf:
+                    refreshed_user = user_to_legacy_dict(_rf.get(KbAppUser, user_id)) or {}
+                refreshed_onboarding = _get_best_onboarding_record(user_id)
                 module_access_role = (
                     refreshed_user.get('moduleAccessRole')
                     or refreshed_onboarding.get('moduleAccessRole', '')
@@ -1501,17 +1363,8 @@ async def admin_update_user_profile(email: str, data: Dict[str, Any] = Body(...)
                     'updated_at': datetime.utcnow(),
                 }
                 tok_patch = {'user_id': user_id, **token_update_payload}
-                if use_rel:
-                    with session_scope() as st:
-                        apply_onboarding_patch_to_relational(st, user_id, tok_patch)
-                        u3 = st.get(KbAppUser, user_id)
-                        p3 = fetch_profile_row(st, user_id)
-                    mirror_user_profile_to_firestore(db, u3, p3)
-                else:
-                    db.collection('onboarding').document(user_id).set(
-                        {'user_id': user_id, **token_update_payload},
-                        merge=True,
-                    )
+                with session_scope() as st:
+                    apply_onboarding_patch_to_relational(st, user_id, tok_patch)
                 _run_with_pdh_db(
                     "admin_update_user_profile.token_sync",
                     lambda pdh: pdh.collection('onboarding').document(user_id).set(
@@ -1572,16 +1425,8 @@ async def register_user(user: UserRegister):
             return JSONResponse(status_code=400, content={"error": "Email, password, and name required"})
         normalized_email = email.lower().strip()
         with SessionLocal() as s:
-            if relational_user_count(s) > 0:
-                rid, _ = find_user_by_email(s, normalized_email)
-                if rid:
-                    return JSONResponse(status_code=409, content={"error": "User already exists"})
-        users_ref = db.collection('users')
-        all_users = users_ref.stream()
-        for user_doc in all_users:
-            doc_data = user_doc.to_dict()
-            doc_email = doc_data.get('email', '').strip() if doc_data.get('email') else ''
-            if doc_email.lower() == normalized_email:
+            rid, _ = find_user_by_email(s, normalized_email)
+            if rid:
                 return JSONResponse(status_code=409, content={"error": "User already exists"})
         entity_value = user.entity if user.entity is not None else ''
         print(f"[DEBUG] Entity value for new user: '{entity_value}' (type: {type(entity_value)})")
@@ -1645,8 +1490,7 @@ async def register_user(user: UserRegister):
             onboarding_data['token_updated_at'] = datetime.utcnow()
         print(f"[DEBUG] Onboarding data being sent to datastore (onboarding collection - FastAPI): {onboarding_data}")
         with session_scope() as s:
-            u, p = upsert_user_from_registration(s, user_id, normalized_email, user_data, onboarding_data)
-        mirror_user_profile_to_firestore(db, u, p)
+            upsert_user_from_registration(s, user_id, normalized_email, user_data, onboarding_data)
         sync_sso_user_login(user_id, user_data, onboarding_data)
         # New user must appear on next /api/users call; list endpoint is cached in memory.
         _cache_delete("users:list")
@@ -1682,77 +1526,7 @@ async def list_users():
         return JSONResponse(status_code=429, content={"error": "Database temporarily throttled"})
     try:
         with SessionLocal() as s:
-            if relational_user_count(s) > 0:
-                users_data = list_users_payloads(s)
-                _normalize_users_list_status_inplace(users_data)
-                _db_breaker_record_success()
-                _cache_set(cache_key, users_data, USERS_CACHE_TTL_SECONDS)
-                return JSONResponse(status_code=status.HTTP_200_OK, content={'users': users_data})
-        users_query = db.collection('users').stream()
-        users_with_sort_keys = []
-        for user_doc in users_query:
-            user_info = user_doc.to_dict() or {}
-            _, onboarding_info = _get_best_onboarding_record(user_doc.id)
-            first_name = onboarding_info.get('firstName') or onboarding_info.get('name') or ''
-            last_name = onboarding_info.get('lastName') or onboarding_info.get('surname') or ''
-            created_at_dt = _coerce_datetime(user_info.get('created_at'))
-            updated_at_dt = _coerce_datetime(user_info.get('updated_at'))
-            last_sign_in_dt = _coerce_datetime(
-                user_info.get('lastSignInAt') or onboarding_info.get('lastSignInAt')
-            )
-            login_count_val = onboarding_info.get('loginCount')
-            if login_count_val is None:
-                login_count_val = user_info.get('loginCount')
-            login_count = _safe_int(login_count_val, 0)
-            try:
-                doc_create = getattr(user_doc, 'create_time', None)
-                doc_update = getattr(user_doc, 'update_time', None)
-            except Exception:
-                doc_create = None
-                doc_update = None
-            if created_at_dt is None:
-                if isinstance(doc_create, datetime):
-                    created_at_dt = doc_create
-                elif isinstance(doc_update, datetime):
-                    created_at_dt = doc_update
-            if updated_at_dt is None:
-                if isinstance(doc_update, datetime):
-                    updated_at_dt = doc_update
-                elif created_at_dt is not None:
-                    updated_at_dt = created_at_dt
-                elif isinstance(doc_create, datetime):
-                    updated_at_dt = doc_create
-            created_at_str = created_at_dt.isoformat() + 'Z' if created_at_dt else None
-            updated_at_str = updated_at_dt.isoformat() + 'Z' if updated_at_dt else None
-            last_sign_in_str = last_sign_in_dt.isoformat() + 'Z' if last_sign_in_dt else None
-            module_access_raw = user_info.get('moduleAccess') or onboarding_info.get('moduleAccess', '')
-            module_access_role_raw = user_info.get('moduleAccessRole') or onboarding_info.get('moduleAccessRole', '')
-            final_module_access = derive_module_access_from_role(module_access_raw, module_access_role_raw)
-            profile_image_url = onboarding_info.get('profileImageUrl') or user_info.get('profileImageUrl') or ''
-            user_payload = {
-                'id': user_doc.id,
-                'email': user_info.get('email', ''),
-                'role': user_info.get('role', 'Staff'),
-                'status': _normalize_account_status_display(user_info.get('status')),
-                'firstName': first_name,
-                'lastName': last_name,
-                'department': onboarding_info.get('department', ''),
-                'designation': onboarding_info.get('designation', ''),
-                'entity': user_info.get('entity') or onboarding_info.get('entity', ''),
-                'manager': user_info.get('manager') or onboarding_info.get('manager', ''),
-                'moduleAccess': final_module_access or '',
-                'moduleRole': user_info.get('moduleRole') or onboarding_info.get('moduleRole', ''),
-                'moduleAccessRole': module_access_role_raw or '',
-                'profileImageUrl': profile_image_url,
-                'createdAt': created_at_str,
-                'updatedAt': updated_at_str,
-                'lastSignInAt': last_sign_in_str,
-                'loginCount': login_count,
-            }
-            sort_key = _sortable_datetime(updated_at_dt or created_at_dt)
-            users_with_sort_keys.append((sort_key, user_payload))
-        users_with_sort_keys.sort(key=lambda item: item[0], reverse=True)
-        users_data = [payload for _, payload in users_with_sort_keys]
+            users_data = list_users_payloads(s)
         _normalize_users_list_status_inplace(users_data)
         _db_breaker_record_success()
         _cache_set(cache_key, users_data, USERS_CACHE_TTL_SECONDS)
@@ -1832,37 +1606,24 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
             onboarding_update_payload["status"] = _normalize_account_status_display(
                 onboarding_update_payload["status"]
             )
-        use_rel = False
         with SessionLocal() as _chk:
-            if relational_user_count(_chk) > 0 and _chk.get(KbAppUser, user_id) is not None:
-                use_rel = True
-        user_ref = db.collection('users').document(user_id)
-        current_user_data: Dict[str, Any] = {}
-        if use_rel:
-            with SessionLocal() as _r0:
-                u0 = _r0.get(KbAppUser, user_id)
-                if u0 is not None:
-                    current_user_data = user_to_legacy_dict(u0)
-            with session_scope() as s:
-                apply_user_patch_to_relational(s, user_id, update_payload)
-                apply_onboarding_patch_to_relational(s, user_id, onboarding_update_payload)
-                u_row = s.get(KbAppUser, user_id)
-                p_row = fetch_profile_row(s, user_id)
-            mirror_user_profile_to_firestore(db, u_row, p_row)
-        else:
-            current_user_doc = user_ref.get()
-            current_user_data = current_user_doc.to_dict() or {}
-            user_ref.update(update_payload)
+            u_chk = _chk.get(KbAppUser, user_id)
+            if u_chk is None:
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={'error': f'User {user_id} not found'},
+                )
+            current_user_data = user_to_legacy_dict(u_chk)
+        with session_scope() as s:
+            apply_user_patch_to_relational(s, user_id, update_payload)
+            apply_onboarding_patch_to_relational(s, user_id, onboarding_update_payload)
         should_regenerate_token = user_update.moduleAccessRole is not None and (user_update.regenerateToken is True)
         if len(onboarding_update_payload) > 1:
-            onboarding_ref, onboarding_data = _get_best_onboarding_record(user_id)
-            if not use_rel:
-                onboarding_ref.set(onboarding_update_payload, merge=True)
+            onboarding_data = _get_best_onboarding_record(user_id)
             if should_regenerate_token:
                 try:
                     print(f"[DEBUG] Regenerating token for user_id: {user_id} due to moduleAccessRole update")
-                    refreshed_onboarding_doc = onboarding_ref.get()
-                    refreshed_onboarding = refreshed_onboarding_doc.to_dict() or {}
+                    refreshed_onboarding = onboarding_data or {}
                     user_email = current_user_data.get('email', '') or refreshed_onboarding.get('email', '')
                     new_module_access_role = user_update.moduleAccessRole or ''
                     roles = parse_module_access_role_to_roles(new_module_access_role)
@@ -1900,15 +1661,9 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
                     }
                     if user_email:
                         update_data['email'] = user_email
-                    if use_rel:
-                        with session_scope() as s_tok:
-                            apply_onboarding_patch_to_relational(s_tok, user_id, update_data)
-                            u_tok = s_tok.get(KbAppUser, user_id)
-                            p_tok = fetch_profile_row(s_tok, user_id)
-                        mirror_user_profile_to_firestore(db, u_tok, p_tok)
-                    else:
-                        onboarding_ref.set(update_data, merge=True)
-                    print(f"[DEBUG] Token regenerated and updated in main onboarding collection for user_id: {user_id}")
+                    with session_scope() as s_tok:
+                        apply_onboarding_patch_to_relational(s_tok, user_id, update_data)
+                    print(f"[DEBUG] Token regenerated and updated in relational onboarding for user_id: {user_id}")
                     # Sync new token to PDH
                     if _run_with_pdh_db(
                         "update_user.token_sync",
@@ -1928,14 +1683,10 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
                         print("[WARNING] PDH Firebase not initialized, skipping token sync")
                 except Exception as token_error:
                     warning_log("Failed to regenerate token", exc=token_error)
-        if use_rel:
-            with SessionLocal() as _r1:
-                u1 = _r1.get(KbAppUser, user_id)
-                updated_data = user_to_legacy_dict(u1) if u1 is not None else {}
-        else:
-            updated_doc = user_ref.get()
-            updated_data = updated_doc.to_dict() or {}
-        _, onboarding_info = _get_best_onboarding_record(user_id)
+        with SessionLocal() as _r1:
+            u1 = _r1.get(KbAppUser, user_id)
+            updated_data = user_to_legacy_dict(u1) if u1 is not None else {}
+        onboarding_info = _get_best_onboarding_record(user_id)
         first_name = onboarding_info.get('firstName') or onboarding_info.get('name') or ''
         last_name = onboarding_info.get('lastName') or onboarding_info.get('surname') or ''
         created_at_dt = _coerce_datetime(updated_data.get('created_at'))
@@ -1980,36 +1731,13 @@ async def update_user(user_id: str, request: Request, user_update: UserUpdate = 
 async def delete_user(user_id: str):
     try:
         print(f"[DEBUG] delete_user called for user_id={user_id}")
-        had_kb = False
         with session_scope() as s:
-            if relational_user_count(s) > 0:
-                had_kb = delete_user_relational(s, user_id)
-        user_ref = db.collection('users').document(user_id)
-        user_doc = user_ref.get()
-        had_fs = user_doc.exists
-        if not had_kb and not had_fs:
+            had_kb = delete_user_relational(s, user_id)
+        if not had_kb:
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
-                content={'error': f'User {user_id} not found in users collection'},
+                content={'error': f'User {user_id} not found'},
             )
-        if had_fs:
-            user_ref.delete()
-            print(f"[DEBUG] Deleted user {user_id} from users collection")
-        onboarding_query = (
-            db.collection('onboarding')
-            .where('user_id', '==', user_id)
-            .limit(1)
-            .stream()
-        )
-        for onboarding_doc in onboarding_query:
-            onboarding_doc.reference.delete()
-            print(f"[DEBUG] Deleted user {user_id} from onboarding collection")
-            break
-        onboarding_doc_ref = db.collection('onboarding').document(user_id)
-        onboarding_doc = onboarding_doc_ref.get()
-        if onboarding_doc.exists:
-            onboarding_doc_ref.delete()
-            print(f"[DEBUG] Deleted user {user_id} from onboarding collection (by document ID)")
         _run_with_pdh_db(
             "delete_user.pdh_cleanup",
             lambda pdh: (
@@ -2036,22 +1764,10 @@ async def delete_user(user_id: str):
 
 @app.get("/api/departments")
 async def list_departments():
-    """Return all department names from both department collections."""
+    """Return all department names from kb_department."""
     try:
-        names = []
-        for collection_name in ("departments", "department"):
-            docs = list(db.collection(collection_name).stream())
-            docs.sort(
-                key=lambda doc: _sortable_datetime(
-                    _coerce_datetime((doc.to_dict() or {}).get("created_at"))
-                ),
-                reverse=True,
-            )
-            for doc in docs:
-                data = doc.to_dict() or {}
-                n = (data.get("name") or "").strip()
-                if n and n not in names:
-                    names.append(n)
+        with session_scope() as s:
+            names = list_department_names(s)
         return JSONResponse(status_code=200, content={"departments": names})
     except Exception as e:
         return api_error_response(e, "list_departments")
@@ -2059,31 +1775,13 @@ async def list_departments():
 
 @app.post("/api/departments")
 async def create_department(body: NameBody):
-    """Add a new department to canonical collection. Returns merged updated list."""
+    """Add a new department. Returns merged updated list."""
     try:
         name = (body.name or "").strip()
         if not name:
             raise HTTPException(status_code=400, detail="name is required")
-        coll = db.collection("departments")
-        existing = coll.where("name", "==", name).limit(1).stream()
-        if next(existing, None) is not None:
-            pass
-        else:
-            coll.add({"name": name, "created_at": datetime.utcnow()})
-        names = []
-        for collection_name in ("departments", "department"):
-            docs = list(db.collection(collection_name).stream())
-            docs.sort(
-                key=lambda doc: _sortable_datetime(
-                    _coerce_datetime((doc.to_dict() or {}).get("created_at"))
-                ),
-                reverse=True,
-            )
-            for doc in docs:
-                data = doc.to_dict() or {}
-                n = (data.get("name") or "").strip()
-                if n and n not in names:
-                    names.append(n)
+        with session_scope() as s:
+            names = relational_create_department(s, name)
         return JSONResponse(status_code=201, content={"departments": names})
     except HTTPException:
         raise
@@ -2095,20 +1793,8 @@ async def create_department(body: NameBody):
 async def list_designations():
     """Return all designation names with newest created options first."""
     try:
-        names = []
-        for collection_name in ("designations", "designation"):
-            docs = list(db.collection(collection_name).stream())
-            docs.sort(
-                key=lambda doc: _sortable_datetime(
-                    _coerce_datetime((doc.to_dict() or {}).get("created_at"))
-                ),
-                reverse=True,
-            )
-            for doc in docs:
-                data = doc.to_dict() or {}
-                n = (data.get("name") or "").strip()
-                if n and n not in names:
-                    names.append(n)
+        with session_scope() as s:
+            names = list_designation_names(s)
         return JSONResponse(status_code=200, content={"designations": names})
     except Exception as e:
         return api_error_response(e, "list_designations")
@@ -2116,24 +1802,10 @@ async def list_designations():
 
 @app.get("/api/entities")
 async def list_entities():
-    """Return all entity names from entities collection plus assigned users."""
+    """Return all entity names from kb_entity plus assigned user entities."""
     try:
-        names = []
-
-        # Canonical entity options collection.
-        for doc in db.collection("entities").stream():
-            data = doc.to_dict() or {}
-            n = (data.get("name") or "").strip()
-            if n and n not in names:
-                names.append(n)
-
-        # Include already-assigned entity values so legacy data stays selectable.
-        for doc in db.collection("users").stream():
-            data = doc.to_dict() or {}
-            n = (data.get("entity") or "").strip()
-            if n and n not in names:
-                names.append(n)
-
+        with session_scope() as s:
+            names = list_entity_names(s)
         names.sort(key=str.lower)
         return JSONResponse(status_code=200, content={"entities": names})
     except Exception as e:
@@ -2142,29 +1814,13 @@ async def list_entities():
 
 @app.post("/api/entities")
 async def create_entity(body: NameBody):
-    """Add a new entity in canonical entities collection. Returns updated list."""
+    """Add a new entity. Returns updated list."""
     try:
         name = (body.name or "").strip()
         if not name:
             raise HTTPException(status_code=400, detail="name is required")
-
-        coll = db.collection("entities")
-        existing = coll.where("name", "==", name).limit(1).stream()
-        if next(existing, None) is None:
-            coll.add({"name": name})
-
-        names = []
-        for doc in coll.stream():
-            data = doc.to_dict() or {}
-            n = (data.get("name") or "").strip()
-            if n and n not in names:
-                names.append(n)
-        for doc in db.collection("users").stream():
-            data = doc.to_dict() or {}
-            n = (data.get("entity") or "").strip()
-            if n and n not in names:
-                names.append(n)
-
+        with session_scope() as s:
+            names = relational_create_entity(s, name)
         names.sort(key=str.lower)
         return JSONResponse(status_code=201, content={"entities": names})
     except HTTPException:
@@ -2196,33 +1852,29 @@ async def create_admin_notification(payload: AdminNotificationCreate):
         if not normalized_roles:
             normalized_roles = ["admin", "staff"]
 
-        now = datetime.utcnow()
         details_payload = payload.details or {}
         if "targetCount" not in details_payload:
             details_payload["targetCount"] = len(normalized_roles)
-        doc = {
-            "actorEmail": actor_email,
-            "actorRole": "admin",
-            "title": title,
-            "message": message,
-            "area": area,
-            "details": details_payload,
-            "targetRoles": normalized_roles,
-            "requiresAck": bool(getattr(payload, "requiresAck", False)),
-            "effectiveDateIso": (getattr(payload, "effectiveDateIso", "") or "").strip(),
-            "acknowledgedByEmails": [],
-            "createdAt": pg_store.SERVER_TIMESTAMP,
-            "createdAtIso": now.isoformat() + "Z",
-        }
-        ref = db.collection("admin_notifications").document()
-        ref.set(doc)
+
+        with session_scope() as s:
+            notif_id, now_iso = relational_create_admin_notification(
+                s,
+                actor_email=actor_email,
+                title=title,
+                message=message,
+                area=area,
+                target_roles=normalized_roles,
+                details=details_payload,
+                requires_ack=bool(getattr(payload, "requiresAck", False)),
+                effective_date_iso=(getattr(payload, "effectiveDateIso", "") or "").strip(),
+            )
         _cache_delete_prefix("admin_notifications:")
         return JSONResponse(
             status_code=201,
             content={
                 "message": "Notification created",
-                "id": ref.id,
-                "createdAtIso": doc["createdAtIso"],
+                "id": notif_id,
+                "createdAtIso": now_iso,
             },
         )
     except HTTPException:
@@ -2255,73 +1907,15 @@ async def list_admin_notifications(
         if normalized_role == "staff":
             limit = min(limit, 30)
 
-        # Avoid composite-index requirement from array_contains + order_by by
-        # querying role matches first, then sorting in memory.
-        query = db.collection("admin_notifications").where(
-            "targetRoles",
-            "array_contains",
-            normalized_role,
-        )
-        docs = list(query.stream())
-
-        cleared_after = None
-        dismissed_ids = set()
-        if normalized_email:
-            state_doc = db.collection("admin_notification_state").document(normalized_email).get()
-            if state_doc.exists:
-                state = state_doc.to_dict() or {}
-                cleared_after = _coerce_datetime(state.get("clearedAtIso"))
-                dismissed_ids = set(state.get("dismissedIds", []) or [])
-
-        alerts = []
-        for doc in docs:
-            data = doc.to_dict() or {}
-            created_at = _coerce_datetime(data.get("createdAt"))
-            created_at_iso = data.get("createdAtIso")
-            if not created_at_iso:
-                created_at_iso = (
-                    created_at.isoformat() + "Z" if created_at else datetime.utcnow().isoformat() + "Z"
-                )
-            alerts.append(
-                {
-                    "id": doc.id,
-                    "actorEmail": data.get("actorEmail", ""),
-                    "title": data.get("title", "Admin update"),
-                    "message": data.get("message", ""),
-                    "area": data.get("area", "general"),
-                    "details": data.get("details", {}),
-                    "targetRoles": data.get("targetRoles", []),
-                    "requiresAck": bool(data.get("requiresAck", False)),
-                    "effectiveDateIso": (data.get("effectiveDateIso", "") or "").strip(),
-                    "acknowledgedByEmails": data.get("acknowledgedByEmails", []) or [],
-                    "createdAtIso": created_at_iso,
-                }
+        with session_scope() as s:
+            alerts = list_admin_notifications_for_role(
+                s,
+                normalized_role=normalized_role,
+                normalized_email=normalized_email,
+                limit=limit,
             )
-
-        alerts.sort(
-            key=lambda item: _sortable_datetime(_coerce_datetime(item.get("createdAtIso"))),
-            reverse=True,
-        )
-        if cleared_after is not None:
-            cleared_key = _sortable_datetime(cleared_after)
-            alerts = [
-                item
-                for item in alerts
-                if _sortable_datetime(_coerce_datetime(item.get("createdAtIso"))) > cleared_key
-            ]
-        alerts = [item for item in alerts if item.get("id") not in dismissed_ids]
-
-        for item in alerts:
-            acked_emails = [
-                (e or "").strip().lower() for e in item.get("acknowledgedByEmails", [])
-            ]
-            item["acknowledged"] = normalized_email in acked_emails if normalized_email else False
-            item["acknowledgedCount"] = len(acked_emails)
-            item["targetCount"] = int(item.get("details", {}).get("targetCount", 0))
-            item.pop("acknowledgedByEmails", None)
         _db_breaker_record_success()
         _cache_set(cache_key, alerts, ADMIN_NOTIFICATIONS_CACHE_TTL_SECONDS)
-        alerts = alerts[:limit]
 
         return JSONResponse(status_code=200, content={"alerts": alerts})
     except HTTPException:
@@ -2348,17 +1942,8 @@ async def clear_admin_notifications(payload: AdminNotificationClear):
                 status_code=400,
                 detail="role and userEmail are required",
             )
-        now_iso = datetime.utcnow().isoformat() + "Z"
-        db.collection("admin_notification_state").document(normalized_email).set(
-            {
-                "role": normalized_role,
-                "userEmail": normalized_email,
-                "clearedAtIso": now_iso,
-                "updatedAtIso": now_iso,
-                "dismissedIds": [],
-            },
-            merge=True,
-        )
+        with session_scope() as s:
+            clear_admin_notification_state(s, normalized_role, normalized_email)
         _cache_delete_prefix("admin_notifications:")
         return JSONResponse(status_code=200, content={"message": "Alerts cleared"})
     except HTTPException:
@@ -2374,13 +1959,8 @@ async def dismiss_admin_notification(payload: AdminNotificationDismiss):
         alert_id = (payload.alertId or "").strip()
         if not normalized_email or not alert_id:
             raise HTTPException(status_code=400, detail="userEmail and alertId are required")
-        db.collection("admin_notification_state").document(normalized_email).set(
-            {
-                "dismissedIds": pg_store.ArrayUnion([alert_id]),
-                "updatedAtIso": datetime.utcnow().isoformat() + "Z",
-            },
-            merge=True,
-        )
+        with session_scope() as s:
+            relational_dismiss_admin_notification(s, normalized_email, alert_id)
         _cache_delete_prefix("admin_notifications:")
         return JSONResponse(status_code=200, content={"message": "Alert dismissed"})
     except HTTPException:
@@ -2396,14 +1976,10 @@ async def acknowledge_admin_notification(payload: AdminNotificationAcknowledge):
         alert_id = (payload.alertId or "").strip()
         if not normalized_email or not alert_id:
             raise HTTPException(status_code=400, detail="userEmail and alertId are required")
-        ref = db.collection("admin_notifications").document(alert_id)
-        ref.set(
-            {
-                "acknowledgedByEmails": pg_store.ArrayUnion([normalized_email]),
-                "updatedAtIso": datetime.utcnow().isoformat() + "Z",
-            },
-            merge=True,
-        )
+        with session_scope() as s:
+            found = relational_acknowledge_admin_notification(s, normalized_email, alert_id)
+        if not found:
+            raise HTTPException(status_code=404, detail="Notification not found")
         _cache_delete_prefix("admin_notifications:")
         return JSONResponse(status_code=200, content={"message": "Alert acknowledged"})
     except HTTPException:
@@ -2419,26 +1995,8 @@ async def create_designation(body: NameBody):
         name = (body.name or "").strip()
         if not name:
             raise HTTPException(status_code=400, detail="name is required")
-        coll = db.collection("designations")
-        existing = coll.where("name", "==", name).limit(1).stream()
-        if next(existing, None) is not None:
-            pass
-        else:
-            coll.add({"name": name, "created_at": datetime.utcnow()})
-        names = []
-        for collection_name in ("designations", "designation"):
-            docs = list(db.collection(collection_name).stream())
-            docs.sort(
-                key=lambda doc: _sortable_datetime(
-                    _coerce_datetime((doc.to_dict() or {}).get("created_at"))
-                ),
-                reverse=True,
-            )
-            for doc in docs:
-                data = doc.to_dict() or {}
-                n = (data.get("name") or "").strip()
-                if n and n not in names:
-                    names.append(n)
+        with session_scope() as s:
+            names = relational_create_designation(s, name)
         return JSONResponse(status_code=201, content={"designations": names})
     except HTTPException:
         raise
@@ -2450,69 +2008,22 @@ async def create_designation(body: NameBody):
 async def create_role(role: Role):
     try:
         role_data = role.model_dump()
-        role_data['created_at'] = datetime.utcnow()
-        role_data['updated_at'] = datetime.utcnow()
-        db.collection('roles').add(role_data)
+        with session_scope() as s:
+            created = relational_create_role(s, role_data)
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
             content={
                 "message": "Role created successfully",
-                "role": role_data,
+                "role": created,
             },
         )
     except Exception as e:
         return api_error_response(e, "create_role")
 @app.post("/api/create_initial_roles")
 async def create_initial_roles():
-    roles_data = [
-        {
-            "roleName": "staff",
-            "pageAccess": {
-                "user_management": {"create": False, "read": False, "update": False, "delete": False},
-                "dashboard": {"create": False, "read": True, "update": False, "delete": False},
-                "resource_allocation": {"create": False, "read": False, "update": False, "delete": False},
-                "project_data": {"create": False, "read": False, "update": False, "delete": False},
-                "reports_analytics": {"create": False, "read": True, "update": False, "delete": False},
-                "audit_logging": {"create": False, "read": False, "update": False, "delete": False},
-                "time_keeping": {"create": False, "read": False, "update": False, "delete": False},
-            },
-        },
-        {
-            "roleName": "admin",
-            "description": "Strategic administrator with full system access except for deletion.",
-            "pageAccess": {
-                "user_management": {"create": True, "read": True, "update": True, "delete": False},
-                "dashboard": {"create": True, "read": True, "update": True, "delete": False},
-                "resource_allocation": {"create": True, "read": True, "update": True, "delete": False},
-                "project_data": {"create": True, "read": True, "update": True, "delete": False},
-                "reports_analytics": {"create": True, "read": True, "update": True, "delete": False},
-                "audit_logging": {"create": True, "read": True, "update": True, "delete": False},
-                "time_keeping": {"create": True, "read": True, "update": True, "delete": False},
-            },
-        },
-        {
-            "roleName": "manager",
-            "pageAccess": {
-                "user_management": {"create": False, "read": False, "update": False, "delete": False},
-                "dashboard": {"create": True, "read": True, "update": True, "delete": False},
-                "resource_allocation": {"create": True, "read": True, "update": True, "delete": False},
-                "project_data": {"create": True, "read": True, "update": True, "delete": False},
-                "reports_analytics": {"create": False, "read": False, "update": False, "delete": False},
-                "audit_logging": {"create": True, "read": True, "update": True, "delete": False},
-                "time_keeping": {"create": False, "read": False, "update": False, "delete": False},
-            },
-        },
-    ]
     try:
-        for role_data in roles_data:
-            role_obj = Role(**role_data)
-            db.collection('roles').add({
-                **role_obj.model_dump(),
-                'created_at': datetime.utcnow(),
-                'updated_at': datetime.utcnow(),
-                'first_valid': datetime(2025, 9, 25, 2, 6, 42),
-                'last_valid': datetime(2039, 12, 31, 2, 6, 29),
-            })
+        with session_scope() as s:
+            seed_initial_roles(s)
         return JSONResponse(status_code=status.HTTP_201_CREATED, content={"message": "Initial roles created successfully"})
     except Exception as e:
         return api_error_response(e, "create_initial_roles")
@@ -2544,7 +2055,6 @@ async def login_user(user_login: UserLogin, request: Request):
         normalized_email = user_login.email.lower().strip()
         if not is_special_session:
             info_log(f"Login attempt for email: {normalized_email}")
-        users_ref = db.collection('users')
         user_lookup_start = time.time()
         user_data = None
         user_id = None
@@ -2558,8 +2068,8 @@ async def login_user(user_login: UserLogin, request: Request):
             stored_email = cache_entry.get("stored_email")
             debug_log(f"Login cache hit for {normalized_email}")
         else:
-            with SessionLocal() as s:
-                if relational_user_count(s) > 0:
+            try:
+                with SessionLocal() as s:
                     rid, rdata = find_user_by_email(s, normalized_email)
                     if not rid:
                         rid, rdata = find_user_by_email(s, email_input.lower().strip())
@@ -2575,53 +2085,25 @@ async def login_user(user_login: UserLogin, request: Request):
                             "expires_at": now + LOGIN_CACHE_TTL_SECONDS,
                         }
                         debug_log(f"Login relational cache populated for {normalized_email}")
-            if user_data is None:
-                try:
-                    query = users_ref.where('email', '==', normalized_email).limit(1)
-                    users = await asyncio.wait_for(
-                        asyncio.to_thread(query.get, timeout=LOGIN_QUERY_TIMEOUT_SECONDS),
-                        timeout=LOGIN_QUERY_TIMEOUT_SECONDS + 1.0,
+            except asyncio.TimeoutError:
+                user_lookup_end = time.time()
+                if not is_special_session:
+                    error_log(
+                        f"Database user lookup timed out for {normalized_email} "
+                        f"after {LOGIN_QUERY_TIMEOUT_SECONDS:.1f}s"
                     )
-                    # Fallback for legacy records where email was stored with mixed case.
-                    if not users:
-                        raw_query = users_ref.where('email', '==', email_input).limit(1)
-                        users = await asyncio.wait_for(
-                            asyncio.to_thread(raw_query.get, timeout=LOGIN_QUERY_TIMEOUT_SECONDS),
-                            timeout=LOGIN_QUERY_TIMEOUT_SECONDS + 1.0,
-                        )
-                    if users:
-                        user_doc = users[0]
-                        doc_data = user_doc.to_dict()
-                        doc_email = doc_data.get('email', '').strip() if doc_data.get('email') else ''
-                        user_data = doc_data
-                        user_id = user_doc.id
-                        stored_email = doc_email
-                        USER_CACHE[cache_key] = {
-                            "user_data": user_data,
-                            "user_id": user_id,
-                            "stored_email": stored_email,
-                            "expires_at": now + LOGIN_CACHE_TTL_SECONDS,
-                        }
-                        debug_log(f"Login cache populated for {normalized_email}")
-                except asyncio.TimeoutError:
-                    user_lookup_end = time.time()
-                    if not is_special_session:
-                        error_log(
-                            f"Database user lookup timed out for {normalized_email} "
-                            f"after {LOGIN_QUERY_TIMEOUT_SECONDS:.1f}s"
-                        )
-                    return JSONResponse(
-                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        content={"error": "Login service temporarily unavailable. Please try again."}
-                    )
-                except Exception as query_error:
-                    user_lookup_end = time.time()
-                    if not is_special_session:
-                        error_log("Database query error during login", exc=query_error)
-                    return JSONResponse(
-                        status_code=500,
-                        content={"error": f"Database query failed: {str(query_error)}"}
-                    )
+                return JSONResponse(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    content={"error": "Login service temporarily unavailable. Please try again."}
+                )
+            except Exception as query_error:
+                user_lookup_end = time.time()
+                if not is_special_session:
+                    error_log("Database query error during login", exc=query_error)
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": f"Database query failed: {str(query_error)}"}
+                )
         user_lookup_end = time.time()
         if not user_data or not user_id:
             print(f"[DEBUG] User not found: {normalized_email}")
@@ -2646,11 +2128,10 @@ async def login_user(user_login: UserLogin, request: Request):
                 },
             )
         onboarding_data = {}
-        onboarding_ref = None
         module_access_role = ""
         onboarding_lookup_start = time.time()
         try:
-            onboarding_ref, onboarding_data = await asyncio.wait_for(
+            onboarding_data = await asyncio.wait_for(
                 asyncio.to_thread(_get_best_onboarding_record, user_id),
                 timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS + 1.0,
             )
@@ -2664,7 +2145,7 @@ async def login_user(user_login: UserLogin, request: Request):
                 f"after {ONBOARDING_QUERY_TIMEOUT_SECONDS:.1f}s"
             )
         except Exception as onboarding_query_error:
-            error_log("Failed to query onboarding collection", exc=onboarding_query_error)
+            error_log("Failed to query onboarding profile", exc=onboarding_query_error)
         onboarding_lookup_end = time.time()
         # Only use onboarding for name/profile in response if it belongs to this user (avoid returning another user's data)
         onboarding_email = (onboarding_data.get('email') or '').strip().lower()
@@ -2675,7 +2156,6 @@ async def login_user(user_login: UserLogin, request: Request):
         if is_special_session:
             roles = ['admin']
         last_sign_in_at = datetime.utcnow()
-        login_count = 0
         first_name = safe_onboarding_for_response.get('firstName') or safe_onboarding_for_response.get('name') or user_data.get('firstName') or ''
         last_name = safe_onboarding_for_response.get('lastName') or safe_onboarding_for_response.get('surname') or user_data.get('lastName') or ''
         full_name = f"{first_name} {last_name}".strip()
@@ -2697,21 +2177,18 @@ async def login_user(user_login: UserLogin, request: Request):
         except Exception:
             pass
         token_gen_end = time.time()
+        existing_login_count = _safe_int(
+            onboarding_data.get('loginCount', user_data.get('loginCount', 0)),
+            0,
+        )
+        login_count = existing_login_count + 1
         # Always update login tracking, including "special" admin sessions,
         # so User Management displays the latest lastSignInAt/loginCount.
         try:
-            current_user_login_count = user_data.get('loginCount', 0)
-            try:
-                current_user_login_count = int(current_user_login_count)
-            except Exception:
-                current_user_login_count = 0
-            db.collection('users').document(user_id).update({
-                'lastSignInAt': last_sign_in_at,
-                'loginCount': current_user_login_count + 1,
-                'updated_at': datetime.utcnow(),
-            })
+            with session_scope() as s:
+                update_user_login_tracking(s, user_id, login_count, last_sign_in_at)
             user_data['lastSignInAt'] = last_sign_in_at
-            user_data['loginCount'] = current_user_login_count + 1
+            user_data['loginCount'] = login_count
         except Exception as sign_in_error:
             error_log(
                 f"Failed to update login tracking for {normalized_email}",
@@ -2719,8 +2196,6 @@ async def login_user(user_login: UserLogin, request: Request):
             )
         if encrypted_token:
             try:
-                if onboarding_ref is None:
-                    onboarding_ref = db.collection('onboarding').document(user_id)
                 update_data = {
                     'user_id': user_id,
                     'token': encrypted_token,
@@ -2736,7 +2211,8 @@ async def login_user(user_login: UserLogin, request: Request):
                     update_data['updated_at'] = datetime.utcnow()
                     if not onboarding_data:
                         update_data['created_at'] = datetime.utcnow()
-                onboarding_ref.set(update_data, merge=True)
+                with session_scope() as s:
+                    apply_onboarding_patch_to_relational(s, user_id, update_data)
             except Exception:
                 pass
             pdh_data = {
@@ -2755,21 +2231,7 @@ async def login_user(user_login: UserLogin, request: Request):
                 "login_user.token_sync",
                 lambda pdh: pdh.collection('onboarding').document(user_id).set(pdh_data, merge=True),
             )
-        # Also update onboarding login tracking for "special" sessions so
-        # the same data source is used by User Management.
         try:
-            if onboarding_ref is None:
-                onboarding_ref, onboarding_info = await asyncio.wait_for(
-                    asyncio.to_thread(_get_best_onboarding_record, user_id),
-                    timeout=ONBOARDING_QUERY_TIMEOUT_SECONDS + 1.0,
-                )
-            else:
-                onboarding_info = onboarding_data or {}
-            existing_login_count = _safe_int(
-                onboarding_info.get('loginCount', user_data.get('loginCount', 0)),
-                0,
-            )
-            login_count = existing_login_count + 1
             tracking_payload = {
                 'user_id': user_id,
                 'email': user_data.get('email', ''),
@@ -2777,14 +2239,10 @@ async def login_user(user_login: UserLogin, request: Request):
                 'loginCount': login_count,
                 'updated_at': datetime.utcnow(),
             }
-            if onboarding_ref is not None:
-                onboarding_ref.set(tracking_payload, merge=True)
-            else:
+            if not onboarding_data:
                 tracking_payload['created_at'] = datetime.utcnow()
-                db.collection('onboarding').document(user_id).set(
-                    tracking_payload,
-                    merge=True,
-                )
+            with session_scope() as s:
+                apply_onboarding_patch_to_relational(s, user_id, tracking_payload)
             _run_with_pdh_db(
                 "login_user.signin_tracking",
                 lambda pdh: pdh.collection('onboarding').document(user_id).set(
@@ -2879,25 +2337,15 @@ async def get_user_token(
         user_id = None
         user_data: Dict[str, Any] = {}
         with SessionLocal() as _tok:
-            if relational_user_count(_tok) > 0:
-                rid, ud = find_user_by_email(_tok, normalized_email)
-                if rid:
-                    user_id, user_data = rid, ud
-        users_ref = db.collection('users')
+            rid, ud = find_user_by_email(_tok, normalized_email)
+            if not rid:
+                rid, ud = find_user_by_email(_tok, email.strip().lower())
+            if rid:
+                user_id, user_data = rid, ud
         if not user_id:
-            query = users_ref.where('email', '==', normalized_email).limit(1)
-            users = query.get()
-            if not users:
-                query2 = users_ref.where('email', '==', email.strip()).limit(1)
-                users = query2.get()
-            if not users:
-                print(f"[DEBUG] User not found: {email}")
-                return JSONResponse(status_code=404, content={"error": "User not found"})
-            user_id = users[0].id
-            user_data = users[0].to_dict()
-        onboarding_ref, onboarding_data = _get_best_onboarding_record(user_id)
-        module_access_role = ""
-        onboarding_doc_ref = onboarding_ref
+            print(f"[DEBUG] User not found: {email}")
+            return JSONResponse(status_code=404, content={"error": "User not found"})
+        onboarding_data = _get_best_onboarding_record(user_id)
         module_access_role = onboarding_data.get('moduleAccessRole', '') or user_data.get('moduleAccessRole', '')
         normalized_module = (module or "").strip().lower()
         is_arw = normalized_module in ("recruitment", "arw")
@@ -2948,10 +2396,6 @@ async def get_user_token(
         if not full_name:
             full_name = user_data.get('name', '')
         user_email = (user_data.get('email') or normalized_email or '').strip()
-        use_rel_tok = False
-        with SessionLocal() as _tr:
-            if relational_user_count(_tr) > 0 and _tr.get(KbAppUser, user_id) is not None:
-                use_rel_tok = True
         try:
             requested_theme = normalize_theme_preference(theme) if theme else None
             token_theme = requested_theme or resolve_theme_preference(
@@ -2974,36 +2418,9 @@ async def get_user_token(
                     'email': user_email,
                     'user_id': user_id,
                 }
-                if use_rel_tok:
-                    with session_scope() as s:
-                        apply_onboarding_patch_to_relational(s, user_id, token_patch)
-                        u_t = s.get(KbAppUser, user_id)
-                        p_t = fetch_profile_row(s, user_id)
-                    mirror_user_profile_to_firestore(db, u_t, p_t)
-                    print(f"[DEBUG] Token updated in relational store for user_id: {user_id}")
-                elif onboarding_doc_ref:
-                    onboarding_doc_ref.update({
-                        'token': encrypted_token,
-                        'token_updated_at': datetime.utcnow(),
-                        'updated_at': datetime.utcnow(),
-                        'fullName': full_name,
-                        'email': user_email,
-                    })
-                    print(f"[DEBUG] Token updated in main onboarding collection for user_id: {user_id}")
-                else:
-                    ob_seed = {
-                        'user_id': user_id,
-                        'email': user_email,
-                        'token': encrypted_token,
-                        'fullName': full_name,
-                        'token_updated_at': datetime.utcnow(),
-                        'created_at': datetime.utcnow(),
-                        'updated_at': datetime.utcnow(),
-                        'moduleAccessRole': module_access_role,
-                        'themePreference': token_theme,
-                    }
-                    db.collection('onboarding').add(ob_seed)
-                    print(f"[DEBUG] Created onboarding document with token for user_id: {user_id}")
+                with session_scope() as s:
+                    apply_onboarding_patch_to_relational(s, user_id, token_patch)
+                print(f"[DEBUG] Token updated in relational store for user_id: {user_id}")
                 if _run_with_pdh_db(
                     "get_user_token.sync",
                     lambda pdh: pdh.collection('onboarding').document(user_id).set(
