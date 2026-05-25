@@ -1,76 +1,21 @@
 {
-  "version": "2026.03.AB43",
-  "generated_at": "2026-05-23T15:33:03Z",
+  "version": "2026.03.AB46",
+  "generated_at": "2026-05-25T14:13:35Z",
   "commits": [
     {
-      "author": "GitHub Action",
-      "message": "Update daily commits data [2026-05-23] [skip ci]",
-      "timestamp": "2026-05-23T15:29:39Z"
-    },
-    {
-      "author": "Nathi66",
-      "message": "chore: update dependencies in pubspec.lock to latest versions",
-      "timestamp": "2026-05-23T17:28:41+02:00"
-    },
-    {
-      "author": "github-actions[bot]",
-      "message": "chore: update Flutter web build [skip ci]",
-      "timestamp": "2026-05-23T15:23:04Z"
+      "author": "GitHub Actions",
+      "message": "chore: update version to 2026.03.AB46 [skip ci]",
+      "timestamp": "2026-05-25T14:12:51Z"
     },
     {
       "author": "GitHub Action",
-      "message": "Update daily commits data [2026-05-23] [skip ci]",
-      "timestamp": "2026-05-23T15:20:12Z"
+      "message": "Update daily commits data [2026-05-25] [skip ci]",
+      "timestamp": "2026-05-25T07:51:24Z"
     },
     {
-      "author": "github-actions[bot]",
-      "message": "squash: integrate khono_test into khono_v4",
-      "timestamp": "2026-05-23T15:18:25Z"
-    },
-    {
-      "author": "github-actions[bot]",
-      "message": "chore: update Flutter web build [skip ci]",
-      "timestamp": "2026-05-23T14:55:34Z"
-    },
-    {
-      "author": "GitHub Action",
-      "message": "Update daily commits data [2026-05-23] [skip ci]",
-      "timestamp": "2026-05-23T14:52:43Z"
-    },
-    {
-      "author": "github-actions[bot]",
-      "message": "squash: integrate khono_test into khono_v4",
-      "timestamp": "2026-05-23T14:50:56Z"
-    },
-    {
-      "author": "github-actions[bot]",
-      "message": "chore: update Flutter web build [skip ci]",
-      "timestamp": "2026-05-23T14:41:21Z"
-    },
-    {
-      "author": "GitHub Action",
-      "message": "Update daily commits data [2026-05-23] [skip ci]",
-      "timestamp": "2026-05-23T14:38:27Z"
-    },
-    {
-      "author": "github-actions[bot]",
-      "message": "squash: integrate khono_test into khono_v4",
-      "timestamp": "2026-05-23T14:36:38Z"
-    },
-    {
-      "author": "github-actions[bot]",
-      "message": "chore: update Flutter web build [skip ci]",
-      "timestamp": "2026-05-23T14:31:19Z"
-    },
-    {
-      "author": "GitHub Action",
-      "message": "Update daily commits data [2026-05-23] [skip ci]",
-      "timestamp": "2026-05-23T14:28:30Z"
-    },
-    {
-      "author": "github-actions[bot]",
-      "message": "squash: integrate khono_test into khono_v4",
-      "timestamp": "2026-05-23T14:26:41Z"
+      "author": "GitHub Actions",
+      "message": "chore: update version to 2026.03.AB45 [skip ci]",
+      "timestamp": "2026-05-25T07:50:45Z"
     },
     {
       "author": "Nathi66",
@@ -88,21 +33,11 @@
       "timestamp": "2026-05-25T07:42:10Z"
     },
     {
-      "author": "GitHub Action",
-      "message": "Update daily commits data [2026-05-23] [skip ci]",
-      "timestamp": "2026-05-23T13:50:17Z"
-    },
-    {
-      "author": "Nathi",
-      "message": "Feature: enhance user display name handling and improve user management (#18)",
-      "timestamp": "2026-05-23T15:49:19+02:00"
-    },
-    {
       "author": "github-actions[bot]",
       "message": "squash: integrate C#-backend-setup into khono_v4",
       "timestamp": "2026-05-25T07:41:08Z"
     }
   ],
-  "total_commits": 22,
-  "date_range": "2026-05-23"
+  "total_commits": 7,
+  "date_range": "2026-05-25"
 }
