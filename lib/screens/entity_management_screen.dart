@@ -83,6 +83,21 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     'Admin': const Color(0xFFC10D00),
   };
 
+  List<String> _normalizeEntityOptions(Iterable<String> values) {
+    final seen = <String>{};
+    final options = <String>[];
+    for (final raw in values) {
+      final value = raw.trim();
+      if (value.isEmpty) continue;
+      final key = value.toLowerCase();
+      if (seen.add(key)) {
+        options.add(value);
+      }
+    }
+    options.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return options;
+  }
+
   List<ManagedUser> get _filteredUsers {
     final userProvider = Provider.of<UserProvider>(context);
     final users = userProvider.users;
@@ -165,13 +180,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
           .timeout(const Duration(seconds: 12));
       if (response.statusCode != 200) return;
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final entities = (decoded['entities'] as List<dynamic>? ?? const [])
-          .whereType<String>()
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      final entities = _normalizeEntityOptions(
+        (decoded['entities'] as List<dynamic>? ?? const []).whereType<String>(),
+      );
       if (!mounted) return;
       setState(() {
         _entityOptions
@@ -247,13 +258,9 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
         throw Exception('Failed to add entity');
       }
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final entities = (decoded['entities'] as List<dynamic>? ?? const [])
-          .whereType<String>()
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      final entities = _normalizeEntityOptions(
+        (decoded['entities'] as List<dynamic>? ?? const []).whereType<String>(),
+      );
       if (!mounted) return;
       setState(() {
         _entityOptions
@@ -914,9 +921,13 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
     final Color dividerColor = appTextColor(context).withValues(
       alpha: isDark ? 0.22 : 0.30,
     );
+    final availableEntities = _normalizeEntityOptions(_entityOptions);
     String? selectedEntity = (user.entity == null || user.entity!.isEmpty)
         ? _notAssignedValue
         : user.entity;
+    if (!availableEntities.contains(selectedEntity)) {
+      selectedEntity = _notAssignedValue;
+    }
     final isUpdating = _updatingUserId == user.id;
 
     return Container(
@@ -996,7 +1007,7 @@ class _EntityManagementScreenState extends State<EntityManagementScreen> {
                       ),
                     ),
                   ),
-                  ..._entityOptions.map(
+                  ...availableEntities.map(
                     (option) => DropdownMenuItem<String?>(
                       value: option,
                       child: Text(

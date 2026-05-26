@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from cryptography.fernet import Fernet
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 import base64
 
@@ -14,7 +15,7 @@ try:
 except ImportError:
     from sentry_setup import report_exception
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 logger = logging.getLogger(__name__)
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
 if not JWT_SECRET_KEY:

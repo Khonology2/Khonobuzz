@@ -197,7 +197,9 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
       if (userMap == null) return;
 
       // Only display when the response is for the logged-in user (never show another user's data)
-      final responseEmail = (userMap['email'] as String? ?? '').trim().toLowerCase();
+      final responseEmail = (userMap['email'] as String? ?? '')
+          .trim()
+          .toLowerCase();
       final currentEmail = email.trim().toLowerCase();
       if (responseEmail != currentEmail) {
         debugPrint('[StaffProfileScreen] Ignoring response: email mismatch');
@@ -209,31 +211,54 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
 
       final curEmail = email.trim().toLowerCase();
       final curEnc = curEmail.replaceAll('@', '%40');
-      final firstName = (userMap['firstName'] ?? userMap['name'] ?? '').toString().trim();
-      final lastName = (userMap['lastName'] ?? userMap['surname'] ?? '').toString().trim();
+      final firstName = (userMap['firstName'] ?? userMap['name'] ?? '')
+          .toString()
+          .trim();
+      final lastName = (userMap['lastName'] ?? userMap['surname'] ?? '')
+          .toString()
+          .trim();
       final phone = ProfileApiFields.phoneFrom(userMap);
       final deptRaw = ProfileApiFields.departmentFrom(userMap);
       final desigRaw = ProfileApiFields.designationFrom(userMap);
       final preferred = (userMap['preferredName'] ?? '').toString().trim();
       final manager = ProfileApiFields.managerFrom(userMap);
-      String profileImageUrl = (userMap['profileImageUrl'] ?? '').toString().trim();
-      String profileImagePublicId = (userMap['profileImagePublicId'] ?? '').toString().trim();
-      if (profileImageUrl.isNotEmpty && !profileImageUrl.toLowerCase().contains(curEmail) && !profileImageUrl.contains(curEnc)) {
+      String profileImageUrl = (userMap['profileImageUrl'] ?? '')
+          .toString()
+          .trim();
+      String profileImagePublicId = (userMap['profileImagePublicId'] ?? '')
+          .toString()
+          .trim();
+      if (profileImageUrl.isNotEmpty &&
+          !profileImageUrl.toLowerCase().contains(curEmail) &&
+          !profileImageUrl.contains(curEnc)) {
         profileImageUrl = '';
         profileImagePublicId = '';
       }
-      if (profileImagePublicId.isNotEmpty && !profileImagePublicId.toLowerCase().contains(curEmail) && !profileImagePublicId.contains(curEnc)) {
+      if (profileImagePublicId.isNotEmpty &&
+          !profileImagePublicId.toLowerCase().contains(curEmail) &&
+          !profileImagePublicId.contains(curEnc)) {
         profileImageUrl = '';
         profileImagePublicId = '';
       }
       final entity = (userMap['entity'] ?? '').toString().trim();
       final moduleAccess = (userMap['moduleAccess'] ?? '').toString().trim();
-      final responseEmailDisplay = (userMap['email'] ?? email).toString().trim();
+      final responseEmailDisplay = (userMap['email'] ?? email)
+          .toString()
+          .trim();
 
-      final deptOpts = ProfileApiFields.dropdownOptionsFor(deptRaw, _departments);
-      final desigOpts = ProfileApiFields.dropdownOptionsFor(desigRaw, _designations);
+      final deptOpts = ProfileApiFields.dropdownOptionsFor(
+        deptRaw,
+        _departments,
+      );
+      final desigOpts = ProfileApiFields.dropdownOptionsFor(
+        desigRaw,
+        _designations,
+      );
       final matchedDept = ProfileApiFields.dropdownSelection(deptRaw, deptOpts);
-      final matchedDesig = ProfileApiFields.dropdownSelection(desigRaw, desigOpts);
+      final matchedDesig = ProfileApiFields.dropdownSelection(
+        desigRaw,
+        desigOpts,
+      );
 
       if (mounted) {
         _isHydratingProfile = true;
@@ -250,10 +275,16 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
           _selectedDesignation = matchedDesig;
           _departmentController.text = matchedDept ?? deptRaw;
           _designationController.text = matchedDesig ?? desigRaw;
-          _profileImageUrl = profileImageUrl.isNotEmpty ? profileImageUrl : null;
-          _profileImagePublicId = profileImagePublicId.isNotEmpty ? profileImagePublicId : null;
+          _profileImageUrl = profileImageUrl.isNotEmpty
+              ? profileImageUrl
+              : null;
+          _profileImagePublicId = profileImagePublicId.isNotEmpty
+              ? profileImagePublicId
+              : null;
           _userEntity = entity.isEmpty ? 'Not assigned' : entity;
-          _userModuleAccess = moduleAccess.isNotEmpty ? moduleAccess : (authProvider.userModuleAccess ?? 'None');
+          _userModuleAccess = moduleAccess.isNotEmpty
+              ? moduleAccess
+              : (authProvider.userModuleAccess ?? 'None');
         });
         _isHydratingProfile = false;
       }
@@ -284,11 +315,15 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
       final saveEnc = saveEmail.replaceAll('@', '%40');
       String saveProfileUrl = _profileImageUrl ?? '';
       String saveProfileId = _profileImagePublicId ?? '';
-      if (saveProfileUrl.isNotEmpty && !saveProfileUrl.toLowerCase().contains(saveEmail) && !saveProfileUrl.contains(saveEnc)) {
+      if (saveProfileUrl.isNotEmpty &&
+          !saveProfileUrl.toLowerCase().contains(saveEmail) &&
+          !saveProfileUrl.contains(saveEnc)) {
         saveProfileUrl = '';
         saveProfileId = '';
       }
-      if (saveProfileId.isNotEmpty && !saveProfileId.toLowerCase().contains(saveEmail) && !saveProfileId.contains(saveEnc)) {
+      if (saveProfileId.isNotEmpty &&
+          !saveProfileId.toLowerCase().contains(saveEmail) &&
+          !saveProfileId.contains(saveEnc)) {
         saveProfileUrl = '';
         saveProfileId = '';
       }
@@ -297,10 +332,10 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         'surname': _surnameController.text.trim(),
         'email': _emailController.text.trim(),
         'phoneNumber': _phoneController.text.trim(),
-        'department':
-            (_selectedDepartment ?? _departmentController.text).trim(),
-        'designation':
-            (_selectedDesignation ?? _designationController.text).trim(),
+        'department': (_selectedDepartment ?? _departmentController.text)
+            .trim(),
+        'designation': (_selectedDesignation ?? _designationController.text)
+            .trim(),
         'preferredName': _preferredNameController.text.trim(),
         'managedBy': _managerController.text.trim(),
         'profileImageUrl': saveProfileUrl,
@@ -344,10 +379,10 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
         },
         body: json.encode({
           'themePreference': isLightMode ? 'light' : 'dark',
-          'department':
-              (_selectedDepartment ?? _departmentController.text).trim(),
-          'designation':
-              (_selectedDesignation ?? _designationController.text).trim(),
+          'department': (_selectedDepartment ?? _departmentController.text)
+              .trim(),
+          'designation': (_selectedDesignation ?? _designationController.text)
+              .trim(),
         }),
       );
       if (response.statusCode != 200) {
@@ -391,59 +426,69 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                     color: const Color(0xFFC10D00).withValues(alpha: 0.3),
                   ),
                 ),
-                child: Row(
-                  children: [
-                    ProfileImageUpload(
-                      currentImageUrl: _profileImageUrl,
-                      currentPublicId: _profileImagePublicId,
-                      userId: authProvider.userEmail ?? 'unknown',
-                      radius: 40,
-                      onImageUploaded: (imageUrl, publicId) {
-                        setState(() {
-                          _profileImageUrl = imageUrl;
-                          _profileImagePublicId = publicId;
-                        });
-                      },
-                      onImageRemoved: () {
-                        setState(() {
-                          _profileImageUrl = null;
-                          _profileImagePublicId = null;
-                        });
-                        _saveProfile(); // Persist removal to backend
-                      },
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Semantics(
-                            label: 'Staff Profile',
-                            header: true,
-                            child: Text(
-                              'Staff Profile',
-                              style: TextStyle(
-                                color: appTextColor(context),
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Poppins',
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final bool isWide = constraints.maxWidth >= 520;
+                    return Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        ProfileImageUpload(
+                          currentImageUrl: _profileImageUrl,
+                          currentPublicId: _profileImagePublicId,
+                          userId: authProvider.userEmail ?? 'unknown',
+                          radius: 40,
+                          onImageUploaded: (imageUrl, publicId) {
+                            setState(() {
+                              _profileImageUrl = imageUrl;
+                              _profileImagePublicId = publicId;
+                            });
+                          },
+                          onImageRemoved: () {
+                            setState(() {
+                              _profileImageUrl = null;
+                              _profileImagePublicId = null;
+                            });
+                            _saveProfile(); // Persist removal to backend
+                          },
+                        ),
+                        SizedBox(
+                          width: isWide
+                              ? constraints.maxWidth - 120
+                              : constraints.maxWidth,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Semantics(
+                                label: 'Staff Profile',
+                                header: true,
+                                child: Text(
+                                  'Staff Profile',
+                                  style: TextStyle(
+                                    color: appTextColor(context),
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                ),
                               ),
-                            ),
+                              Text(
+                                authProvider.userEmail ?? 'staff@example.com',
+                                style: TextStyle(
+                                  color: appTextColor(context),
+                                  fontSize: 16,
+                                  fontFamily: 'Poppins',
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ],
                           ),
-                          Text(
-                            authProvider.userEmail ?? 'staff@example.com',
-                            style: TextStyle(
-                              color: appTextColor(context),
-                              fontSize: 16,
-                              fontFamily: 'Poppins',
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -468,99 +513,125 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Entity and Modules (read-only)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _buildReadOnlyLabelValue('Entity', _userEntity),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildReadOnlyLabelValue(
-                            'Modules Access',
-                            _userModuleAccess,
-                          ),
-                        ),
-                      ],
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final bool isWide = constraints.maxWidth >= 760;
+                        final double sectionWidth = isWide
+                            ? (constraints.maxWidth - 16) / 2
+                            : constraints.maxWidth;
+                        return Wrap(
+                          spacing: 16,
+                          runSpacing: 16,
+                          children: [
+                            SizedBox(
+                              width: sectionWidth,
+                              child: _buildReadOnlyLabelValue(
+                                'Entity',
+                                _userEntity,
+                              ),
+                            ),
+                            SizedBox(
+                              width: sectionWidth,
+                              child: _buildReadOnlyLabelValue(
+                                'Modules Access',
+                                _userModuleAccess,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildEditableField(
-                                'First Name',
-                                _firstNameController,
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final bool isWide = constraints.maxWidth >= 900;
+                        final double columnWidth = isWide
+                            ? (constraints.maxWidth - 16) / 2
+                            : constraints.maxWidth;
+                        return Wrap(
+                          spacing: 16,
+                          runSpacing: 16,
+                          children: [
+                            SizedBox(
+                              width: columnWidth,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildEditableField(
+                                    'First Name',
+                                    _firstNameController,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildEditableField(
+                                    'Surname',
+                                    _surnameController,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildEditableField(
+                                    'Email Address',
+                                    _emailController,
+                                    errorText: _emailError,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildEditableField(
+                                    'Phone Number',
+                                    _phoneController,
+                                    errorText: _phoneError,
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 16),
-                              _buildEditableField(
-                                'Surname',
-                                _surnameController,
+                            ),
+                            SizedBox(
+                              width: columnWidth,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildDropdownField(
+                                    'Department',
+                                    _departmentController,
+                                    _selectedDepartment,
+                                    _departmentOptions,
+                                    (String? newValue) {
+                                      setState(() {
+                                        _selectedDepartment = newValue;
+                                        _departmentController.text =
+                                            newValue ?? '';
+                                      });
+                                      _onFieldChanged();
+                                    },
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildDropdownField(
+                                    'Designation',
+                                    _designationController,
+                                    _selectedDesignation,
+                                    _designationOptions,
+                                    (String? newValue) {
+                                      setState(() {
+                                        _selectedDesignation = newValue;
+                                        _designationController.text =
+                                            newValue ?? '';
+                                      });
+                                      _onFieldChanged();
+                                    },
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildEditableField(
+                                    'Preferred Name',
+                                    _preferredNameController,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildEditableField(
+                                    'Manager',
+                                    _managerController,
+                                    readOnly: true,
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 16),
-                              _buildEditableField(
-                                'Email Address',
-                                _emailController,
-                                errorText: _emailError,
-                              ),
-                              const SizedBox(height: 16),
-                              _buildEditableField(
-                                'Phone Number',
-                                _phoneController,
-                                errorText: _phoneError,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildDropdownField(
-                                'Department',
-                                _departmentController,
-                                _selectedDepartment,
-                                _departmentOptions,
-                                (String? newValue) {
-                                  setState(() {
-                                    _selectedDepartment = newValue;
-                                    _departmentController.text = newValue ?? '';
-                                  });
-                                  _onFieldChanged();
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              _buildDropdownField(
-                                'Designation',
-                                _designationController,
-                                _selectedDesignation,
-                                _designationOptions,
-                                (String? newValue) {
-                                  setState(() {
-                                    _selectedDesignation = newValue;
-                                    _designationController.text = newValue ?? '';
-                                  });
-                                  _onFieldChanged();
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              _buildEditableField(
-                                'Preferred Name',
-                                _preferredNameController,
-                              ),
-                              const SizedBox(height: 16),
-                              _buildEditableField(
-                                'Manager',
-                                _managerController,
-                                readOnly: true,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                            ),
+                          ],
+                        );
+                      },
                     ),
                     Consumer<ThemeModeProvider>(
                       builder: (context, themeMode, _) {
@@ -577,7 +648,9 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
                           subtitle: Text(
                             themeMode.isLight ? 'Light mode' : 'Dark mode',
                             style: TextStyle(
-                              color: appTextColor(context).withValues(alpha: 0.75),
+                              color: appTextColor(
+                                context,
+                              ).withValues(alpha: 0.75),
                               fontFamily: 'Poppins',
                             ),
                           ),
@@ -653,7 +726,9 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
           decoration: BoxDecoration(
             color: widgetBg,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: appTextColor(context).withValues(alpha: 0.3)),
+            border: Border.all(
+              color: appTextColor(context).withValues(alpha: 0.3),
+            ),
           ),
           child: Text(
             value,
@@ -760,12 +835,18 @@ class _StaffProfileScreenState extends State<StaffProfileScreen> {
           decoration: BoxDecoration(
             color: widgetBg,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: appTextColor(context).withValues(alpha: 0.3)),
+            border: Border.all(
+              color: appTextColor(context).withValues(alpha: 0.3),
+            ),
           ),
           child: DropdownButtonFormField<String>(
-            value: initialValue,
+            value: items.contains(initialValue) ? initialValue : null,
+            isExpanded: true,
             dropdownColor: widgetBg,
-            style: TextStyle(color: appTextColor(context), fontFamily: 'Poppins'),
+            style: TextStyle(
+              color: appTextColor(context),
+              fontFamily: 'Poppins',
+            ),
             decoration: InputDecoration(
               filled: true,
               fillColor: widgetBg,

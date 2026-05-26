@@ -105,7 +105,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
     // Primary sort: latest sign-in first, so admins always see newest logins on top.
     // Secondary sort: keep the selected sort option among users with same sign-in recency.
     list.sort((a, b) {
-      final signInCompare = _lastSignInSortKey(b).compareTo(_lastSignInSortKey(a));
+      final signInCompare = _lastSignInSortKey(
+        b,
+      ).compareTo(_lastSignInSortKey(a));
       if (signInCompare != 0) return signInCompare;
 
       switch (_sortOption) {
@@ -508,26 +510,31 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       final seg = part.trim();
       if (seg.isEmpty) continue;
       if (seg.startsWith('PDH - ')) {
-        result['Personal Development Hub'] =
-            seg.replaceFirst('PDH - ', '').trim();
+        result['Personal Development Hub'] = seg
+            .replaceFirst('PDH - ', '')
+            .trim();
       } else if (seg == 'PDH') {
         result['Personal Development Hub'] = 'Assigned';
       } else if (seg.startsWith('Skills Heatmap - ')) {
-        result['Resource & Capacity Skills Heatmap'] =
-            seg.replaceFirst('Skills Heatmap - ', '').trim();
+        result['Resource & Capacity Skills Heatmap'] = seg
+            .replaceFirst('Skills Heatmap - ', '')
+            .trim();
       } else if (seg.startsWith('Automated Recruitment Workflow - ')) {
-        result['Automated Recruitment Workflow'] =
-            seg.replaceFirst('Automated Recruitment Workflow - ', '').trim();
+        result['Automated Recruitment Workflow'] = seg
+            .replaceFirst('Automated Recruitment Workflow - ', '')
+            .trim();
       } else if (seg == 'Automated Recruitment Workflow') {
         result['Automated Recruitment Workflow'] = 'Assigned';
       } else if (seg.startsWith('Proposal & SOW Builder - ')) {
-        result['Proposal & SOW Builder'] =
-            seg.replaceFirst('Proposal & SOW Builder - ', '').trim();
+        result['Proposal & SOW Builder'] = seg
+            .replaceFirst('Proposal & SOW Builder - ', '')
+            .trim();
       } else if (seg == 'Proposal & SOW Builder') {
         result['Proposal & SOW Builder'] = 'Assigned';
       } else if (seg.startsWith('Deliverables & Sprint Sign-Off Hub - ')) {
-        result['Deliverables & Sprint Sign-Off Hub'] =
-            seg.replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '').trim();
+        result['Deliverables & Sprint Sign-Off Hub'] = seg
+            .replaceFirst('Deliverables & Sprint Sign-Off Hub - ', '')
+            .trim();
       } else if (seg == 'Deliverables & Sprint Sign-Off Hub') {
         result['Deliverables & Sprint Sign-Off Hub'] = 'Assigned';
       }
@@ -831,7 +838,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             SnackBar(
               content: Text(
                 'Module access updated, but failed to sync with PDH.',
-                style: TextStyle(fontFamily: 'Poppins', color: appTextColor(context)),
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: appTextColor(context),
+                ),
               ),
               backgroundColor: Colors.orange,
             ),
@@ -967,33 +977,37 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                             ),
                             decoration: BoxDecoration(
                               color:
-                                  Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
-                                      : Colors.white,
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? moduleAccessDarkWidgetBg
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
-                            child: CheckboxListTile(
-                              title: Text(
-                                'Personal Development Hub',
-                                style: TextStyle(
-                                  color: appTextColor(context),
-                                  fontFamily: 'Poppins',
+                            child: Material(
+                              color: Colors.transparent,
+                              child: CheckboxListTile(
+                                title: Text(
+                                  'Personal Development Hub',
+                                  style: TextStyle(
+                                    color: appTextColor(context),
+                                    fontFamily: 'Poppins',
+                                  ),
                                 ),
+                                value: pdhSelected,
+                                activeColor: const Color(0xFFC10D00),
+                                checkColor: appTextColor(context),
+                                onChanged: (bool? value) {
+                                  SoundSystem.playButtonClick();
+                                  setStateDialog(() {
+                                    pdhSelected = value ?? false;
+                                    if (!pdhSelected) {
+                                      selectedModuleRole = _notAssignedValue;
+                                    }
+                                  });
+                                },
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
                               ),
-                              value: pdhSelected,
-                              activeColor: const Color(0xFFC10D00),
-                              checkColor: appTextColor(context),
-                              onChanged: (bool? value) {
-                                SoundSystem.playButtonClick();
-                                setStateDialog(() {
-                                  pdhSelected = value ?? false;
-                                  if (!pdhSelected) {
-                                    selectedModuleRole = _notAssignedValue;
-                                  }
-                                });
-                              },
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
                             ),
                           ),
                         ),
@@ -1006,9 +1020,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                             ),
                             decoration: BoxDecoration(
                               color:
-                                  Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
-                                      : Colors.white,
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? moduleAccessDarkWidgetBg
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: DropdownButtonHideUnderline(
@@ -1017,10 +1032,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                     ? selectedModuleRole
                                     : _notAssignedValue,
                                 isExpanded: true,
-                              dropdownColor:
-                                  Theme.of(context).brightness == Brightness.dark
-                                      ? const Color(0xFF3D3F40)
-                                      : Colors.white,
+                                dropdownColor:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? const Color(0xFF3D3F40)
+                                    : Colors.white,
                                 icon: Icon(
                                   Icons.arrow_drop_down,
                                   color: appTextColor(context),
@@ -1076,30 +1092,34 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                             ),
                             decoration: BoxDecoration(
                               color:
-                                  Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
-                                      : Colors.white,
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? moduleAccessDarkWidgetBg
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
-                            child: CheckboxListTile(
-                              title: Text(
-                                'Resource & Capacity Skills Heatmap',
-                                style: TextStyle(
-                                  color: appTextColor(context),
-                                  fontFamily: 'Poppins',
+                            child: Material(
+                              color: Colors.transparent,
+                              child: CheckboxListTile(
+                                title: Text(
+                                  'Resource & Capacity Skills Heatmap',
+                                  style: TextStyle(
+                                    color: appTextColor(context),
+                                    fontFamily: 'Poppins',
+                                  ),
                                 ),
+                                value: skillsHeatmapSelected,
+                                activeColor: const Color(0xFFC10D00),
+                                checkColor: appTextColor(context),
+                                onChanged: (bool? value) {
+                                  SoundSystem.playButtonClick();
+                                  setStateDialog(() {
+                                    skillsHeatmapSelected = value ?? false;
+                                  });
+                                },
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
                               ),
-                              value: skillsHeatmapSelected,
-                              activeColor: const Color(0xFFC10D00),
-                              checkColor: appTextColor(context),
-                              onChanged: (bool? value) {
-                                SoundSystem.playButtonClick();
-                                setStateDialog(() {
-                                  skillsHeatmapSelected = value ?? false;
-                                });
-                              },
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
                             ),
                           ),
                         ),
@@ -1112,9 +1132,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                             ),
                             decoration: BoxDecoration(
                               color:
-                                  Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
-                                      : Colors.white,
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? moduleAccessDarkWidgetBg
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: DropdownButtonHideUnderline(
@@ -1123,10 +1144,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                     ? selectedSkillsHeatmapRole
                                     : _notAssignedValue,
                                 isExpanded: true,
-                              dropdownColor:
-                                  Theme.of(context).brightness == Brightness.dark
-                                      ? const Color(0xFF3D3F40)
-                                      : Colors.white,
+                                dropdownColor:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? const Color(0xFF3D3F40)
+                                    : Colors.white,
                                 icon: Icon(
                                   Icons.arrow_drop_down,
                                   color: appTextColor(context),
@@ -1183,33 +1205,38 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                             ),
                             decoration: BoxDecoration(
                               color:
-                                  Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
-                                      : Colors.white,
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? moduleAccessDarkWidgetBg
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
-                            child: CheckboxListTile(
-                              title: Text(
-                                'Automated Recruitment Workflow',
-                                style: TextStyle(
-                                  color: appTextColor(context),
-                                  fontFamily: 'Poppins',
+                            child: Material(
+                              color: Colors.transparent,
+                              child: CheckboxListTile(
+                                title: Text(
+                                  'Automated Recruitment Workflow',
+                                  style: TextStyle(
+                                    color: appTextColor(context),
+                                    fontFamily: 'Poppins',
+                                  ),
                                 ),
+                                value: recruitmentSelected,
+                                activeColor: const Color(0xFFC10D00),
+                                checkColor: appTextColor(context),
+                                onChanged: (bool? value) {
+                                  SoundSystem.playButtonClick();
+                                  setStateDialog(() {
+                                    recruitmentSelected = value ?? false;
+                                    if (!recruitmentSelected) {
+                                      selectedRecruitmentRole =
+                                          _notAssignedValue;
+                                    }
+                                  });
+                                },
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
                               ),
-                              value: recruitmentSelected,
-                              activeColor: const Color(0xFFC10D00),
-                              checkColor: appTextColor(context),
-                              onChanged: (bool? value) {
-                                SoundSystem.playButtonClick();
-                                setStateDialog(() {
-                                  recruitmentSelected = value ?? false;
-                                  if (!recruitmentSelected) {
-                                    selectedRecruitmentRole = _notAssignedValue;
-                                  }
-                                });
-                              },
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
                             ),
                           ),
                         ),
@@ -1222,9 +1249,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                             ),
                             decoration: BoxDecoration(
                               color:
-                                  Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
-                                      : Colors.white,
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? moduleAccessDarkWidgetBg
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: DropdownButtonHideUnderline(
@@ -1233,10 +1261,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                     ? selectedRecruitmentRole
                                     : _notAssignedValue,
                                 isExpanded: true,
-                              dropdownColor:
-                                  Theme.of(context).brightness == Brightness.dark
-                                      ? const Color(0xFF3D3F40)
-                                      : Colors.white,
+                                dropdownColor:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? const Color(0xFF3D3F40)
+                                    : Colors.white,
                                 icon: Icon(
                                   Icons.arrow_drop_down,
                                   color: appTextColor(context),
@@ -1292,33 +1321,38 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                             ),
                             decoration: BoxDecoration(
                               color:
-                                  Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
-                                      : Colors.white,
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? moduleAccessDarkWidgetBg
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
-                            child: CheckboxListTile(
-                              title: Text(
-                                'Proposal & SOW Builder',
-                                style: TextStyle(
-                                  color: appTextColor(context),
-                                  fontFamily: 'Poppins',
+                            child: Material(
+                              color: Colors.transparent,
+                              child: CheckboxListTile(
+                                title: Text(
+                                  'Proposal & SOW Builder',
+                                  style: TextStyle(
+                                    color: appTextColor(context),
+                                    fontFamily: 'Poppins',
+                                  ),
                                 ),
+                                value: sowBuilderSelected,
+                                activeColor: const Color(0xFFC10D00),
+                                checkColor: appTextColor(context),
+                                onChanged: (bool? value) {
+                                  SoundSystem.playButtonClick();
+                                  setStateDialog(() {
+                                    sowBuilderSelected = value ?? false;
+                                    if (!sowBuilderSelected) {
+                                      selectedSOWBuilderRole =
+                                          _notAssignedValue;
+                                    }
+                                  });
+                                },
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
                               ),
-                              value: sowBuilderSelected,
-                              activeColor: const Color(0xFFC10D00),
-                              checkColor: appTextColor(context),
-                              onChanged: (bool? value) {
-                                SoundSystem.playButtonClick();
-                                setStateDialog(() {
-                                  sowBuilderSelected = value ?? false;
-                                  if (!sowBuilderSelected) {
-                                    selectedSOWBuilderRole = _notAssignedValue;
-                                  }
-                                });
-                              },
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
                             ),
                           ),
                         ),
@@ -1331,9 +1365,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                             ),
                             decoration: BoxDecoration(
                               color:
-                                  Theme.of(context).brightness == Brightness.dark
-                                      ? moduleAccessDarkWidgetBg
-                                      : Colors.white,
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? moduleAccessDarkWidgetBg
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: DropdownButtonHideUnderline(
@@ -1342,10 +1377,11 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                     ? selectedSOWBuilderRole
                                     : _notAssignedValue,
                                 isExpanded: true,
-                              dropdownColor:
-                                  Theme.of(context).brightness == Brightness.dark
-                                      ? const Color(0xFF3D3F40)
-                                      : Colors.white,
+                                dropdownColor:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? const Color(0xFF3D3F40)
+                                    : Colors.white,
                                 icon: Icon(
                                   Icons.arrow_drop_down,
                                   color: appTextColor(context),
@@ -1396,39 +1432,41 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         vertical: 8.0,
                       ),
                       decoration: BoxDecoration(
-                        color:
-                            Theme.of(context).brightness == Brightness.dark
-                                ? moduleAccessDarkWidgetBg
-                                : Colors.white,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? moduleAccessDarkWidgetBg
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(8.0),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: CheckboxListTile(
-                              title: Text(
-                                'Deliverables & Sprint Sign-Off Hub',
-                                style: TextStyle(
-                                  color: appTextColor(context),
-                                  fontFamily: 'Poppins',
+                            child: Material(
+                              color: Colors.transparent,
+                              child: CheckboxListTile(
+                                title: Text(
+                                  'Deliverables & Sprint Sign-Off Hub',
+                                  style: TextStyle(
+                                    color: appTextColor(context),
+                                    fontFamily: 'Poppins',
+                                  ),
                                 ),
+                                value: deliverablesSelected,
+                                activeColor: const Color(0xFFC10D00),
+                                checkColor: appTextColor(context),
+                                onChanged: (bool? value) {
+                                  SoundSystem.playButtonClick();
+                                  setStateDialog(() {
+                                    deliverablesSelected = value ?? false;
+                                    if (!deliverablesSelected) {
+                                      selectedDeliverablesRole =
+                                          _notAssignedValue;
+                                    }
+                                  });
+                                },
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
                               ),
-                              value: deliverablesSelected,
-                              activeColor: const Color(0xFFC10D00),
-                              checkColor: appTextColor(context),
-                              onChanged: (bool? value) {
-                                SoundSystem.playButtonClick();
-                                setStateDialog(() {
-                                  deliverablesSelected = value ?? false;
-                                  if (!deliverablesSelected) {
-                                    selectedDeliverablesRole =
-                                        _notAssignedValue;
-                                  }
-                                });
-                              },
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
                             ),
                           ),
                           const SizedBox(width: 16.0),
@@ -1440,9 +1478,10 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                               ),
                               decoration: BoxDecoration(
                                 color:
-                                    Theme.of(context).brightness == Brightness.dark
-                                        ? moduleAccessDarkWidgetBg
-                                        : Colors.white,
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? moduleAccessDarkWidgetBg
+                                    : Colors.white,
                                 borderRadius: BorderRadius.circular(8.0),
                               ),
                               child: DropdownButtonHideUnderline(
@@ -1453,9 +1492,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                                   isExpanded: true,
                                   dropdownColor:
                                       Theme.of(context).brightness ==
-                                              Brightness.dark
-                                          ? const Color(0xFF3D3F40)
-                                          : Colors.white,
+                                          Brightness.dark
+                                      ? const Color(0xFF3D3F40)
+                                      : Colors.white,
                                   icon: Icon(
                                     Icons.arrow_drop_down,
                                     color: appTextColor(context),
@@ -1708,15 +1747,14 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset(
-              appBackgroundAsset(context),
-              fit: BoxFit.cover,
-            ),
+            child: Image.asset(appBackgroundAsset(context), fit: BoxFit.cover),
           ),
           Positioned.fill(
             child: ScrollbarTheme(
               data: ScrollbarThemeData(
-                thumbColor: WidgetStatePropertyAll<Color>(appTextColor(context)),
+                thumbColor: WidgetStatePropertyAll<Color>(
+                  appTextColor(context),
+                ),
               ),
               child: Scrollbar(
                 controller: _scrollController,
@@ -1891,7 +1929,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                             height: 10,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: appTextColor(context).withValues(alpha: 0.12),
+                              color: appTextColor(
+                                context,
+                              ).withValues(alpha: 0.12),
                             ),
                           ),
                         ),
@@ -2039,9 +2079,7 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
         decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFFC10D00)
-              : normalChipBg,
+          color: isSelected ? const Color(0xFFC10D00) : normalChipBg,
           borderRadius: BorderRadius.circular(20.0),
           border: isSelected
               ? Border.all(color: const Color(0xFFC10D00), width: 1)
@@ -2151,9 +2189,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
               boxShadow: [
                 BoxShadow(
                   color: isHovered
-                      ? const Color(0xFFC10D00).withValues(
-                          alpha: isDark ? 0.28 : 0.18,
-                        )
+                      ? const Color(
+                          0xFFC10D00,
+                        ).withValues(alpha: isDark ? 0.28 : 0.18)
                       : Colors.black.withValues(alpha: 0.08),
                   blurRadius: isHovered ? 18 : 12,
                   spreadRadius: isHovered ? 1 : 0,
@@ -2163,127 +2201,131 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
             ),
             padding: const EdgeInsets.all(16.0),
             child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (_isSelectionMode) ...[
-                  Checkbox(
-                    value: isSelected,
-                    onChanged: (value) {
-                      SoundSystem.playButtonClick();
-                      setState(() {
-                        if (value == true) {
-                          _selectedUserIds.add(user.id);
-                        } else {
-                          _selectedUserIds.remove(user.id);
-                          if (_selectedUserIds.isEmpty) {
-                            _isSelectionMode = false;
-                          }
-                        }
-                      });
-                    },
-                    activeColor: const Color(0xFFC10D00),
-                    checkColor: appTextColor(context),
-                  ),
-                  const SizedBox(width: 8.0),
-                ],
-                Expanded(
-                  child: Row(
-                    children: [
-                      _buildUserAvatar(user),
-                      const SizedBox(width: 12.0),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              user.displayName,
-                              style: TextStyle(
-                                color: appTextColor(context),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16.0,
-                                fontFamily: 'Poppins',
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                            Text(
-                              user.email,
-                              style: TextStyle(
-                                color: appTextColor(context),
-                                fontSize: 12.0,
-                                fontFamily: 'Poppins',
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                          ],
-                        ),
+                Row(
+                  children: [
+                    if (_isSelectionMode) ...[
+                      Checkbox(
+                        value: isSelected,
+                        onChanged: (value) {
+                          SoundSystem.playButtonClick();
+                          setState(() {
+                            if (value == true) {
+                              _selectedUserIds.add(user.id);
+                            } else {
+                              _selectedUserIds.remove(user.id);
+                              if (_selectedUserIds.isEmpty) {
+                                _isSelectionMode = false;
+                              }
+                            }
+                          });
+                        },
+                        activeColor: const Color(0xFFC10D00),
+                        checkColor: appTextColor(context),
                       ),
+                      const SizedBox(width: 8.0),
                     ],
-                  ),
-                ),
-                const SizedBox(width: 12.0),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        user.designation,
-                        style: TextStyle(
-                          color: appTextColor(context),
-                          fontWeight: FontWeight.w500,
-                          fontSize: 14.0,
-                          fontFamily: 'Poppins',
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          _buildUserAvatar(user),
+                          const SizedBox(width: 12.0),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  user.displayName,
+                                  style: TextStyle(
+                                    color: appTextColor(context),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16.0,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                                Text(
+                                  user.email,
+                                  style: TextStyle(
+                                    color: appTextColor(context),
+                                    fontSize: 12.0,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4.0),
-                      Text(
-                        user.department,
-                        style: TextStyle(
-                          color: appTextColor(context),
-                          fontSize: 12.0,
-                          fontFamily: 'Poppins',
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ],
-                  ),
-                ),
-                if (!_isSelectionMode)
-                  Transform.rotate(
-                    angle: isExpanded ? 3.14 : 0,
-                    child: Icon(
-                      Icons.keyboard_arrow_down,
-                      color: appTextColor(context),
-                      size: 28,
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12.0),
-            Row(
-              children: [
-                Text(
-                  'Modules:',
-                  style: TextStyle(
-                    color: appTextColor(context),
-                    fontSize: 12.0,
-                    fontFamily: 'Poppins',
-                  ),
+                    const SizedBox(width: 12.0),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            user.designation,
+                            style: TextStyle(
+                              color: appTextColor(context),
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14.0,
+                              fontFamily: 'Poppins',
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                          const SizedBox(height: 4.0),
+                          Text(
+                            user.department,
+                            style: TextStyle(
+                              color: appTextColor(context),
+                              fontSize: 12.0,
+                              fontFamily: 'Poppins',
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!_isSelectionMode)
+                      Transform.rotate(
+                        angle: isExpanded ? 3.14 : 0,
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: appTextColor(context),
+                          size: 28,
+                        ),
+                      ),
+                  ],
                 ),
-                const SizedBox(width: 8.0),
-                Wrap(spacing: 2.0, runSpacing: 4.0, children: moduleAccessDots),
+                const SizedBox(height: 12.0),
+                Row(
+                  children: [
+                    Text(
+                      'Modules:',
+                      style: TextStyle(
+                        color: appTextColor(context),
+                        fontSize: 12.0,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    const SizedBox(width: 8.0),
+                    Wrap(
+                      spacing: 2.0,
+                      runSpacing: 4.0,
+                      children: moduleAccessDots,
+                    ),
+                  ],
+                ),
               ],
-            ),
-          ],
             ),
           ),
         ),
@@ -2360,9 +2402,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
         ? moduleAccessDarkWidgetBg
         : Colors.white.withValues(alpha: 0.40);
     final Color popupBg = isDark ? const Color(0xFF3D3F40) : Colors.white;
-    final Color dividerColor = appTextColor(context).withValues(
-      alpha: isDark ? 0.22 : 0.30,
-    );
+    final Color dividerColor = appTextColor(
+      context,
+    ).withValues(alpha: isDark ? 0.22 : 0.30);
     List<String> selectedModuleAccessList = [];
     if (user.moduleAccess != null && user.moduleAccess!.isNotEmpty) {
       selectedModuleAccessList = user.moduleAccess!
@@ -2617,43 +2659,46 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
-                  child: CheckboxListTile(
-                    title: Text(
-                      'Personal Development Hub',
-                      style: TextStyle(
-                        color: appTextColor(context),
-                        fontFamily: 'Poppins',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: CheckboxListTile(
+                      title: Text(
+                        'Personal Development Hub',
+                        style: TextStyle(
+                          color: appTextColor(context),
+                          fontFamily: 'Poppins',
+                        ),
                       ),
-                    ),
-                    value: pdhSelected,
-                    activeColor: const Color(0xFFC10D00),
-                    checkColor: appTextColor(context),
-                    onChanged: (bool? value) {
-                      SoundSystem.playButtonClick();
-                      setState(() {
-                        pdhSelected = value ?? false;
-                        _updateModuleAccessList(
-                          user,
-                          pdhSelected,
-                          skillsHeatmapSelected,
-                          recruitmentSelected,
-                          sowBuilderSelected,
-                          deliverablesSelected,
-                        );
+                      value: pdhSelected,
+                      activeColor: const Color(0xFFC10D00),
+                      checkColor: appTextColor(context),
+                      onChanged: (bool? value) {
+                        SoundSystem.playButtonClick();
+                        setState(() {
+                          pdhSelected = value ?? false;
+                          _updateModuleAccessList(
+                            user,
+                            pdhSelected,
+                            skillsHeatmapSelected,
+                            recruitmentSelected,
+                            sowBuilderSelected,
+                            deliverablesSelected,
+                          );
 
-                        if (!pdhSelected &&
-                            selectedModuleRole != _notAssignedValue) {
-                          if (!skillsHeatmapSelected &&
-                              !recruitmentSelected &&
-                              !sowBuilderSelected) {
-                            selectedModuleRole = _notAssignedValue;
-                            user.moduleRole = null;
+                          if (!pdhSelected &&
+                              selectedModuleRole != _notAssignedValue) {
+                            if (!skillsHeatmapSelected &&
+                                !recruitmentSelected &&
+                                !sowBuilderSelected) {
+                              selectedModuleRole = _notAssignedValue;
+                              user.moduleRole = null;
+                            }
                           }
-                        }
-                      });
-                    },
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
+                        });
+                      },
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
                   ),
                 ),
               ),
@@ -2688,7 +2733,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                         ),
                       ),
                       style: TextStyle(
-                        color: pdhSelected ? appTextColor(context) : appTextColor(context),
+                        color: pdhSelected
+                            ? appTextColor(context)
+                            : appTextColor(context),
                         fontFamily: 'Poppins',
                       ),
                       onChanged: pdhSelected
@@ -2754,32 +2801,35 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
-                  child: CheckboxListTile(
-                    title: Text(
-                      'Resource & Capacity Skills Heatmap',
-                      style: TextStyle(
-                        color: appTextColor(context),
-                        fontFamily: 'Poppins',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: CheckboxListTile(
+                      title: Text(
+                        'Resource & Capacity Skills Heatmap',
+                        style: TextStyle(
+                          color: appTextColor(context),
+                          fontFamily: 'Poppins',
+                        ),
                       ),
+                      value: skillsHeatmapSelected,
+                      activeColor: const Color(0xFFC10D00),
+                      checkColor: appTextColor(context),
+                      onChanged: (bool? value) {
+                        setState(() {
+                          skillsHeatmapSelected = value ?? false;
+                          _updateModuleAccessList(
+                            user,
+                            pdhSelected,
+                            skillsHeatmapSelected,
+                            recruitmentSelected,
+                            sowBuilderSelected,
+                            deliverablesSelected,
+                          );
+                        });
+                      },
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
                     ),
-                    value: skillsHeatmapSelected,
-                    activeColor: const Color(0xFFC10D00),
-                    checkColor: appTextColor(context),
-                    onChanged: (bool? value) {
-                      setState(() {
-                        skillsHeatmapSelected = value ?? false;
-                        _updateModuleAccessList(
-                          user,
-                          pdhSelected,
-                          skillsHeatmapSelected,
-                          recruitmentSelected,
-                          sowBuilderSelected,
-                          deliverablesSelected,
-                        );
-                      });
-                    },
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
                   ),
                 ),
               ),
@@ -2882,33 +2932,36 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
-                  child: CheckboxListTile(
-                    title: Text(
-                      'Automated Recruitment Workflow',
-                      style: TextStyle(
-                        color: appTextColor(context),
-                        fontFamily: 'Poppins',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: CheckboxListTile(
+                      title: Text(
+                        'Automated Recruitment Workflow',
+                        style: TextStyle(
+                          color: appTextColor(context),
+                          fontFamily: 'Poppins',
+                        ),
                       ),
+                      value: recruitmentSelected,
+                      activeColor: const Color(0xFFC10D00),
+                      checkColor: appTextColor(context),
+                      onChanged: (bool? value) {
+                        SoundSystem.playButtonClick();
+                        setState(() {
+                          recruitmentSelected = value ?? false;
+                          _updateModuleAccessList(
+                            user,
+                            pdhSelected,
+                            skillsHeatmapSelected,
+                            recruitmentSelected,
+                            sowBuilderSelected,
+                            deliverablesSelected,
+                          );
+                        });
+                      },
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
                     ),
-                    value: recruitmentSelected,
-                    activeColor: const Color(0xFFC10D00),
-                    checkColor: appTextColor(context),
-                    onChanged: (bool? value) {
-                      SoundSystem.playButtonClick();
-                      setState(() {
-                        recruitmentSelected = value ?? false;
-                        _updateModuleAccessList(
-                          user,
-                          pdhSelected,
-                          skillsHeatmapSelected,
-                          recruitmentSelected,
-                          sowBuilderSelected,
-                          deliverablesSelected,
-                        );
-                      });
-                    },
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
                   ),
                 ),
               ),
@@ -3011,33 +3064,36 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
-                  child: CheckboxListTile(
-                    title: Text(
-                      'Deliverables & Sprint Sign-Off Hub',
-                      style: TextStyle(
-                        color: appTextColor(context),
-                        fontFamily: 'Poppins',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: CheckboxListTile(
+                      title: Text(
+                        'Deliverables & Sprint Sign-Off Hub',
+                        style: TextStyle(
+                          color: appTextColor(context),
+                          fontFamily: 'Poppins',
+                        ),
                       ),
+                      value: deliverablesSelected,
+                      activeColor: const Color(0xFFC10D00),
+                      checkColor: appTextColor(context),
+                      onChanged: (bool? value) {
+                        SoundSystem.playButtonClick();
+                        setState(() {
+                          deliverablesSelected = value ?? false;
+                          _updateModuleAccessList(
+                            user,
+                            pdhSelected,
+                            skillsHeatmapSelected,
+                            recruitmentSelected,
+                            sowBuilderSelected,
+                            deliverablesSelected,
+                          );
+                        });
+                      },
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
                     ),
-                    value: deliverablesSelected,
-                    activeColor: const Color(0xFFC10D00),
-                    checkColor: appTextColor(context),
-                    onChanged: (bool? value) {
-                      SoundSystem.playButtonClick();
-                      setState(() {
-                        deliverablesSelected = value ?? false;
-                        _updateModuleAccessList(
-                          user,
-                          pdhSelected,
-                          skillsHeatmapSelected,
-                          recruitmentSelected,
-                          sowBuilderSelected,
-                          deliverablesSelected,
-                        );
-                      });
-                    },
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
                   ),
                 ),
               ),
@@ -3138,33 +3194,36 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                     color: widgetBg,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
-                  child: CheckboxListTile(
-                    title: Text(
-                      'Proposal & SOW Builder',
-                      style: TextStyle(
-                        color: appTextColor(context),
-                        fontFamily: 'Poppins',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: CheckboxListTile(
+                      title: Text(
+                        'Proposal & SOW Builder',
+                        style: TextStyle(
+                          color: appTextColor(context),
+                          fontFamily: 'Poppins',
+                        ),
                       ),
+                      value: sowBuilderSelected,
+                      activeColor: const Color(0xFFC10D00),
+                      checkColor: appTextColor(context),
+                      onChanged: (bool? value) {
+                        SoundSystem.playButtonClick();
+                        setState(() {
+                          sowBuilderSelected = value ?? false;
+                          _updateModuleAccessList(
+                            user,
+                            pdhSelected,
+                            skillsHeatmapSelected,
+                            recruitmentSelected,
+                            sowBuilderSelected,
+                            deliverablesSelected,
+                          );
+                        });
+                      },
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
                     ),
-                    value: sowBuilderSelected,
-                    activeColor: const Color(0xFFC10D00),
-                    checkColor: appTextColor(context),
-                    onChanged: (bool? value) {
-                      SoundSystem.playButtonClick();
-                      setState(() {
-                        sowBuilderSelected = value ?? false;
-                        _updateModuleAccessList(
-                          user,
-                          pdhSelected,
-                          skillsHeatmapSelected,
-                          recruitmentSelected,
-                          sowBuilderSelected,
-                          deliverablesSelected,
-                        );
-                      });
-                    },
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
                   ),
                 ),
               ),
@@ -3288,7 +3347,9 @@ class _ModuleAccessScreenState extends State<ModuleAccessScreen> {
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Colors.white,
+                        ),
                       ),
                     )
                   : Text(

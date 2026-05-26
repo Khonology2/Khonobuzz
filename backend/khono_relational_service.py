@@ -161,7 +161,25 @@ def profile_to_legacy_onboarding_dict(p: KbUserProfile, user_id: str) -> Dict[st
 def find_user_by_id(session: Session, user_id: str) -> Tuple[Optional[str], Dict[str, Any]]:
     u = session.get(KbAppUser, user_id)
     if u is None:
-        return None, {}
+        row = session.execute(
+            text(
+                """
+                SELECT document_id, data, created_at, updated_at
+                FROM fs_users
+                WHERE document_id = :user_id
+                LIMIT 1
+                """
+            ),
+            {"user_id": user_id},
+        ).mappings().first()
+        if row is None:
+            return None, {}
+        return row["document_id"], _fs_user_payload_to_legacy_dict(
+            row["document_id"],
+            row["data"] or {},
+            row.get("created_at"),
+            row.get("updated_at"),
+        )
     return u.id, user_to_legacy_dict(u)
 
 
@@ -170,7 +188,56 @@ def find_user_by_email(session: Session, normalized_email: str) -> Tuple[Optiona
         select(KbAppUser).where(func.lower(KbAppUser.email) == normalized_email.lower())
     )
     if row is None:
-        return None, {}
+        legacy_row = session.execute(
+            text(
+                """
+                SELECT document_id, data, created_at, updated_at
+                FROM fs_users
+                WHERE lower(coalesce(data->>'email', '')) = :email
+                ORDER BY coalesce(updated_at, created_at) DESC
+                LIMIT 1
+                """
+            ),
+            {"email": normalized_email.lower()},
+        ).mappings().first()
+        if legacy_row is None:
+            alias_row = session.execute(
+                text(
+                    """
+                    SELECT document_id, data, created_at, updated_at
+                    FROM fs_users
+                    WHERE split_part(lower(coalesce(data->>'email', '')), '@', 2) = split_part(:email, '@', 2)
+                      AND regexp_replace(
+                            split_part(lower(coalesce(data->>'email', '')), '@', 1),
+                            '\\d+$',
+                            '',
+                            'g'
+                          ) = regexp_replace(
+                            split_part(:email, '@', 1),
+                            '\\d+$',
+                            '',
+                            'g'
+                          )
+                    ORDER BY coalesce(updated_at, created_at) DESC
+                    LIMIT 1
+                    """
+                ),
+                {"email": normalized_email.lower()},
+            ).mappings().first()
+            if alias_row is None:
+                return None, {}
+            return alias_row["document_id"], _fs_user_payload_to_legacy_dict(
+                alias_row["document_id"],
+                alias_row["data"] or {},
+                alias_row.get("created_at"),
+                alias_row.get("updated_at"),
+            )
+        return legacy_row["document_id"], _fs_user_payload_to_legacy_dict(
+            legacy_row["document_id"],
+            legacy_row["data"] or {},
+            legacy_row.get("created_at"),
+            legacy_row.get("updated_at"),
+        )
     return row.id, user_to_legacy_dict(row)
 
 
@@ -189,6 +256,32 @@ def merged_onboarding_dict(session: Session, user_id: str, user_email: str) -> D
 
 def list_users_payloads(session: Session) -> List[Dict[str, Any]]:
     """Same payload shape as /api/users when sourced from kb_* tables."""
+    kb_user_count = session.scalar(select(func.count()).select_from(KbAppUser)) or 0
+    if int(kb_user_count) == 0:
+        rows = session.execute(
+            text(
+                """
+                SELECT document_id, data, created_at, updated_at
+                FROM fs_users
+                ORDER BY coalesce(updated_at, created_at) DESC
+                """
+            )
+        ).mappings().all()
+        out: List[Tuple[datetime, Dict[str, Any]]] = []
+        for row in rows:
+            payload = _fs_user_payload_to_legacy_dict(
+                row["document_id"],
+                row["data"] or {},
+                row.get("created_at"),
+                row.get("updated_at"),
+            )
+            created_at_dt = _coerce_dt(payload.get("created_at"))
+            updated_at_dt = _coerce_dt(payload.get("updated_at"))
+            sort_key = _sortable_dt(updated_at_dt or created_at_dt)
+            out.append((sort_key, payload))
+        out.sort(key=lambda item: item[0], reverse=True)
+        return [p for _, p in out]
+
     stmt = (
         select(KbAppUser, KbUserProfile)
         .outerjoin(KbUserProfile, KbUserProfile.user_id == KbAppUser.id)
@@ -248,6 +341,47 @@ def list_users_payloads(session: Session) -> List[Dict[str, Any]]:
         out.append((sort_key, user_payload))
     out.sort(key=lambda item: item[0], reverse=True)
     return [p for _, p in out]
+
+
+def _fs_user_payload_to_legacy_dict(
+    document_id: str,
+    data: Dict[str, Any],
+    created_at: Optional[datetime] = None,
+    updated_at: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    payload = data if isinstance(data, dict) else {}
+    name = str(payload.get("name") or "").strip()
+    created_raw = payload.get("created_at") or created_at
+    updated_raw = payload.get("updated_at") or updated_at
+    legacy: Dict[str, Any] = {
+        "email": str(payload.get("email") or "").strip(),
+        "password": payload.get("password"),
+        "name": name,
+        "role": str(payload.get("role") or "Staff").strip() or "Staff",
+        "status": str(payload.get("status") or "Active").strip() or "Active",
+        "entity": str(payload.get("entity") or "").strip(),
+        "department": str(payload.get("department") or "").strip(),
+        "designation": str(payload.get("designation") or "").strip(),
+        "manager": str(payload.get("manager") or "").strip(),
+        "moduleAccess": str(payload.get("moduleAccess") or "").strip(),
+        "moduleRole": str(payload.get("moduleRole") or "").strip(),
+        "moduleAccessRole": str(payload.get("moduleAccessRole") or "").strip(),
+        "themePreference": str(payload.get("themePreference") or payload.get("theme_preference") or "dark").strip() or "dark",
+        "created_at": _coerce_dt(created_raw) or created_raw,
+        "updated_at": _coerce_dt(updated_raw) or updated_raw,
+        "lastSignInAt": payload.get("lastSignInAt") or payload.get("last_sign_in_at"),
+        "loginCount": payload.get("loginCount") or payload.get("login_count") or 0,
+    }
+    admin_json = payload.get("admin")
+    if admin_json is not None:
+        legacy["admin"] = admin_json
+    if not legacy["name"] and legacy["email"]:
+        legacy["name"] = legacy["email"].split("@", 1)[0].replace(".", " ").title()
+    if legacy["created_at"] is None:
+        legacy.pop("created_at", None)
+    if legacy["updated_at"] is None:
+        legacy.pop("updated_at", None)
+    return {k: v for k, v in legacy.items() if v is not None or k in ("email", "role", "status")}
 
 
 def upsert_user_from_registration(

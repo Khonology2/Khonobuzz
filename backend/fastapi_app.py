@@ -1,9 +1,11 @@
 from fastapi import FastAPI, Query, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from brotli_asgi import BrotliMiddleware
 from dotenv import load_dotenv
 import os
+from pathlib import Path
 import logging
 import json
 import time
@@ -16,9 +18,10 @@ from fastapi.responses import JSONResponse
 from fastapi import status
 from fastapi import HTTPException
 from typing import Optional, Dict, Any, Callable
-from pathlib import Path
 import jwt
 from redis import Redis
+
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 try:
     from .auth import get_current_user
 except ImportError:
@@ -119,7 +122,6 @@ except ImportError:
         upsert_user_from_registration,
         user_to_legacy_dict,
     )
-load_dotenv()
 DEBUG_MODE = os.environ.get('DEBUG', 'True').lower() == 'true'
 LOG_LEVEL = logging.DEBUG if DEBUG_MODE else logging.INFO
 logging.basicConfig(
@@ -1516,17 +1518,20 @@ async def list_users():
     cache_key = "users:list"
     fresh_cache = _cache_get(cache_key)
     if fresh_cache is not None:
+        fresh_cache = jsonable_encoder(fresh_cache)
         _normalize_users_list_status_inplace(fresh_cache)
         return JSONResponse(status_code=status.HTTP_200_OK, content={'users': fresh_cache})
     if _db_breaker_is_open():
         stale_cache = _cache_get_any(cache_key)
         if stale_cache is not None:
+            stale_cache = jsonable_encoder(stale_cache)
             _normalize_users_list_status_inplace(stale_cache)
             return JSONResponse(status_code=status.HTTP_200_OK, content={'users': stale_cache})
         return JSONResponse(status_code=429, content={"error": "Database temporarily throttled"})
     try:
         with SessionLocal() as s:
             users_data = list_users_payloads(s)
+        users_data = jsonable_encoder(users_data)
         _normalize_users_list_status_inplace(users_data)
         _db_breaker_record_success()
         _cache_set(cache_key, users_data, USERS_CACHE_TTL_SECONDS)
@@ -1538,6 +1543,7 @@ async def list_users():
         if _is_quota_error(e):
             stale_cache = _cache_get_any(cache_key)
             if stale_cache is not None:
+                stale_cache = jsonable_encoder(stale_cache)
                 _normalize_users_list_status_inplace(stale_cache)
                 return JSONResponse(status_code=status.HTTP_200_OK, content={'users': stale_cache})
             return JSONResponse(status_code=429, content={"error": "Quota exceeded"})

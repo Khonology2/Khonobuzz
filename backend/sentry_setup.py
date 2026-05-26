@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 import sentry_sdk
@@ -23,7 +24,7 @@ try:
 except ImportError:
     _HAS_FASTAPI_INTEGRATIONS = False
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 logger = logging.getLogger(__name__)
 _INITIALIZED = False

@@ -83,34 +83,14 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentImageUrl != widget.currentImageUrl ||
         oldWidget.currentPublicId != widget.currentPublicId) {
-      final prevUrl = _imageUrl;
-      final prevId = _publicId;
       _resolveImageFromProps();
-      if (!mounted || (prevUrl == _imageUrl && prevId == _publicId)) {
-        return;
-      }
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          setState(() {});
-        }
-      });
     }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final prevUrl = _imageUrl;
-    final prevId = _publicId;
     _resolveImageFromProps();
-    if (!mounted || (prevUrl == _imageUrl && prevId == _publicId)) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
   }
 
   Future<void> _showImageOptions() async {
@@ -130,36 +110,48 @@ class _ProfileImageUploadState extends State<ProfileImageUpload> {
           ),
           child: Wrap(
             children: [
-              ListTile(
-                leading: const Icon(
-                  Icons.photo_library,
-                  color: Color(0xFFC10D00),
-                ),
-                title: const Text('Choose from Gallery'),
-                onTap: () {
-                  SoundSystem.playButtonClick();
-                  Navigator.pop(context);
-                  _pickImage(ImageSource.gallery);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt, color: Color(0xFFC10D00)),
-                title: const Text('Take Photo'),
-                onTap: () {
-                  SoundSystem.playButtonClick();
-                  Navigator.pop(context);
-                  _pickImage(ImageSource.camera);
-                },
-              ),
-              if (_imageUrl != null || (_publicId != null && _publicId!.isNotEmpty))
-                ListTile(
-                  leading: const Icon(Icons.delete, color: Colors.red),
-                  title: const Text('Remove Photo'),
+              Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.photo_library,
+                    color: Color(0xFFC10D00),
+                  ),
+                  title: const Text('Choose from Gallery'),
                   onTap: () {
                     SoundSystem.playButtonClick();
                     Navigator.pop(context);
-                    _removeImage();
+                    _pickImage(ImageSource.gallery);
                   },
+                ),
+              ),
+              Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.camera_alt,
+                    color: Color(0xFFC10D00),
+                  ),
+                  title: const Text('Take Photo'),
+                  onTap: () {
+                    SoundSystem.playButtonClick();
+                    Navigator.pop(context);
+                    _pickImage(ImageSource.camera);
+                  },
+                ),
+              ),
+              if (_imageUrl != null || (_publicId != null && _publicId!.isNotEmpty))
+                Material(
+                  color: Colors.transparent,
+                  child: ListTile(
+                    leading: const Icon(Icons.delete, color: Colors.red),
+                    title: const Text('Remove Photo'),
+                    onTap: () {
+                      SoundSystem.playButtonClick();
+                      Navigator.pop(context);
+                      _removeImage();
+                    },
+                  ),
                 ),
             ],
           ),

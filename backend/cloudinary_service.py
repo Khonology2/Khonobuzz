@@ -1,5 +1,6 @@
 import os
 import io
+from pathlib import Path
 from dotenv import load_dotenv
 import cloudinary
 import cloudinary.uploader
@@ -7,8 +8,8 @@ import cloudinary.api
 import logging
 import hashlib
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from backend/.env so the app uses the same config everywhere.
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 logger = logging.getLogger(__name__)
 

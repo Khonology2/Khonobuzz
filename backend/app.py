@@ -1,10 +1,13 @@
 import uvicorn
 import os
 import errno
-from dotenv import load_dotenv
-from fastapi_app import app
+from pathlib import Path
 
-load_dotenv()
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().with_name(".env"))
+
+from fastapi_app import app
 
 # Windows WSAEADDRINUSE = 10048; Unix EADDRINUSE = 98
 _PORT_IN_USE_ERRNOS = (errno.EADDRINUSE, getattr(errno, "WSAEADDRINUSE", 10048))
